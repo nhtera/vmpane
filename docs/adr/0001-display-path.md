@@ -1,6 +1,6 @@
 # ADR 0001: Display path for Windows guests
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-10
 
 ## Context
@@ -12,27 +12,42 @@ clipboard sharing. Options:
 - **B**: write our own Swift SPICE client on top of spice-glib (about two extra weeks).
 - **C**: QEMU's VNC server and our own RFB client (about two extra weeks, and no USB redirection).
 
-What we found so far:
+UTM builds QEMU as a shared library loaded by its own launcher and always builds GStreamer and a full GPU
+stack. That does not fit our design, where QEMU is a sandboxed child process. CocoaSpice (Apache-2.0) is
+a standalone Swift package that only needs glib, spice-client-glib and GStreamer's core libraries.
 
-- UTM builds QEMU as a shared library loaded by its own launcher and always builds GStreamer and a full
-  GPU stack. That does not fit our design, where QEMU is a sandboxed child process.
-- CocoaSpice (Apache-2.0) is a standalone Swift package with bundled headers. It links glib and
-  spice-client-glib (libusb optional) and calls `gst_init` unconditionally, so building it without
-  GStreamer needs a small patch.
-- Audio does not go through SPICE: QEMU's `coreaudio` backend with HDA works.
-- Firmware and early boot draw to `ramfb`; the Windows desktop uses the virtio GPU driver. Resize through
-  spice-vdagent is not yet tested.
+## Decision
 
-## Decision (provisional)
+**A, modified**: our own minimal dependency build, upstream QEMU built as an executable with SPICE, and
+CocoaSpice (the no-USB variant first) with a small patch set.
 
-**A, modified**: our own dependency build (recipes adapted from UTM's script: glib, pixman,
-spice-protocol, spice-server, spice-glib without GStreamer, usbredir, libtpms, swtpm), upstream QEMU as an
-executable, and CocoaSpice (the no-USB variant first) with a small patch.
+A prototype built this stack (spice-protocol 0.14.5, spice-server 0.16.0, QEMU 11.1.2 with
+`--enable-spice --enable-hvf`, spice-gtk 0.42) and rendered a Windows 11 guest's desktop over
+`-spice unix` through CocoaSpice's Metal renderer, checked by reading back the rendered drawable.
 
-This becomes final when a CocoaSpice sample renders a Windows guest over QEMU's `-spice unix` socket
-within a fixed time box. If it does not, we switch to **B** without further discussion.
+## What the build needs
+
+- spice-gtk 0.42 with UTM's five patches: CocoaSpice runs SPICE on its own GLib main context
+  (`spice_util_set_main_context`), and one patch fixes the macOS link.
+- spice-server: one line, `librt` does not exist on macOS.
+- CocoaSpice:
+  - no static GStreamer plugin registration on macOS;
+  - no process-wide `HOME`/`TMPDIR`/`XDG_*` overrides from its iOS start-up code;
+  - build vertices before the canvas texture when a renderer is attached. Without this the first frame
+    is dropped and a static guest screen stays black until the guest redraws (reproduced and fixed;
+    worth sending upstream);
+  - compile against our build's headers instead of its bundled ones (spice-gtk 0.40, GStreamer 1.19).
+- GStreamer: spice-gtk requires its core libraries (about 3.6 MB, LGPL, linked dynamically). We ship no
+  plugins and never use SPICE audio or video streaming: audio goes through QEMU's CoreAudio backend, and
+  QEMU's SPICE video streaming stays off. Plugin scanning is disabled at start-up; with it on, the first
+  connection stalled for over a minute.
 
 ## Consequences
 
-- The QEMU build script is ours to maintain.
-- Clipboard and resize depend on an ARM64 build of spice-vdagent in the guest.
+- The QEMU and SPICE build script and the patch set are ours to maintain (Phase 04).
+- The shader library is compiled by Xcode; plain `swift build` does not compile CocoaSpice's Metal
+  shaders.
+- Dynamic resolution and clipboard need an ARM64 build of spice-vdagent in the Windows guest (upstream
+  ships x86 and x64 only). If none is usable, our own guest agent handles resize and clipboard.
+- Windows blanks its display when idle, which shows as a black SPICE canvas; the helper should keep the
+  guest display awake while its window is visible, or show that the display is asleep.

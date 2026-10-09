@@ -21,9 +21,9 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
-# Swift jobs for main run on the project's self-hosted Mac (pinned Xcode, future SDKs). They never run for
-# pull requests, so code from forks never reaches that machine (scripts/check-workflows.rb enforces it).
-# Pull requests get the same Swift checks on a hosted runner (swift-pr).
+# Pull requests get the Swift tests and Debug build on a hosted runner (swift-pr). Pushes to main (tests in
+# both configurations, Release build) and the nightly ASan run use the project's self-hosted Mac, which
+# never runs pull-request code (scripts/check-workflows.rb enforces it).
 jobs:
   lint:
     if: github.event_name != 'schedule'
@@ -49,40 +49,6 @@ jobs:
       - run: scripts/build.sh Debug
       - run: scripts/sign.sh --verify build/Debug/VMPane.app
 
-  swift-unit:
-    if: contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name)
-    runs-on: [self-hosted, macOS, ARM64, vmpane]
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-xcode
-      - run: scripts/test.sh --swift-only
-      - name: Clean workspace
-        if: always()
-        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
-
-  xcode-build:
-    if: contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name)
-    runs-on: [self-hosted, macOS, ARM64, vmpane]
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-xcode
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: build/dd/SourcePackages
-          key: spm-${{ hashFiles('project.yml', 'Packages/VMPaneKit/Package.swift') }}
-      - name: Build Debug (ad hoc signed from the manifest)
-        run: scripts/build.sh Debug
-      - run: scripts/sign.sh --verify build/Debug/VMPane.app
-      - name: Clean workspace
-        if: always()
-        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
-
   swift-release:
     if: contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name)
     runs-on: [self-hosted, macOS, ARM64, vmpane]
@@ -92,8 +58,10 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-xcode
-      - name: Unit tests (release)
-        run: scripts/test.sh --swift-only --release
+      - name: Unit tests (debug and release)
+        run: |
+          scripts/test.sh --swift-only
+          scripts/test.sh --swift-only --release
       - run: scripts/build.sh Release
       - run: scripts/sign.sh --verify build/Release/VMPane.app
       - run: scripts/check-dylibs.sh build/Release/VMPane.app

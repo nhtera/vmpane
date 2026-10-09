@@ -59,8 +59,9 @@ hardened runtime: without a team ID, library validation would refuse the app's o
 
 - Hosted runners do lint, Rust, supply-chain and notices checks, and the Swift tests and build for pull
   requests (`swift-pr`).
-- Swift jobs for `main`, tags and manual runs (plus the nightly ASan run) use the project's self-hosted
-  Mac. They never run for pull requests: `scripts/check-workflows.rb` (part of `scripts/lint.sh`) rejects
+- `swift-release` (pushes to `main`, tags, manual runs: unit tests in debug and release, Release build,
+  signing and linkage checks) and the nightly `swift-asan` run use the project's self-hosted Mac
+  (`scripts/setup-runner.sh`). They never run for pull requests: `scripts/check-workflows.rb` (part of `scripts/lint.sh`) rejects
   any job not on a GitHub-hosted label unless its `if:` allowlists `push`, `workflow_dispatch` or
   `schedule`, and bans `pull_request_target`, `issue_comment` and `workflow_run`.
 - Every third-party Action is pinned by commit SHA; Dependabot proposes updates for Actions and crates.
