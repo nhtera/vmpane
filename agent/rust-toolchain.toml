@@ -1,0 +1,6 @@
+# Bump only in a dedicated PR (keep rust-version in Cargo.toml in step).
+[toolchain]
+channel = "1.97.1"
+components = ["rustfmt", "clippy"]
+targets = ["aarch64-unknown-linux-musl", "aarch64-apple-darwin", "aarch64-pc-windows-msvc"]
+profile = "minimal"

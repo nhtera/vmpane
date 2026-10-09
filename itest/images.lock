@@ -1,0 +1,2 @@
+# Guest images used by integration scenarios: <name> <url> <sha256>
+# Filled in when the first VM scenarios land (Linux cloud image, macOS IPSW, Windows ISO handled by the user).

@@ -1,0 +1,4 @@
+# Static Linux guest binaries link with the bundled rust-lld: no cross C toolchain needed.
+[target.aarch64-unknown-linux-musl]
+linker = "rust-lld"
+rustflags = ["-C", "target-feature=+crt-static"]

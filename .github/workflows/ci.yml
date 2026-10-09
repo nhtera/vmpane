@@ -1,0 +1,243 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *" # nightly: ASan + supply-chain advisories
+
+permissions:
+  contents: read
+
+# Pull requests: a new push cancels the previous run. Everything else gets its own group, so every push to
+# main (and each nightly run) is built; a shared group would drop queued runs.
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+# Swift jobs for main run on the project's self-hosted Mac (pinned Xcode, future SDKs). They never run for
+# pull requests, so code from forks never reaches that machine (scripts/check-workflows.rb enforces it).
+# Pull requests get the same Swift checks on a hosted runner (swift-pr).
+jobs:
+  lint:
+    if: github.event_name != 'schedule'
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-xcode
+      - run: scripts/lint.sh
+
+  swift-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-xcode
+      - run: scripts/test.sh --swift-only
+      - run: scripts/build.sh Debug
+      - run: scripts/sign.sh --verify build/Debug/VMPane.app
+
+  swift-unit:
+    if: contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name)
+    runs-on: [self-hosted, macOS, ARM64, vmpane]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-xcode
+      - run: scripts/test.sh --swift-only
+      - name: Clean workspace
+        if: always()
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
+
+  xcode-build:
+    if: contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name)
+    runs-on: [self-hosted, macOS, ARM64, vmpane]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-xcode
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/dd/SourcePackages
+          key: spm-${{ hashFiles('project.yml', 'Packages/VMPaneKit/Package.swift') }}
+      - name: Build Debug (ad hoc signed from the manifest)
+        run: scripts/build.sh Debug
+      - run: scripts/sign.sh --verify build/Debug/VMPane.app
+      - name: Clean workspace
+        if: always()
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
+
+  swift-release:
+    if: contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name)
+    runs-on: [self-hosted, macOS, ARM64, vmpane]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-xcode
+      - name: Unit tests (release)
+        run: scripts/test.sh --swift-only --release
+      - run: scripts/build.sh Release
+      - run: scripts/sign.sh --verify build/Release/VMPane.app
+      - run: scripts/check-dylibs.sh build/Release/VMPane.app
+      - name: Clean workspace
+        if: always()
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
+
+  swift-asan:
+    if: contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event_name) && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, macOS, ARM64, vmpane]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-xcode
+      - name: Unit tests with address sanitizer (debug and release)
+        run: |
+          scripts/test.sh --swift-only --asan
+          scripts/test.sh --swift-only --asan --release
+      - name: Clean workspace
+        if: always()
+        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
+
+  rust-lint-test:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            agent/target
+          key: cargo-linux-${{ hashFiles('agent/Cargo.lock', 'agent/rust-toolchain.toml') }}
+      - run: rustup toolchain install
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --target aarch64-unknown-linux-musl -- -D warnings
+      - run: cargo test --workspace --target aarch64-unknown-linux-musl
+      - run: cargo build --release --target aarch64-unknown-linux-musl
+
+  rust-macos:
+    if: github.event_name != 'schedule'
+    runs-on: macos-26
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            agent/target
+          key: cargo-macos-${{ hashFiles('agent/Cargo.lock', 'agent/rust-toolchain.toml') }}
+      - run: rustup toolchain install
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - run: cargo build --release --target aarch64-apple-darwin
+
+  rust-windows:
+    if: github.event_name != 'schedule'
+    runs-on: windows-11-arm
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            agent/target
+          key: cargo-windows-${{ hashFiles('agent/Cargo.lock', 'agent/rust-toolchain.toml') }}
+      - run: rustup toolchain install
+      - run: cargo clippy --workspace --all-targets --target aarch64-pc-windows-msvc -- -D warnings
+      - run: cargo test --workspace --target aarch64-pc-windows-msvc
+      - run: cargo build --release --target aarch64-pc-windows-msvc
+      # Development builds only: release artifacts are built by the release workflow, never taken from CI.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: vmpane-agent-windows-arm64
+          path: |
+            agent/target/aarch64-pc-windows-msvc/release/vmpane-agent.exe
+            agent/target/aarch64-pc-windows-msvc/release/vmpane-session.exe
+          retention-days: 7
+
+  rust-supply-chain:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Tools live in their own root so the cache never overwrites rustup's proxies in ~/.cargo/bin.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo-tools
+          key: cargo-tools-linux-${{ hashFiles('scripts/cargo-tools.txt') }}
+      - run: rustup toolchain install
+      - name: Install cargo-deny and cargo-audit (pinned)
+        run: |
+          for tool in cargo-deny cargo-audit; do
+            version=$(awk -v t="$tool" '$1 == t {print $2}' ../scripts/cargo-tools.txt)
+            cargo install --list --root ~/.cargo-tools | grep -q "^$tool v$version:" ||
+              cargo install --locked --root ~/.cargo-tools "$tool" --version "$version"
+          done
+          echo "$HOME/.cargo-tools/bin" >> "$GITHUB_PATH"
+      - run: cargo deny check
+      - run: cargo audit
+
+  notices-check:
+    if: github.event_name != 'schedule'
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-xcode
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo-tools
+          key: cargo-tools-macos-${{ hashFiles('scripts/cargo-tools.txt') }}
+      - name: Install cargo-about (pinned)
+        run: |
+          version=$(awk '$1 == "cargo-about" {print $2}' scripts/cargo-tools.txt)
+          cargo install --list --root ~/.cargo-tools | grep -q "^cargo-about v$version:" ||
+            cargo install --locked --root ~/.cargo-tools cargo-about --version "$version"
+          echo "$HOME/.cargo-tools/bin" >> "$GITHUB_PATH"
+      - run: scripts/gen-notices.sh --check

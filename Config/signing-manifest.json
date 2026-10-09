@@ -1,0 +1,14 @@
+{
+  "comment": "Every Mach-O in VMPane.app, signed inside-out by scripts/sign.sh (never --deep). Paths are relative to the .app and may be globs. optional=true entries may be absent: QEMU parts arrive with the QEMU build; *.dylib under MacOS/ exist only in Debug builds (Xcode preview support). Xcode's own local signatures are development-only (Xcode adds e.g. application-identifier to the CLI); sign.sh replaces them.",
+  "items": [
+    { "path": "Contents/Helpers/qemu/lib/*.dylib", "identifier": null, "entitlements": null, "optional": true },
+    { "path": "Contents/Helpers/qemu/bin/qemu-system-aarch64", "identifier": "app.vmpane.mac.qemu-system-aarch64", "entitlements": "Config/Entitlements/qemu.entitlements", "optional": true },
+    { "path": "Contents/Helpers/qemu/bin/qemu-img", "identifier": "app.vmpane.mac.qemu-img", "entitlements": null, "optional": true },
+    { "path": "Contents/Helpers/qemu/bin/swtpm", "identifier": "app.vmpane.mac.swtpm", "entitlements": null, "optional": true },
+    { "path": "Contents/Helpers/vmpane", "identifier": "app.vmpane.mac.cli", "entitlements": null },
+    { "path": "Contents/Helpers/VMPaneVM.app/Contents/MacOS/*.dylib", "identifier": null, "entitlements": null, "optional": true },
+    { "path": "Contents/Helpers/VMPaneVM.app", "identifier": "app.vmpane.mac.vm", "entitlements": "Config/Entitlements/VMPaneVM.entitlements" },
+    { "path": "Contents/MacOS/*.dylib", "identifier": null, "entitlements": null, "optional": true },
+    { "path": ".", "identifier": "app.vmpane.mac", "entitlements": "Config/Entitlements/VMPane.entitlements" }
+  ]
+}

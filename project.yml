@@ -1,0 +1,100 @@
+# XcodeGen spec. The generated VMPane.xcodeproj is gitignored: run `xcodegen generate` (scripts/bootstrap.sh does).
+name: VMPane
+options:
+  bundleIdPrefix: app.vmpane
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+configs:
+  Debug: debug
+  Release: release
+configFiles:
+  Debug: Config/Debug.xcconfig
+  Release: Config/Release.xcconfig
+packages:
+  VMPaneKit:
+    path: Packages/VMPaneKit
+  swift-argument-parser:
+    url: https://github.com/apple/swift-argument-parser
+    exactVersion: 1.8.2
+targets:
+  VMPane:
+    type: application
+    platform: macOS
+    sources: [App]
+    settings:
+      base:
+        # Set as build settings: XcodeGen's `info:`/`entitlements:` keys would regenerate (overwrite) the files.
+        INFOPLIST_FILE: Config/App-Info.plist
+        CODE_SIGN_ENTITLEMENTS: Config/Entitlements/VMPane.entitlements
+        PRODUCT_BUNDLE_IDENTIFIER: app.vmpane.mac
+        GENERATE_INFOPLIST_FILE: NO
+    dependencies:
+      - package: VMPaneKit
+        product: VMPaneCore
+      - package: VMPaneKit
+        product: VMPaneUI
+      # Helper app and CLI are embedded in Contents/Helpers (not MacOS/: case-insensitive collision with VMPane).
+      - target: VMPaneVM
+        embed: true
+        codeSign: false
+        copy:
+          destination: wrapper
+          subpath: Contents/Helpers
+      - target: VMPaneCLI
+        embed: true
+        codeSign: false
+        copy:
+          destination: wrapper
+          subpath: Contents/Helpers
+  VMPaneVM:
+    type: application
+    platform: macOS
+    sources: [VMHelper]
+    settings:
+      base:
+        INFOPLIST_FILE: Config/VMHelper-Info.plist
+        CODE_SIGN_ENTITLEMENTS: Config/Entitlements/VMPaneVM.entitlements
+        PRODUCT_BUNDLE_IDENTIFIER: app.vmpane.mac.vm
+        PRODUCT_NAME: VMPaneVM
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+    dependencies:
+      - package: VMPaneKit
+        product: VMPaneHost
+  # Target name differs from the product: `vmpane` and `VMPane` collide on case-insensitive APFS (build dirs).
+  VMPaneCLI:
+    type: tool
+    platform: macOS
+    sources: [CLI]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.vmpane.mac.cli
+        PRODUCT_NAME: vmpane
+        PRODUCT_MODULE_NAME: VMPaneCLI
+        SKIP_INSTALL: YES
+        OTHER_CODE_SIGN_FLAGS: "--timestamp=none --identifier app.vmpane.mac.cli"
+    dependencies:
+      - package: VMPaneKit
+        product: VMPaneCore
+      - package: swift-argument-parser
+        product: ArgumentParser
+  VMPaneUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources: [UITests]
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: app.vmpane.mac.uitests
+    dependencies:
+      - target: VMPane
+schemes:
+  VMPane:
+    build:
+      targets:
+        VMPane: all
+        VMPaneVM: all
+        VMPaneCLI: all
+    test:
+      targets: [VMPaneUITests]

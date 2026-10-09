@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "lineLength": 140,
+  "indentation": { "spaces": 4 },
+  "tabWidth": 4,
+  "maximumBlankLines": 1,
+  "respectsExistingLineBreaks": true,
+  "lineBreakBeforeEachArgument": false,
+  "rules": {
+    "AlwaysUseLowerCamelCase": true,
+    "NeverForceUnwrap": false,
+    "NeverUseForceTry": false,
+    "OrderedImports": true,
+    "UseLetInEveryBoundCaseVariable": true,
+    "ValidateDocumentationComments": false
+  }
+}

@@ -1,0 +1,9 @@
+VMPane
+Copyright 2026 VMPane contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party components are listed with their licences in THIRD_PARTY_NOTICES.md.
+QEMU, swtpm and other GPL/LGPL components ship as separate executables or
+dynamic libraries; their corresponding source and patches are published with
+every release.

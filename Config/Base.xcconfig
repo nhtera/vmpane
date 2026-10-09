@@ -1,0 +1,12 @@
+// Settings shared by every target and configuration.
+MACOSX_DEPLOYMENT_TARGET = 15.0
+// Apple silicon only: Virtualization features and HVF guests need arm64 hosts.
+ARCHS = arm64
+SWIFT_VERSION = 6.0
+SWIFT_STRICT_CONCURRENCY = complete
+ENABLE_HARDENED_RUNTIME = YES
+CURRENT_PROJECT_VERSION = 1
+MARKETING_VERSION = 0.1.0
+DEAD_CODE_STRIPPING = YES
+ENABLE_USER_SCRIPT_SANDBOXING = YES
+#include "Signing.xcconfig"

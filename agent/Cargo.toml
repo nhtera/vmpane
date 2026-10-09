@@ -1,0 +1,27 @@
+# Guest agent workspace: built for Linux (musl), macOS and Windows guests. Never linked into the host app.
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "Apache-2.0"
+repository = "https://github.com/nhtera/vmpane"
+publish = false
+
+[workspace.dependencies]
+vmpane-agent-proto = { path = "crates/vmpane-agent-proto" }
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "warn"
+
+[profile.release]
+strip = true
+lto = "thin"
+codegen-units = 1

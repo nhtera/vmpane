@@ -1,0 +1,29 @@
+plans
+# Spike build output and large VM assets (never committed)
+spikes/**/build/
+spikes/**/.build/
+spikes/**/target/
+spikes/**/assets/
+*.iso
+*.ipsw
+*.img
+*.qcow2
+.DS_Store
+.env
+
+# Phase 00 throwaway spike code: kept local, never committed (Gate 00)
+spikes/
+
+# Build outputs (Phase 01)
+*.xcodeproj
+build/
+DerivedData/
+.build/
+.swiftpm/
+Config/Local.xcconfig
+qemu/build/
+itest/results/
+agent/target/
+
+# Per-developer agent memory
+.claude/agent-memory/
