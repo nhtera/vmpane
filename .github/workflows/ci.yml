@@ -213,9 +213,9 @@ jobs:
       - name: Install cargo-deny and cargo-audit (pinned)
         run: |
           for tool in cargo-deny cargo-audit; do
-            version=$(awk -v t="$tool" '$1 == t {print $2}' ../scripts/cargo-tools.txt)
+            read -r _ version flags < <(awk -v t="$tool" '$1 == t' ../scripts/cargo-tools.txt)
             cargo install --list --root ~/.cargo-tools | grep -q "^$tool v$version:" ||
-              cargo install --locked --root ~/.cargo-tools "$tool" --version "$version"
+              cargo install --locked --root ~/.cargo-tools "$tool" --version "$version" $flags
           done
           echo "$HOME/.cargo-tools/bin" >> "$GITHUB_PATH"
       - run: cargo deny check
@@ -236,8 +236,8 @@ jobs:
           key: cargo-tools-macos-${{ hashFiles('scripts/cargo-tools.txt') }}
       - name: Install cargo-about (pinned)
         run: |
-          version=$(awk '$1 == "cargo-about" {print $2}' scripts/cargo-tools.txt)
+          read -r _ version flags < <(awk '$1 == "cargo-about"' scripts/cargo-tools.txt)
           cargo install --list --root ~/.cargo-tools | grep -q "^cargo-about v$version:" ||
-            cargo install --locked --root ~/.cargo-tools cargo-about --version "$version"
+            cargo install --locked --root ~/.cargo-tools cargo-about --version "$version" $flags
           echo "$HOME/.cargo-tools/bin" >> "$GITHUB_PATH"
       - run: scripts/gen-notices.sh --check

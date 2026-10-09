@@ -18,10 +18,11 @@ fi
 cd agent
 rustup toolchain install
 installed=$(cargo install --list)
-grep -v '^#' ../scripts/cargo-tools.txt | while read -r name version; do
+grep -v '^#' ../scripts/cargo-tools.txt | while read -r name version flags; do
     [[ -n "$name" ]] || continue
     if ! grep -q "^$name v$version:" <<<"$installed"; then
-        cargo install --locked "$name" --version "$version"
+        # shellcheck disable=SC2086 # flags is a word list on purpose
+        cargo install --locked "$name" --version "$version" $flags
     fi
 done
 cd ..
