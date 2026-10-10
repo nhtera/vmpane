@@ -58,8 +58,12 @@ and so is everything after it in the lock (the lock order is the build order).
   it took stays in the Mach-O header, so the path's length would shift every binary). `GIT_CEILING_DIRECTORIES`
   stops version scripts from finding the surrounding checkout (spice-gtk would report `-dirty`).
 
-Checked: two clean builds in different directories give the same SHA-256 for all 43 files of the bundle
-(before signing). `package.sh` records these hashes in `MANIFEST.json`.
+- **No checkout paths in the output:** OpenSSL records its compiler command in libcrypto, so it is given
+  Xcode's clang directly rather than the wrapper. `package.sh` fails if any bundle file contains the
+  checkout or build directory.
+
+Checked: clean builds from different checkouts and build directories give the same SHA-256 for every
+file of the bundle; `package.sh` records these hashes in `MANIFEST.json`.
 
 ## Package
 

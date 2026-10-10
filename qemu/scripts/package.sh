@@ -121,6 +121,10 @@ for f in "${machos[@]}"; do
     codesign --remove-signature "$f"
 done
 
+# No file may name the checkout or the build directory: a build elsewhere (CI) would differ.
+leaks=$(grep -rlF -e "$REPO_DIR" -e "$BUILD" "$out" || true)
+[[ -z $leaks ]] || die "build paths inside the bundle: ${leaks//$'\n'/ }"
+
 # file<TAB>sha256 for every file of the bundle but MANIFEST.json.
 hashes() {
     (

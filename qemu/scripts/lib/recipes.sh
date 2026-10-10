@@ -109,14 +109,14 @@ recipe_json_glib() {
 recipe_pixman() { meson_component pixman -Dtests=disabled -Ddemos=disabled -Dgtk=disabled -Dlibpng=disabled; }
 
 # libcrypto for libtpms/swtpm, libssl for spice-server. OpenSSL builds in-tree with relative paths and
-# records its compiler flags in the library, so it gets no -ffile-prefix-map (that flag holds the
-# build path).
+# records its compiler command in the library, so it gets neither -ffile-prefix-map (that flag holds the
+# build path) nor the lib/cc wrapper (its path is the checkout's); it adds no run paths anyway.
 recipe_openssl() {
     local dir
     dir=$(unpack openssl)
     (
         cd "$dir"
-        ./Configure darwin64-arm64-cc shared no-tests no-docs no-apps no-module no-legacy --prefix="$PREFIX" \
+        CC=$VMPANE_CLANG ./Configure darwin64-arm64-cc shared no-tests no-docs no-apps no-module no-legacy --prefix="$PREFIX" \
             --openssldir="$PREFIX/ssl" --libdir=lib -O2 -Wl,-reproducible -Wl,-headerpad_max_install_names
         make -j"$JOBS"
         make install_sw DESTDIR="$STAGE"
