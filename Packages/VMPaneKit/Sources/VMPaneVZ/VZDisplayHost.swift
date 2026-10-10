@@ -1,7 +1,6 @@
 import AppKit
 import IOSurface
 import QuartzCore
-import UniformTypeIdentifiers
 import VMPaneCore
 import Virtualization
 
@@ -78,24 +77,9 @@ public final class VZDisplayHost {
 
     /// The guest framebuffer as PNG, longest edge at most `maxEdge`.
     public func capture(maxEdge: Int) -> Capture? {
-        guard let image = framebuffer() else { return nil }
-        let longest = max(image.width, image.height)
-        let scale = longest > maxEdge && maxEdge > 0 ? Double(longest) / Double(maxEdge) : 1
-        let width = Int(Double(image.width) / scale), height = Int(Double(image.height) / scale)
-        guard
-            let context = CGContext(
-                data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
-                space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
-                bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
-        else { return nil }
-        context.interpolationQuality = .high
-        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-        guard let scaled = context.makeImage() else { return nil }
-        let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else { return nil }
-        CGImageDestinationAddImage(destination, scaled, nil)
-        guard CGImageDestinationFinalize(destination) else { return nil }
-        return Capture(png: data as Data, width: width, height: height, scale: scale)
+        guard let image = framebuffer(), let shot = ScreenshotEncoder.png(image, maxEdge: maxEdge) else { return nil }
+        let scale = ScreenshotEncoder.scale(width: image.width, height: image.height, maxEdge: maxEdge)
+        return Capture(png: shot.png, width: shot.width, height: shot.height, scale: scale)
     }
 
     /// Start-up self-test: a framebuffer exists and is not uniformly black.
