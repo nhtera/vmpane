@@ -1,0 +1,18 @@
+VMPane patch header (text before the first "---" line is ignored by patch)
+Origin: VMPane (written for this build).
+Reason: macOS has no librt (its functions live in libSystem), so spice-server's meson file must not
+  require it on darwin.
+
+--- spice-0.16.0/meson.build.orig	2026-10-10 02:33:01
++++ spice-0.16.0/meson.build	2026-10-10 02:33:01
+@@ -107,8 +107,9 @@
+ endforeach
+ 
+ if host_machine.system() != 'windows'
++  # macOS has no librt (its functions live in libSystem).
+   foreach dep : ['rt', 'm']
+-    spice_server_deps += compiler.find_library(dep)
++    spice_server_deps += compiler.find_library(dep, required: host_machine.system() != 'darwin')
+   endforeach
+ else
+   foreach dep : ['ws2_32', 'shlwapi']

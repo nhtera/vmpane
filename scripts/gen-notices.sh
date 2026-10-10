@@ -48,7 +48,13 @@ resolved=VMPane.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resol
     if [[ -f qemu/deps.lock ]]; then
         echo "## QEMU and its libraries (Windows guests)"
         echo
-        cat qemu/deps.lock
+        echo "Built from source by \`qemu/scripts/build-deps.sh\` (see \`qemu/BUILDING.md\`); the corresponding source"
+        echo "is published with each release."
+        echo
+        echo "| Component | Version | Licence | Source |"
+        echo "|---|---|---|---|"
+        jq -r '.components[] | select(.role == "runtime") | "| \(.name) | \(.version) | \(.license) | <\(.url)> |"' qemu/deps.lock
+        echo
     fi
 } >"$tmp"
 
