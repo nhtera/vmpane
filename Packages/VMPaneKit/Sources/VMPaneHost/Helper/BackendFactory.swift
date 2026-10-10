@@ -1,5 +1,6 @@
 import Foundation
 import VMPaneCore
+import VMPaneQEMU
 import VMPaneVZ
 
 /// Chooses and prepares the backend for a helper's VM.
@@ -25,8 +26,9 @@ public enum BackendFactory {
     }
 
     /// The backend for `prepared`'s VM, or nil when this build has none for it (the helper then answers
-    /// `backendUnavailable`). First-start changes are saved under the bundle lock.
-    public static func make(_ prepared: PreparedBundle) throws -> Made {
+    /// `backendUnavailable`). First-start changes are saved under the bundle lock. `runtime` is the helper's
+    /// `runtime/<version>/` directory (QEMU VMs run its `qemu/`); nil when there is none.
+    public static func make(_ prepared: PreparedBundle, runtime: URL? = nil) throws -> Made {
         var config = prepared.config
         switch config.backend {
         case .vz:
@@ -49,8 +51,25 @@ public enum BackendFactory {
                 backend: backend, config: config, afterStart: { VZBackend.installed($0, bundle: bundle) },
                 afterStop: { LinuxInstall.finished($0, bundle: bundle) })
         case .qemu:
-            return Made(backend: nil, config: config)  // Phase 05
+            guard let runtime, FileManager.default.fileExists(atPath: runtime.appendingPathComponent("qemu/bin").path) else {
+                return Made(backend: nil, config: config)  // this app has no QEMU
+            }
+            return Made(
+                backend: qemuBackend(prepared, config: config, qemu: runtime.appendingPathComponent("qemu", isDirectory: true)),
+                config: config)
         }
+    }
+
+    /// QEMU and swtpm as recorded children of this helper, holding the bundle lock, in `run/<sid>/`.
+    static func qemuBackend(_ prepared: PreparedBundle, config: VMConfigV1, qemu: URL) -> QEMUBackend {
+        let installation = QEMUInstallation(root: qemu, source: .runtimeCopy)
+        let layout = QEMULayout(bundle: prepared.lock.bundle, runDirectory: prepared.runFiles.childDirectory, installation: installation)
+        let registry = ChildProcessRegistry(runFiles: prepared.runFiles, owner: prepared.owner)
+        let processes = QEMUProcesses(
+            layout: layout, lockDescriptor: prepared.lock.fileDescriptor, spawn: { try registry.spawn($0, $1) },
+            forget: { try? registry.remove($0) })
+        let inputs = QEMUPaths.Inputs(runtimeCopy: qemu)
+        return QEMUBackend(config: config, processes: processes, resolveInstallation: { try QEMUPaths.resolve(inputs) })
     }
 
     /// `validate()` of the VM's configuration (signed helper only: needs the entitlement).

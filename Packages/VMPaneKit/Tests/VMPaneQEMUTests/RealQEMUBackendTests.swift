@@ -34,7 +34,8 @@ private final class Harness: @unchecked Sendable {
     private var eventLog: [BackendEvent] = []
 
     init(memoryMiB: Int = 1024) throws {
-        root = URL(fileURLWithPath: "/private/tmp/vp-be-\(UUID().uuidString.prefix(8))", isDirectory: true)
+        // Through the /tmp symlink on purpose: the backend must hand QEMU resolved paths (sandbox rules match them).
+        root = URL(fileURLWithPath: "/tmp/vp-be-\(UUID().uuidString.prefix(8))", isDirectory: true)
         let run = root.appendingPathComponent("run", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         var config = try windowsConfig()

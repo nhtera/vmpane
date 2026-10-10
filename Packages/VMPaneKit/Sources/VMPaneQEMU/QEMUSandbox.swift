@@ -23,7 +23,7 @@ public enum QEMUSandbox {
     public static func arguments(_ program: Program, executable: URL, arguments: [String], layout: QEMULayout) throws -> [String] {
         [
             "-f", try profile(program).path,
-            "-D", "BUNDLE=\(try realPath(layout.bundle.url))",
+            "-D", "BUNDLE=\(try realPath(layout.bundleDirectory))",
             "-D", "RUNDIR=\(try realPath(layout.runDirectory))",
             "-D", "RUNTIME=\(try realPath(layout.installation.root))",
             executable.path,

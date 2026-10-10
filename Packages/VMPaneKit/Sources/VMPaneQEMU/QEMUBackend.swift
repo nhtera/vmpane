@@ -98,10 +98,11 @@ actor QEMUSession {
         if let next = options.config { config = next }
         var processes = processes
         processes.layoutInstallation(try resolveInstallation())
+        try FileManager.default.createDirectory(
+            at: processes.layout.runDirectory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        processes.layout = try processes.layout.resolved()
         self.processes = processes
         let layout = processes.layout
-        try FileManager.default.createDirectory(
-            at: layout.runDirectory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         try QEMUFirmware.ensureVariables(layout)
         try QEMUFirmware.prepareCode(layout)
         let arguments = try QEMUArgvBuilder.arguments(config, layout: layout, incoming: options.stateDirectory != nil)
@@ -111,22 +112,26 @@ actor QEMUSession {
         displaySize = nil
         pressedButtons = 0
         var swtpm: (ProcessRecord, ChildExitWatcher)?
+        var qemu: ProcessRecord?
         do {
             if config.qemu?.tpm == true { swtpm = try await processes.startSwtpm() }
-            let (qemu, qemuExit) = try processes.startQEMU(arguments)
-            let qmp: QMPClient
-            do {
-                qmp = try await connect(layout.qmpSocket, while: qemuExit, log: layout.qemuLog)
-            } catch {
-                qemu.terminate()
-                throw error
-            }
-            running = Running(qemu: qemu, swtpm: swtpm?.0, qmp: qmp, layout: layout)
+            let (record, qemuExit) = try processes.startQEMU(arguments)
+            qemu = record
+            let qmp = try await connect(layout.qmpSocket, while: qemuExit, log: layout.qemuLog)
+            running = Running(qemu: record, swtpm: swtpm?.0, qmp: qmp, layout: layout)
             watch(qmp)
-            Task { await self.qemuExited(await qemuExit.wait(), qemu: qemu) }
+            Task { await self.qemuExited(await qemuExit.wait(), qemu: record) }
             if let (record, watcher) = swtpm { Task { await self.swtpmExited(await watcher.wait(), swtpm: record) } }
         } catch {
-            swtpm?.0.terminate()
+            // Nothing half-started stays behind, nor in the children record.
+            let started = [qemu, swtpm?.0].compactMap { $0 }
+            let forget = processes.forget
+            await Blocking.run {
+                for child in started {
+                    child.terminate()
+                    forget(child)
+                }
+            }
             throw error
         }
     }

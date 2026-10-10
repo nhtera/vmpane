@@ -73,7 +73,7 @@ public enum QEMUArgvBuilder {
 
         // The USB controller first: USB storage attaches to it.
         for device in profile.inputDevices { args += ["-device", device] }
-        args += try storage(config, bundle: layout.bundle, fileExists: fileExists)
+        args += try storage(config, layout: layout, fileExists: fileExists)
         args += ["-device", qemu.gpu == .virtio ? "virtio-gpu-pci" : "ramfb"]
         args += try network(config)
 
@@ -104,12 +104,12 @@ public enum QEMUArgvBuilder {
 
     /// Disks (each gets a boot index: EDK2 drops devices without one from BootOrder), then removable media.
     /// The install medium boots first. Node names are positional, so config ids never reach QEMU.
-    private static func storage(_ config: VMConfigV1, bundle: VMBundle, fileExists: (URL) -> Bool) throws -> [String] {
+    private static func storage(_ config: VMConfigV1, layout: QEMULayout, fileExists: (URL) -> Bool) throws -> [String] {
         var args: [String] = []
         let installMedia = config.install?.media
         var bootIndex = config.removable.contains { $0.id == installMedia } ? 1 : 0
         for (index, disk) in config.disks.enumerated() {
-            let url = try bundle.fileURL(relativePath: disk.file)
+            let url = try layout.bundleFile(disk.file)
             guard fileExists(url) else { throw QEMUConfigError.missingFile(disk.file) }
             let node = "disk\(index)"
             args += ["-blockdev", "node-name=\(node),driver=raw,discard=unmap,file.driver=file,file.filename=\(path(url))"]

@@ -56,11 +56,12 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
         }
         let paths = VMPanePaths.standard()
         RunDirectoryReconciler.reconcile(paths: paths)
+        let runtime = runtimeVersion(paths)
         let prepared: PreparedBundle
         do {
             let bundle = try VMBundle.open(arguments.bundle)
             prepared = try LaunchCoordinator.prepareBundle(
-                bundle, paths: paths, runtimeVersion: runtimeVersion(paths),
+                bundle, paths: paths, runtimeVersion: runtime,
                 library: VMLibrary(paths: paths))
         } catch LaunchError.alreadyRunning {
             exit(LaunchCoordinator.alreadyRunningExitCode)
@@ -74,7 +75,7 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
             _ = try? registry.spawn(
                 URL(fileURLWithPath: "/bin/sleep"), .init(arguments: ["3600"], inheriting: [prepared.lock.fileDescriptor]))
         }
-        let controller = makeController(prepared)
+        let controller = makeController(prepared, runtimeVersion: runtime, paths: paths)
         Task {
             do {
                 try await controller.start()
@@ -144,23 +145,37 @@ extension HelperDelegate {
 }
 
 /// The runtime copy this helper runs from (`runtime/<version>/VMPaneVM.app`): the app keeps that directory
-/// while the helper lives. A helper started from the app bundle itself reports the app version.
+/// while the helper lives. A helper started from the app bundle itself (development, integration tests)
+/// makes the copy the app would make when the app has QEMU, so QEMU always runs from `runtime/<version>/qemu`;
+/// otherwise it reports the app version.
 private func runtimeVersion(_ paths: VMPanePaths) -> String {
-    RuntimeStore(paths: paths).version(ofHelperAt: Bundle.main.bundleURL) ?? VMPane.version
+    let store = RuntimeStore(paths: paths)
+    if let version = store.version(ofHelperAt: Bundle.main.bundleURL) { return version }
+    let app = Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let items = RuntimeStore.helperItems(app: app)
+    guard items.count > 1 else { return VMPane.version }
+    let version = RuntimeStore.version(app: app, appVersion: VMPane.version)
+    do {
+        try store.ensure(version: version, items: items)
+    } catch {
+        FileHandle.standardError.write(Data("VMPaneVM: cannot make the runtime copy: \(error)\n".utf8))
+        return VMPane.version
+    }
+    return version
 }
 
 extension HelperDelegate {
     /// Chooses the backend (saving first-start config changes) and builds the controller.
-    fileprivate func makeController(_ prepared: PreparedBundle) -> HelperController {
+    fileprivate func makeController(_ prepared: PreparedBundle, runtimeVersion: String, paths: VMPanePaths) -> HelperController {
         let made: BackendFactory.Made
         do {
-            made = try BackendFactory.make(prepared)
+            made = try BackendFactory.make(prepared, runtime: paths.runtime(version: runtimeVersion))
         } catch {
             FileHandle.standardError.write(Data("VMPaneVM: cannot prepare the VM: \(error)\n".utf8))
             made = BackendFactory.Made(backend: nil, config: prepared.config)
         }
         let controller = HelperController(
-            prepared: prepared, runtimeVersion: runtimeVersion(.standard()), backend: made.backend, config: made.config,
+            prepared: prepared, runtimeVersion: runtimeVersion, backend: made.backend, config: made.config,
             afterStart: made.afterStart, afterStop: made.afterStop
         ) {
             DispatchQueue.main.async { exit(0) }
