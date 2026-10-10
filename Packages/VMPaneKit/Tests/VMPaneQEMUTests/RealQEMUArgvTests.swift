@@ -111,6 +111,13 @@ func realQEMUAcceptsTheArgv(variant: String) async throws {
     let qmp = try await QMPClient.connect(to: layout.qmpSocket)
     let status = try await qmp.execute("query-status")["status"]
     #expect(status == (variant == "minimal" ? "inmigrate" : "running"))
+    if variant == "default" {
+        // Every key name in the shared table is a QKeyCode this QEMU knows (an unknown one is an error).
+        for name in Set(KeyNames.names.values) {
+            let release: JSONValue = ["type": "key", "data": ["down": false, "key": ["type": "qcode", "data": .string(name)]]]
+            try await qmp.execute("input-send-event", ["events": [release]])
+        }
+    }
     try await qmp.execute("quit")
     qemu.waitUntilExit()
     #expect(qemu.terminationStatus == 0)

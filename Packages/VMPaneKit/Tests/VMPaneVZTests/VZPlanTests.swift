@@ -165,3 +165,12 @@ private func withTemp(_ body: (URL) throws -> Void) throws {
     #expect(!VZBackend.isLockedRestore(other))
     #expect(!VZBackend.isLockedRestore(POSIXError(.EIO)))
 }
+
+@Test func everyVZKeyHasASharedName() {
+    for usage in VZKeyMap.hidUsage.keys {
+        #expect(KeyNames.name(forHIDUsage: usage) != nil, "no name for usage \(usage)")
+    }
+    for character in "abcXYZ019 !@#~\t\n" {
+        #expect(KeyNames.stroke(for: character).flatMap { VZKeyMap.keyCode(forHIDUsage: $0.usage) } != nil)
+    }
+}
