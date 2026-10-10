@@ -75,7 +75,7 @@ private func startSwtpm(_ layout: QEMULayout, output: URL) throws -> Process {
 }
 
 @Test(.enabled(if: qemuBundle != nil), arguments: ["default", "install", "tools", "minimal"])
-func realQEMUAcceptsTheArgv(variant: String) throws {
+func realQEMUAcceptsTheArgv(variant: String) async throws {
     let installation = QEMUInstallation(root: URL(fileURLWithPath: try #require(qemuBundle), isDirectory: true), source: .environment)
     // Short and resolved: socket paths must fit sun_path, and /tmp is a symlink.
     let root = URL(fileURLWithPath: "/private/tmp/vp-argv-\(UUID().uuidString.prefix(8))", isDirectory: true)
@@ -106,4 +106,12 @@ func realQEMUAcceptsTheArgv(variant: String) throws {
     #expect(FileManager.default.fileExists(atPath: layout.qmpSocket.path))
     #expect(FileManager.default.fileExists(atPath: layout.spiceSocket.path))
     #expect(output.isEmpty, "QEMU printed: \(output)")
+
+    // The QMP client against the real QEMU: status, then a clean quit.
+    let qmp = try await QMPClient.connect(to: layout.qmpSocket)
+    let status = try await qmp.execute("query-status")["status"]
+    #expect(status == (variant == "minimal" ? "inmigrate" : "running"))
+    try await qmp.execute("quit")
+    qemu.waitUntilExit()
+    #expect(qemu.terminationStatus == 0)
 }

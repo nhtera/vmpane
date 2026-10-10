@@ -1,11 +1,10 @@
 import Darwin
 import Foundation
-import VMPaneCore
 
-/// Low-level AF_UNIX stream socket helpers.
-enum UnixSocket {
+/// Low-level AF_UNIX stream socket helpers (control sockets, QMP, guest agent ports).
+package enum UnixSocket {
     /// A new stream socket: close-on-exec, no SIGPIPE on writes to a closed peer.
-    static func make() throws -> Int32 {
+    package static func make() throws -> Int32 {
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else { throw POSIXError.current() }
         _ = fcntl(fd, F_SETFD, FD_CLOEXEC)
@@ -15,7 +14,7 @@ enum UnixSocket {
     }
 
     /// Runs `body` with a `sockaddr_un` for `path` (relative or absolute, at most 103 bytes).
-    static func withAddress<T>(_ path: String, _ body: (UnsafePointer<sockaddr>, socklen_t) throws -> T) throws -> T {
+    package static func withAddress<T>(_ path: String, _ body: (UnsafePointer<sockaddr>, socklen_t) throws -> T) throws -> T {
         var address = sockaddr_un()
         address.sun_family = sa_family_t(AF_UNIX)
         let bytes = Array(path.utf8)
@@ -32,7 +31,7 @@ enum UnixSocket {
     }
 
     /// `bind`, or a relative bind from inside the directory when the absolute path is too long for `sun_path`.
-    static func bind(_ fd: Int32, to address: UnixSocketAddress) throws {
+    package static func bind(_ fd: Int32, to address: UnixSocketAddress) throws {
         switch address {
         case .absolute(let path):
             try withAddress(path) { pointer, length in
@@ -47,7 +46,7 @@ enum UnixSocket {
         }
     }
 
-    static func connect(_ fd: Int32, to address: UnixSocketAddress) throws {
+    package static func connect(_ fd: Int32, to address: UnixSocketAddress) throws {
         switch address {
         case .absolute(let path):
             try withAddress(path) { pointer, length in
@@ -81,7 +80,7 @@ enum UnixSocket {
     }
 
     /// Writes all of `data` (blocking socket).
-    static func writeAll(_ fd: Int32, _ data: Data) throws {
+    package static func writeAll(_ fd: Int32, _ data: Data) throws {
         try data.withUnsafeBytes { buffer in
             guard let base = buffer.baseAddress else { return }
             var offset = 0

@@ -36,7 +36,7 @@ let package = Package(
         .testTarget(name: "VMPaneCoreTests", dependencies: ["VMPaneCore"], resources: [.copy("Fixtures")]),
         .testTarget(name: "VMPaneControlTests", dependencies: ["VMPaneControl"]),
         .testTarget(name: "VMPaneVZTests", dependencies: ["VMPaneVZ"]),
-        .testTarget(name: "VMPaneQEMUTests", dependencies: ["VMPaneQEMU"], exclude: ["Golden"]),
+        .testTarget(name: "VMPaneQEMUTests", dependencies: ["VMPaneQEMU"], exclude: ["Golden", "Fixtures"]),
         .testTarget(name: "VMPaneHostTests", dependencies: ["VMPaneHost"]),
         .testTarget(name: "VMPaneMCPTests", dependencies: ["VMPaneMCP"]),
         .testTarget(name: "VMPaneUIModelTests", dependencies: ["VMPaneUI"]),

@@ -1,0 +1,23 @@
+{"s": {"QMP": {"capabilities": ["oob"], "version": {"package": "", "qemu": {"major": 11, "micro": 2, "minor": 1}}}}}
+{"c": {"execute": "qmp_capabilities", "id": 1}}
+{"s": {"id": 1, "return": {}}}
+{"c": {"execute": "query-status", "id": 2}}
+{"s": {"id": 2, "return": {"running": true, "status": "running"}}}
+{"c": {"execute": "stop", "id": 3}}
+{"s": {"event": "STOP", "timestamp": {"microseconds": 882477, "seconds": 1791643604}}}
+{"s": {"id": 3, "return": {}}}
+{"c": {"execute": "query-status", "id": 4}}
+{"s": {"id": 4, "return": {"running": false, "status": "paused"}}}
+{"c": {"execute": "cont", "id": 5}}
+{"s": {"event": "RESUME", "timestamp": {"microseconds": 882853, "seconds": 1791643604}}}
+{"s": {"id": 5, "return": {}}}
+{"c": {"execute": "no-such-command", "id": 6}}
+{"s": {"error": {"class": "CommandNotFound", "desc": "The command no-such-command has not been found"}, "id": 6}}
+{"c": {"execute": "query-name", "id": 7}}
+{"s": {"id": 7, "return": {}}}
+{"c": {"execute": "system_powerdown", "id": 8}}
+{"s": {"event": "POWERDOWN", "timestamp": {"microseconds": 883413, "seconds": 1791643604}}}
+{"s": {"id": 8, "return": {}}}
+{"c": {"execute": "quit", "id": 9}}
+{"s": {"data": {"guest": false, "reason": "host-qmp-quit"}, "event": "SHUTDOWN", "timestamp": {"microseconds": 883601, "seconds": 1791643604}}}
+{"s": {"id": 9, "return": {}}}
