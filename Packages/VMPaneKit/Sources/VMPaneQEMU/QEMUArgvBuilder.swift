@@ -51,7 +51,8 @@ public enum QEMUArgvBuilder {
 
         var args: [String] = [
             "-nodefaults", "-no-user-config",
-            "-name", escape(config.name),
+            // Never the user's VM name: QEMU shows it in its process title and the SPICE server name.
+            "-name", "guest=vmpane-\(ShortID(config.id))",
             "-uuid", qemu.smbiosUUID.uuidString.lowercased(),
             "-machine", profile.machine,
             "-accel", "hvf", "-cpu", "host",

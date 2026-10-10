@@ -144,7 +144,7 @@ it_golden_macos() {
 
 # The golden Windows bundle (imported from the S1 install; see build-golden-windows.sh).
 # Built once into ~/VMPaneItest/win11-base.vmpane; scenarios clone it. Exit 77 when the source is missing.
-IT_GOLDEN_WINDOWS_VERSION=1
+IT_GOLDEN_WINDOWS_VERSION=2
 it_golden_windows() {
     local golden="$HOME/VMPaneItest/win11-base.vmpane" status
     if [[ $(cat "$golden/.ready" 2>/dev/null) == "$IT_GOLDEN_WINDOWS_VERSION" ]]; then echo "$golden"; return 0; fi

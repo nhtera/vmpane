@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Builds the golden Windows bundle from the Gate 00 S1 install (Windows 11 Pro 26H2 ARM64, our Secure Boot
-# EDK2, local account with auto-logon, ramfb, no virtio drivers), until Phase 06 can install Windows
-# unattended. Imports the spike's disk (APFS clone), its UEFI variables (boot entries; same EDK2 commit)
-# and its TPM state, which the spike kept encrypted: swtpm_ioctl (Homebrew swtpm, development only)
-# exports it from a keyed swtpm and imports it into an unkeyed one. Then boots it once through VMPane's
-# helper to the desktop and shuts it down.
+# Builds the golden Windows bundle from the Gate 00 S1 install (Windows 11 Pro 26H2 ARM64, local account with
+# auto-logon, ramfb, no virtio drivers), until Phase 06 can install Windows unattended. Only
+# the disk is imported (APFS clone); the UEFI variables (our Secure Boot template: PK, MS KEK/db, dbx) and
+# the TPM are VMPane's own, made at first start like any VM VMPane creates: with no boot entry, EDK2 boots
+# Windows through \EFI\BOOT\BOOTAA64.EFI. Then boots it once through the helper to the desktop and shuts
+# it down. (BitLocker must be off on that install: with a new TPM Windows would ask for the recovery key
+# and the desktop check fails.)
 # Usage: build-golden-windows.sh <bundle path>   (needs $APP, $VMPANE_ROOT; VMPANE_WIN_SPIKE overrides the source)
 set -euo pipefail
 golden=$1
@@ -12,11 +13,7 @@ source "$VMPANE_ROOT/itest/lib/common.sh"
 IT_SCENARIO=golden-windows
 
 source_dir=${VMPANE_WIN_SPIKE:-$VMPANE_ROOT/spikes/s01-win-qemu-boot/assets/win-sb2}
-ioctl=/opt/homebrew/bin/swtpm_ioctl
-for need in "$source_dir/disk.raw" "$source_dir/own-vars.fd" "$source_dir/tpm/tpm2-00.permall" "$source_dir/tpm.key" "$ioctl"; do
-    [[ -e $need ]] || { echo "golden-windows: missing $need (the S1 spike install, or brew install swtpm)" >&2; exit 77; }
-done
-swtpm=$APP/Contents/Helpers/qemu/bin/swtpm
+[[ -f $source_dir/disk.raw ]] || { echo "golden-windows: missing $source_dir/disk.raw (the S1 spike install)" >&2; exit 77; }
 
 work=$(cd "$(mktemp -d /tmp/vp-golden-win.XXXXXX)" && pwd -P)
 export VMPANE_SUPPORT_DIR="$work/s"
@@ -29,25 +26,6 @@ it_create_bundle "$golden.partial" windows \
      | .qemu = {tpm: true, secureBoot: true, gpu: "ramfb", storageBus: "nvme", smbiosUUID: "'"$(uuidgen)"'"}
      | .windows = {}'
 cp -c "$source_dir/disk.raw" "$golden.partial/current/disk.img"
-cp "$source_dir/own-vars.fd" "$golden.partial/current/aux/efi_vars.fd"
-
-# TPM state: keyed swtpm → state blob → unkeyed swtpm in the bundle. The key never leaves its file.
-tpm=$golden.partial/current/aux/tpm
-mkdir -p "$work/old" "$tpm"
-cp "$source_dir/tpm/tpm2-00.permall" "$work/old/"
-"$swtpm" socket --tpm2 --tpmstate dir="$work/old" --ctrl type=unixio,path="$work/old.sock" \
-    --key file="$source_dir/tpm.key",format=hex,mode=aes-256-cbc --daemon
-it_wait_for 5 test -S "$work/old.sock"
-"$ioctl" --unix "$work/old.sock" -i
-"$ioctl" --unix "$work/old.sock" --save permanent "$work/permanent.blob"
-"$ioctl" --unix "$work/old.sock" -s
-"$swtpm" socket --tpm2 --tpmstate dir="$tpm" --ctrl type=unixio,path="$work/new.sock" --daemon
-it_wait_for 5 test -S "$work/new.sock"
-"$ioctl" --unix "$work/new.sock" --load permanent "$work/permanent.blob"
-"$ioctl" --unix "$work/new.sock" -i
-"$ioctl" --unix "$work/new.sock" -s
-rm -f "$work/permanent.blob" "$tpm/.lock"
-[[ -s $tpm/tpm2-00.permall ]] || { it_fail "TPM state import failed"; exit 1; }
 chmod -R go-rwx "$golden.partial"
 mv "$golden.partial" "$golden"
 

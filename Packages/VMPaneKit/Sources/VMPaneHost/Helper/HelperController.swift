@@ -15,7 +15,8 @@ public actor HelperController {
     private var shuttingDown = false
     var pumpTask: Task<Void, Never>?
     /// How long shutdown waits for a guest to power off after the ACPI request before forcing it off.
-    var gracefulStopTimeout: Duration = .seconds(30)
+    /// Windows takes 36–120 s (S2), and forcing it off risks Automatic Repair on the next boot.
+    var gracefulStopTimeout: Duration
     /// Whether the VM was last started without a window (restarts after a restore keep it).
     var lastStartHeadless = true
     /// The config the running VM was started with, plus settings applied live since (nil before a start).
@@ -49,6 +50,7 @@ public actor HelperController {
         (stateChanges, stateContinuation) = AsyncStream.makeStream(of: VMRunState.self)
         (displayRequests, displayContinuation) = AsyncStream.makeStream(of: Void.self)
         self.backend = backend
+        gracefulStopTimeout = backend?.kind == .qemu ? .seconds(120) : .seconds(30)
         self.onShutdown = onShutdown
     }
 

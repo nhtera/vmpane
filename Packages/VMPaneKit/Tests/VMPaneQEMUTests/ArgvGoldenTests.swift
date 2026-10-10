@@ -103,7 +103,7 @@ private func expectGolden(_ name: String, _ args: [String], layout: QEMULayout, 
     config.removable = [Extensible(RemovableConfig(id: "iso", path: "/isos/a,readonly=off.iso", bus: .usb))]
     try withBundle(named: "Win, Test.vmpane", config) { layout in
         let args = try QEMUArgvBuilder.arguments(config, layout: layout, fileExists: allExist)
-        #expect(args.contains("Win,, file=/etc/passwd"))
+        #expect(!args.contains { $0.contains("passwd") })  // the VM name never reaches QEMU
         #expect(args.contains { $0.hasSuffix("file.filename=/isos/a,,readonly=off.iso") })
         try expectGolden("windows-commas", args, layout: layout)
     }
