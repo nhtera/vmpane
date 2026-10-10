@@ -43,8 +43,11 @@ public final class SpiceDisplay: NSObject {
         NSApp.activate()
     }
 
-    /// Connects (or reconnects) to QEMU's SPICE server.
-    public func connect() {
+    /// Connects (or reconnects) to QEMU's SPICE server. After `disconnectAndWait` (QEMU is quitting) only a
+    /// connect for a new QEMU (`afterStart`) reconnects: a late "paused" from the dying QEMU must not.
+    public func connect(afterStart: Bool = false) {
+        if afterStart { quitting = false }
+        guard !quitting else { return }
         wanted = true
         guard connection == nil else { return }
         if !Self.started {
@@ -70,6 +73,7 @@ public final class SpiceDisplay: NSObject {
     /// cleanup when it exits with a client still connected, so QEMU is quit only after this.
     public func disconnectAndWait() async {
         wanted = false
+        quitting = true
         guard connection != nil else { return }
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             closed.append(continuation)
@@ -79,6 +83,7 @@ public final class SpiceDisplay: NSObject {
     }
 
     private var closing: CSConnection?
+    private var quitting = false
     private var closed: [CheckedContinuation<Void, Never>] = []
 
     private func finishClosing() {

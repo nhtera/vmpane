@@ -230,7 +230,7 @@ extension HelperDelegate {
             for await state in controller.stateChanges {
                 switch state {
                 case .running, .paused:
-                    display.connect()
+                    display.connect(afterStart: state == .running)
                     if !headless, !shown {
                         shown = true
                         display.show()

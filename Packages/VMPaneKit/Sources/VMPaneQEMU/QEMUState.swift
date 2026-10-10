@@ -27,6 +27,8 @@ enum QEMUState {
     static let infoName = "state-qemu.json"
     /// No cap: the default (128 MiB/s) makes saves several times slower.
     static let maxBandwidth: Int64 = 1 << 40
+    /// Migration commands on a busy host can take longer than QMP's default 5 s to answer.
+    static let commandTimeout = Duration.seconds(30)
 
     struct Info: Codable, Equatable {
         var qemu: String
@@ -47,8 +49,8 @@ enum QEMUState {
 
     /// Saves the paused VM's RAM state to `file`.
     static func save(_ qmp: QMPClient, to file: URL, memoryMiB: Int) async throws {
-        try await qmp.execute("migrate-set-parameters", ["max-bandwidth": .int(maxBandwidth)])
-        try await qmp.execute("migrate", ["channels": channel(file)])
+        try await qmp.execute("migrate-set-parameters", ["max-bandwidth": .int(maxBandwidth)], timeout: commandTimeout)
+        try await qmp.execute("migrate", ["channels": channel(file)], timeout: commandTimeout)
         try await waitForMigration(qmp, what: "saving the memory state", memoryMiB: memoryMiB)
         let info = try JSONEncoder().encode(Info(qemu: version(of: qmp)))
         try DurableWrite.write(info, to: file.deletingLastPathComponent().appendingPathComponent(infoName))
@@ -63,7 +65,7 @@ enum QEMUState {
         }
         let running = version(of: qmp)
         guard let saved, saved.qemu == running else { throw QEMUStateError.incompatible(saved: saved?.qemu ?? "unknown", running: running) }
-        try await qmp.execute("migrate-incoming", ["channels": channel(file)])
+        try await qmp.execute("migrate-incoming", ["channels": channel(file)], timeout: commandTimeout)
         try await waitForMigration(qmp, what: "loading the memory state", memoryMiB: memoryMiB)
     }
 
@@ -72,7 +74,7 @@ enum QEMUState {
     static func waitForMigration(_ qmp: QMPClient, what: String, memoryMiB: Int) async throws {
         let deadline = ContinuousClock.now + .seconds(30 + 10 * max(1, memoryMiB / 1024))
         while true {
-            let status = try await qmp.execute("query-migrate")
+            let status = try await qmp.execute("query-migrate", timeout: commandTimeout)
             switch status["status"]?.stringValue {
             case "completed":
                 return

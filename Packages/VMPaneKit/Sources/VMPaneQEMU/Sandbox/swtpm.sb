@@ -1,6 +1,6 @@
 ;; Deny-by-default sandbox for swtpm (applied by the helper with sandbox-exec, QEMUSandbox.swift).
 ;; Parameters (-D):
-;;   BUNDLE   the VM bundle (read-write: the TPM state directory lives in it)
+;;   BUNDLE   the VM bundle (read; write only current/aux/tpm, the TPM state)
 ;;   RUNDIR   the VM's run directory (read-write: the control socket QEMU connects to, the log)
 ;;   RUNTIME  the QEMU runtime copy (read-only: swtpm and its libraries)
 ;; swtpm needs no network and no hypervisor: only its state, its socket and its libraries.
@@ -31,7 +31,8 @@
   (literal "/private/etc/localtime") (subpath "/usr/share/zoneinfo") (subpath "/private/var/db/timezone"))
 (allow file-write-data (literal "/dev/null"))
 
-(allow file-read* file-write* (subpath (param "BUNDLE")) (subpath (param "RUNDIR")))
+(allow file-read* (subpath (param "BUNDLE")) (subpath (param "RUNDIR")))
+(allow file-write* (subpath (string-append (param "BUNDLE") "/current/aux/tpm")) (subpath (param "RUNDIR")))
 
 ;; The control socket (swtpm listens, QEMU connects)
 (allow system-socket)

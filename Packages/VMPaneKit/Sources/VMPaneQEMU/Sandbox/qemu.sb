@@ -1,6 +1,8 @@
 ;; Deny-by-default sandbox for qemu-system-aarch64 (applied by the helper with sandbox-exec, QEMUSandbox.swift).
 ;; Parameters (-D):
-;;   BUNDLE   the VM bundle (read-write: disks, firmware variables, saved state)
+;;   BUNDLE   the VM bundle (read; write only under current/: disks, firmware variables, saved state. The rest
+;;            (config.json, snapshot metadata, the restore journal, install media) is parsed by the unsandboxed
+;;            helper and app, so a compromised QEMU must not rewrite it)
 ;;   RUNDIR   the VM's run directory (read-write: QMP/agent/swtpm sockets, logs; also TMPDIR, because
 ;;            QEMU's memfd fallback writes memfd-XXXXXX into $TMPDIR)
 ;;   RUNTIME  the QEMU runtime copy (read-only: programs, libraries, firmware)
@@ -44,11 +46,15 @@
 ;; QEMU and swtpm find their data relative to their own executable (realpath of every directory above it)
 (allow file-read-metadata (path-ancestors (param "RUNTIME")))
 (allow file-read* (literal "/dev/null") (literal "/dev/urandom") (literal "/dev/random")
-  (literal "/private/etc/localtime") (subpath "/usr/share/zoneinfo") (subpath "/private/var/db/timezone"))
+  (literal "/private/etc/localtime") (subpath "/usr/share/zoneinfo") (subpath "/private/var/db/timezone")
+  ;; slirp's DNS proxy (10.0.2.3) reads the host's name servers with libresolv
+  (literal "/private/var/run/resolv.conf") (literal "/private/etc/hosts"))
+(allow file-read-metadata (literal "/etc") (literal "/var") (literal "/private/etc") (literal "/private/var/run"))
 (allow file-write-data (literal "/dev/null"))
 
 ;; The VM's own files
-(allow file-read* file-write* (subpath (param "BUNDLE")) (subpath (param "RUNDIR")))
+(allow file-read* (subpath (param "BUNDLE")) (subpath (param "RUNDIR")))
+(allow file-write* (subpath (string-append (param "BUNDLE") "/current")) (subpath (param "RUNDIR")))
 
 ;; slirp user networking: outbound IP connections, and the listening sockets of port forwards (hostfwd).
 ;; IP only: an unscoped network-outbound would also allow connecting to any Unix socket on the Mac.

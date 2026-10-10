@@ -137,7 +137,7 @@ actor QEMUSession {
         case "STOP" where exitReason != nil: break  // QEMU is going away: the stop is not a pause
         case "STOP" where pausedForSpace: events.yield(.diskFull(message: Self.diskFullMessage))
         case "STOP": events.yield(.paused)
-        case "BLOCK_IO_ERROR" where event.data["action"] == "stop":
+        case "BLOCK_IO_ERROR" where event.data["action"] == "stop" && event.data["nospace"] == true:
             // A disk with a stop-on-ENOSPC policy (virtio, USB) paused the guest; STOP follows.
             Self.log.error("block I/O error: \(String(describing: event.data), privacy: .public)")
             pausedForSpace = true

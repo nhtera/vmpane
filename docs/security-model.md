@@ -10,8 +10,8 @@ What it can reach then:
 
 | process | runs as | sandbox | can reach |
 |---|---|---|---|
-| `qemu-system-aarch64` | the user | `VMPaneQEMU/Sandbox/qemu.sb` (deny by default) | its VM bundle and run directory (read/write), the QEMU runtime copy (read), HVF, CoreAudio output, outbound network (slirp NAT), listening sockets for the VM's port forwards |
-| `swtpm` | the user | `VMPaneQEMU/Sandbox/swtpm.sb` | its VM bundle and run directory; no network, no hypervisor |
+| `qemu-system-aarch64` | the user | `VMPaneQEMU/Sandbox/qemu.sb` (deny by default) | its VM bundle (read; write only `current/`: disks, UEFI variables, saved state) and run directory, the QEMU runtime copy (read), HVF, CoreAudio output, outbound IP (slirp NAT), listening sockets for the VM's port forwards, the host's DNS configuration |
+| `swtpm` | the user | `VMPaneQEMU/Sandbox/swtpm.sb` | its VM bundle (read; write only `current/aux/tpm`) and run directory; no network, no hypervisor |
 | helper (`VMPaneVM`) | the user | none (v2 hardening item) | everything the user can |
 
 - QEMU is built HVF-only with a device allowlist (`qemu/SECURITY-DEVICES.md`): no TCG, no VNC, no
@@ -40,3 +40,8 @@ What it can reach then:
 - **Port forwards to `0.0.0.0`** expose the guest service on the network, as the user asked; the QEMU
   sandbox allows listening on any local address.
 - **Saved RAM state** (`current/state/state.qemu`, snapshots) is a plain file, like the disks.
+- **The guest reaches the Mac's loopback services** through slirp's host alias 10.0.2.2 (any service that
+  listens on 127.0.0.1, as for every slirp/NAT VM). A later option is slirp's `restrict` mode with only the
+  agent's forward.
+- **Integration-test hooks** (`VMPANE_TEST_*` environment variables) exist in release helpers; they are
+  read from the helper's own environment only.
