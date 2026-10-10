@@ -10,7 +10,7 @@ This page describes the intended shape; parts not built yet are marked *planned*
 | `VMPane.app` | VM library, creation wizard, settings. Never runs a VM itself. |
 | `VMPaneVM.app` (one per running VM) | Owns one VM: its window, Dock tile, control socket and backend. A crash takes down one VM, not the app. |
 | `vmpane` CLI | Scripting and the MCP server (`vmpane mcp`). Talks to helpers over their control sockets. |
-| `qemu-system-aarch64`, `swtpm` (*planned*) | Child processes of a Windows VM's helper, run under a deny-by-default sandbox profile. |
+| `qemu-system-aarch64`, `swtpm` | Child processes of a Windows VM's helper, run under deny-by-default sandbox profiles. |
 | guest agent (Rust, *planned*) | Runs inside the guest: clipboard, exec, file transfer, display resize. Talks to the host over vsock (Linux, macOS) or virtio-serial (Windows). |
 
 ## Backends
@@ -58,6 +58,10 @@ VMPaneMCP       MCP server (hand-rolled, see ADR 0002)                          
 VMPaneUI        shared SwiftUI views and view models                                        -> Core, Control, Host
 ```
 
+`Packages/VMPaneSpice` (helper only) is the Windows display: CocoaSpice vendored with our patches
+(`scripts/vendor-cocoaspice.sh`), built against `SpiceSDK/` (headers and link stubs of the SPICE client
+libraries, generated from the QEMU build by `qemu/scripts/spice-sdk.sh`; CI fails on drift).
+
 ## App bundle
 
 ```
@@ -65,8 +69,10 @@ VMPane.app/Contents/
   MacOS/VMPane                     main app
   Helpers/vmpane                   CLI (not in MacOS/: `vmpane` and `VMPane` are the same name on case-insensitive APFS)
   Helpers/VMPaneVM.app             per-VM helper
-  Helpers/qemu/{bin,lib}/          QEMU, qemu-img, swtpm and their libraries (planned)
-  Resources/qemu/share/            firmware and QEMU data files, passed with -L (planned)
+  Helpers/VMPaneVM.app/Contents/Frameworks/   SPICE client libraries (weak-linked; from the QEMU bundle)
+  Helpers/qemu/{bin,lib}/          QEMU, qemu-img, swtpm and their libraries
+  Resources/qemu/share/            firmware and QEMU data files, passed with -L
+  Resources/qemu/MANIFEST.json     the QEMU bundle's identity (part of the runtime copy's name)
 ```
 
 Every Mach-O is listed in `Config/signing-manifest.json` with its signing identifier and entitlements;
@@ -75,5 +81,30 @@ Every Mach-O is listed in `Config/signing-manifest.json` with its signing identi
 ## Trust between processes
 
 Helpers accept control connections only from peers whose code signature satisfies our designated
-requirement (checked from the socket's audit token, not the PID). Secrets such as the TPM state key are
-kept in the login keychain with an access list limited to VMPane's own binaries.
+requirement (checked from the socket's audit token, not the PID). A Windows VM's isolation and accepted
+risks are in [security-model.md](security-model.md).
+
+## QEMU (Windows guests)
+
+A Windows VM's helper runs QEMU from its runtime copy (`runtime/<version>/qemu`; a helper started from the
+app bundle makes the copy itself):
+
+1. **Firmware.** The shipped EDK2 code is padded to the 64 MiB flash in `run/<sid>/` at each start; the
+   VM's variables (`current/aux/efi_vars.fd`) are made once from the Secure Boot template.
+2. **swtpm**, then **QEMU**, each through `sandbox-exec` with its profile (`VMPaneQEMU/Sandbox/*.sb`),
+   recorded in `run/<sid>.children` before it runs (by pid and start time: the launcher execs), holding
+   the bundle lock, with a minimal environment and `TMPDIR` in the run directory. Paths handed to them
+   are real paths (sandbox rules match those).
+3. **QMP** (`run/<sid>/qmp.sock`) controls QEMU: pause, ACPI power button, quit, screenshots
+   (`screendump`, PPM), input (`input-send-event`), RAM state (file migration), port forwards
+   (`hostfwd_add`/`hostfwd_remove`). Its events drive the state machine; an unexpected exit, or the TPM
+   going away, is a failure carrying the end of `logs/qemu.log`.
+4. **Display**: the helper's SPICE client on `run/<sid>/spice.sock`, reconnected whenever QEMU restarts.
+   QEMU runs with `-no-shutdown`: a guest power-off pauses it, the client disconnects, then QEMU quits
+   (QEMU's spice-server can hang in its cleanup with a client still connected).
+5. **Disk space**: NVMe has no write-error policy, so the helper pauses the guest when the bundle's
+   volume drops below 2 GiB free and resumes it only from 3 GiB (`diskFull` event).
+
+Suspend and live snapshots save RAM state with a plain file migration after `stop` (`state/state.qemu`,
+with `state-qemu.json` naming the QEMU that wrote it: only the same QEMU loads it); the swtpm state travels
+in the stream. Unlike VZ's, QEMU's saved state does not need an unlocked Mac.

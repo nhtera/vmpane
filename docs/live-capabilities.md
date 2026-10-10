@@ -40,4 +40,10 @@ suspended VM is never lost to a locked screen. Integration tests that restore sk
 
 ## QEMU
 
-Phase 05.
+| change while running | how |
+|---|---|
+| port forwards (`portForwards`) | slirp `hostfwd_remove` / `hostfwd_add` on the first NAT NIC |
+| everything else (CPU, memory, disks, removable media, NICs, display size, audio, GPU, TPM) | next start |
+
+Display resize follows the window through SPICE once spice-vdagent runs in the guest (Phase 06);
+removable media changes come with the Windows install work (Phase 06).

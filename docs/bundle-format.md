@@ -12,8 +12,10 @@ Name.vmpane/
   current/               the live file set, swapped as one unit by a snapshot restore
     generation.json      {schemaVersion, generationId, parentSnapshotId}
     disk.img             raw sparse disk (the only disk format)
-    aux/                 efi_vars.fd | AuxiliaryStorage, HardwareModel, MachineIdentifier | tpm/
-    state/               saved RAM state + suspend.json {generationId, deviceSetHash, hostBuild, backendVersion}
+    aux/                 efi_vars.fd (UEFI variables) | AuxiliaryStorage, HardwareModel, MachineIdentifier
+                         | tpm/ (swtpm state, Windows)
+    state/               saved RAM state (suspend.vzvmsave | state.qemu + state-qemu.json) + suspend.json
+                         {generationId, deviceSetHash, hostBuild, backendVersion}
   snapshots/<uuid>/      meta.json, disk.img, aux/, state/ — meta.json is written last
   install/               Windows install state; never snapshotted or cloned
   restore.journal        present only while a restore is in progress
