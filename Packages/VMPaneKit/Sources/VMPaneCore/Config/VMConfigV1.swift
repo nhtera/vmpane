@@ -303,15 +303,19 @@ public struct UIConfig: ExtensibleFields {
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
 
+/// A guest still being installed; removed from the config once the install is done.
 public struct InstallConfig: ExtensibleFields {
-    /// Absolute path of a macOS restore image (`.ipsw`) to install from.
-    public var restoreImage: String
+    /// macOS: absolute path of the restore image (`.ipsw`) to install from on first start.
+    public var restoreImage: String?
+    /// Linux: id of the `removable` entry holding the installer ISO, detached after the installer's reboot.
+    public var media: String?
 
-    public init(restoreImage: String) {
+    public init(restoreImage: String? = nil, media: String? = nil) {
         self.restoreImage = restoreImage
+        self.media = media
     }
 
-    enum CodingKeys: String, CodingKey, CaseIterable { case restoreImage }
+    enum CodingKeys: String, CodingKey, CaseIterable { case restoreImage, media }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
 

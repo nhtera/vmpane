@@ -26,7 +26,9 @@ extension HelperController {
         case .paused: transition(.paused)
         case .resumed: transition(.resumed)
         case .suspended: transition(.suspended)
-        case .stopped(let reason): transition(.stopped, reason: reason)
+        case .stopped(let reason):
+            transition(.stopped, reason: reason)
+            if afterStop != nil, state == .stopped { Task { await self.vmStopped() } }
         case .failed(let message): transition(.failed, reason: message)
         case .installProgress(let fraction, let message):
             server?.broadcast(
@@ -149,6 +151,28 @@ extension HelperController {
             }
         }
         return resumed
+    }
+
+    /// The VM stopped: save `afterStop`'s config change, if any (next start uses it). Not while saved RAM
+    /// state waits: a device change would discard it.
+    func vmStopped() async {
+        guard let hook = afterStop, state == .stopped else { return }
+        let directory = stateDirectory
+        let hasSavedState = await Blocking.run { !((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []).isEmpty }
+        guard !hasSavedState else { return }
+        let current = config
+        // A start may have run while the hook read the disk: then it waits for the next stop.
+        guard let updated = await Blocking.run({ hook(current) }), state == .stopped, config == current else { return }
+        config = updated  // before saving, so a start arriving meanwhile already uses it
+        let lock = prepared.lock
+        do {
+            try await Blocking.run { try ConfigStore.save(updated, holding: lock) }
+        } catch {
+            Self.log.error("cannot save the config after the VM stopped: \(String(describing: error), privacy: .public)")
+        }
+        server?.broadcast(
+            topic: "install", method: ControlNotification.installProgress.rawValue,
+            params: ["phase": "complete", "percent": 100, "message": "Installation finished; installer media removed"])
     }
 
     func writeStateMeta() async throws {

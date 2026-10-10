@@ -87,3 +87,19 @@ private func run(_ tool: String, _ arguments: [String]) throws { try shell(tool,
         #expect(try #require(DiskImage.privateBytes(clone)) < 1 << 20)
     }
 }
+
+@Test func efiBootLoadersAreFoundAtEitherAlignmentExceptTheRemovablePath() throws {
+    try withTempDirectory { dir in
+        let store = dir.appendingPathComponent("efi_vars.fd")
+        func utf16(_ text: String) -> Data {
+            text.utf16.reduce(into: Data()) { $0.append(contentsOf: [UInt8($1 & 0xFF), UInt8($1 >> 8)]) }
+        }
+        // Two paths at odd offsets, then (after one padding byte) one at an even offset.
+        let data =
+            Data([0]) + utf16(#"\EFI\BOOT\BOOTAA64.EFI"#) + utf16(#"\EFI\Fedora\shimaa64.efi"#) + Data([0])
+            + utf16(#"\EFI\ubuntu\grubaa64.efi"#)
+        try data.write(to: store)
+        #expect(DiskImage.efiBootLoaders(inVariableStore: store) == ["fedora", "ubuntu"])
+        #expect(DiskImage.efiBootLoaders(inVariableStore: dir.appendingPathComponent("none")).isEmpty)
+    }
+}

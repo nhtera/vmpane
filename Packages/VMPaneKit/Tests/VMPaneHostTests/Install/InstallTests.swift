@@ -122,22 +122,75 @@ private func sha(_ data: Data) -> String { SHA256.hash(data: data).map { String(
     }
 }
 
+/// A small ISO in `dir` with `EFI/BOOT/<loader>` (none when nil).
+private func makeISO(in dir: URL, _ name: String, loader: String?) throws -> URL {
+    let tree = dir.appendingPathComponent("\(name)-tree")
+    try FileManager.default.createDirectory(at: tree.appendingPathComponent("EFI/BOOT"), withIntermediateDirectories: true)
+    if let loader { try Data("efi".utf8).write(to: tree.appendingPathComponent("EFI/BOOT/\(loader)")) }
+    let iso = dir.appendingPathComponent("\(name).iso")
+    let child = try ChildSpawner.spawn(
+        URL(fileURLWithPath: "/usr/bin/hdiutil"),
+        .init(arguments: ["makehybrid", "-quiet", "-iso", "-joliet", "-o", iso.path, tree.path]))
+    var status: Int32 = 0
+    waitpid(child.pid, &status, 0)
+    return iso
+}
+
+private func temporaryDirectory() throws -> URL {
+    let dir = URL(fileURLWithPath: "/tmp/vp-iso-\(UUID().uuidString.prefix(8))", isDirectory: true)
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return dir
+}
+
 @Test func isoInspectorRecognisesArm64Media() throws {
-    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("vp-iso-\(UUID().uuidString)")
+    let dir = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
-    func makeISO(_ name: String, loader: String?) throws -> URL {
-        let tree = dir.appendingPathComponent("\(name)-tree")
-        try FileManager.default.createDirectory(at: tree.appendingPathComponent("EFI/BOOT"), withIntermediateDirectories: true)
-        if let loader { try Data("efi".utf8).write(to: tree.appendingPathComponent("EFI/BOOT/\(loader)")) }
-        let iso = dir.appendingPathComponent("\(name).iso")
-        let child = try ChildSpawner.spawn(
-            URL(fileURLWithPath: "/usr/bin/hdiutil"),
-            .init(arguments: ["makehybrid", "-quiet", "-iso", "-joliet", "-o", iso.path, tree.path]))
-        var status: Int32 = 0
-        waitpid(child.pid, &status, 0)
-        return iso
-    }
-    #expect(ISOInspector.inspect(try makeISO("arm", loader: "BOOTAA64.EFI")) == .arm64)
-    #expect(ISOInspector.inspect(try makeISO("x86", loader: "BOOTX64.EFI")) == .notArm64)
+    #expect(ISOInspector.inspect(try makeISO(in: dir, "arm", loader: "BOOTAA64.EFI")) == .arm64)
+    #expect(ISOInspector.inspect(try makeISO(in: dir, "x86", loader: "BOOTX64.EFI")) == .notArm64)
     #expect(ISOInspector.inspect(dir.appendingPathComponent("missing.iso")) == .unreadable)
+}
+
+@Test func linuxInstallAttachesOnlyArm64Media() throws {
+    let dir = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let config = VMConfigV1(VMConfigFields.new(name: "L", os: .linux, macAddress: MachineIdentity.randomMACAddress()))
+    let iso = try makeISO(in: dir, "arm", loader: "BOOTAA64.EFI")
+    let prepared = try LinuxInstall.prepare(config, iso: iso)
+    #expect(prepared.removable.map(\.fields) == [RemovableConfig(id: "install", path: iso.path, bus: .usb)])
+    #expect(prepared.install?.media == "install")
+    #expect(try LinuxInstall.prepare(prepared, iso: iso).removable.count == 1)  // replaced, not added twice
+    #expect(throws: LinuxInstallError.notArm64) {
+        try LinuxInstall.prepare(config, iso: try makeISO(in: dir, "x86", loader: "BOOTX64.EFI"))
+    }
+}
+
+@Test func linuxInstallFinishesOnceTheBootLoaderIsInstalled() throws {
+    let dir = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let fresh = VMConfigV1(VMConfigFields.new(name: "L", os: .linux, macAddress: MachineIdentity.randomMACAddress()))
+    let bundle = try VMBundle.create(at: dir.appendingPathComponent("L.vmpane"), config: fresh)
+    let config = try LinuxInstall.prepare(fresh, iso: try makeISO(in: dir, "arm", loader: "BOOTAA64.EFI"))
+    let disk = try bundle.fileURL(relativePath: try #require(config.disks.first).file)
+    try DiskImage.createRaw(at: disk, sizeBytes: 64 << 20)
+    let variables = bundle.auxDirectory.appendingPathComponent("efi_vars.fd")
+    try FileManager.default.createDirectory(at: bundle.auxDirectory, withIntermediateDirectories: true)
+    // Blank disk, firmware booted the ISO only: still installing.
+    try utf16(#"\EFI\BOOT\BOOTAA64.EFI"#, at: 1).write(to: variables)
+    #expect(LinuxInstall.finished(config, bundle: bundle) == nil)
+    // Partitioned, but no boot loader yet (the installer is still copying): still installing.
+    let handle = try FileHandle(forWritingTo: disk)
+    try handle.seek(toOffset: 512)
+    try handle.write(contentsOf: Data("EFI PART".utf8))
+    try handle.close()
+    #expect(LinuxInstall.finished(config, bundle: bundle) == nil)
+    // The installer registered its boot loader: done.
+    try utf16(#"\EFI\debian\shimaa64.efi"#, at: 1).write(to: variables)
+    let done = try #require(LinuxInstall.finished(config, bundle: bundle))
+    #expect(done.removable.isEmpty && done.install == nil)
+    #expect(LinuxInstall.finished(done, bundle: bundle) == nil)  // not installing any more
+}
+
+/// `text` as UTF-16LE after `offset` padding bytes (EFI variable stores do not align strings for us).
+private func utf16(_ text: String, at offset: Int) -> Data {
+    Data(repeating: 0, count: offset) + text.utf16.reduce(into: Data()) { $0.append(contentsOf: [UInt8($1 & 0xFF), UInt8($1 >> 8)]) }
 }

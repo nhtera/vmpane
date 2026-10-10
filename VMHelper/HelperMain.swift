@@ -131,7 +131,7 @@ extension HelperDelegate {
         }
         let controller = HelperController(
             prepared: prepared, runtimeVersion: VMPane.version, backend: made.backend, config: made.config,
-            afterStart: made.afterStart
+            afterStart: made.afterStart, afterStop: made.afterStop
         ) {
             DispatchQueue.main.async { exit(0) }
         }

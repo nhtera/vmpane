@@ -37,6 +37,31 @@ public enum DiskImage {
         try UInt64(stat(url).st_size)
     }
 
+    /// Whether the image starts with a GPT (the "EFI PART" header at LBA 1, 512-byte sectors).
+    public static func hasPartitionTable(_ url: URL) -> Bool {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? handle.close() }
+        guard (try? handle.seek(toOffset: 512)) != nil, let header = try? handle.read(upToCount: 8) else { return false }
+        return header == Data("EFI PART".utf8)
+    }
+
+    /// OS loaders named in an EFI variable store's boot entries (`\EFI\debian\shimaa64.efi` → "debian"),
+    /// lowercased, without the removable-media path `\EFI\BOOT\`. Installers write these entries late, when
+    /// installing the boot loader. Paths are UTF-16LE in the store; both byte alignments are scanned.
+    public static func efiBootLoaders(inVariableStore url: URL) -> Set<String> {
+        guard let data = try? Data(contentsOf: url) else { return [] }
+        let bytes = [UInt8](data)
+        var names: Set<String> = []
+        for offset in 0..<2 {
+            let units = stride(from: offset, to: bytes.count - 1, by: 2).map { UInt16(bytes[$0]) | UInt16(bytes[$0 + 1]) << 8 }
+            let text = String(decoding: units, as: UTF16.self)
+            let pattern = /\\[Ee][Ff][Ii]\\([A-Za-z0-9_.-]+)\\/
+            for match in text.matches(of: pattern) { names.insert(String(match.1).lowercased()) }
+        }
+        names.remove("boot")
+        return names
+    }
+
     /// Bytes allocated on disk, including blocks shared with clones (snapshots).
     public static func allocatedBytes(_ url: URL) throws -> UInt64 {
         try UInt64(stat(url).st_blocks) * 512

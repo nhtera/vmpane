@@ -14,17 +14,23 @@ private struct Harness {
     let backend: ScriptedBackend
     let client: UDSClient
 
-    static func make(memoryMiB: Int = 64, closeAction: UIConfig.CloseAction = .keepRunning) async throws -> Harness {
+    static func make(
+        memoryMiB: Int = 64, closeAction: UIConfig.CloseAction = .keepRunning,
+        afterStop: (@Sendable (VMConfigV1) -> VMConfigV1?)? = nil, configure: (inout VMConfigV1) -> Void = { _ in }
+    ) async throws -> Harness {
         let root = URL(fileURLWithPath: "/tmp/vp-l-\(UUID().uuidString.prefix(8))", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let paths = VMPanePaths(root: root.appendingPathComponent("s"))
         var config = VMConfigV1(VMConfigFields.new(name: "L", os: .linux, macAddress: MachineIdentity.randomMACAddress()))
         config.memory.mib = memoryMiB
         config.ui.closeAction = closeAction
+        configure(&config)
         let bundle = try VMBundle.create(at: root.appendingPathComponent("L.vmpane"), config: config)
         let prepared = try LaunchCoordinator.prepareBundle(bundle, paths: paths, runtimeVersion: "t")
         let backend = ScriptedBackend()
-        let controller = HelperController(prepared: prepared, runtimeVersion: "t", backend: backend) {}
+        let controller = HelperController(
+            prepared: prepared, runtimeVersion: "t", backend: backend, afterStop: afterStop
+        ) {}
         await controller.setSessionLockCheck { false }  // independent of this Mac's real lock state
         try await controller.start()
         let client = try UDSClient.connect(to: prepared.runFiles.socketURL)
@@ -161,6 +167,46 @@ private struct Harness {
     }
     await #expect(throws: RPCError.self) { try await helper.client.call("vm.settings.apply", params: ["patch": 3]) }
     #expect(try ConfigStore.load(helper.bundle).cpu.count >= 1)
+    await helper.tearDown()
+}
+
+/// Detaches install media like `LinuxInstall.finished` would, once the install is done.
+private let detachMedia: @Sendable (VMConfigV1) -> VMConfigV1? = { config in
+    guard config.install != nil else { return nil }
+    var config = config
+    config.removable = []
+    config.install = nil
+    return config
+}
+
+private func installing(_ config: inout VMConfigV1) {
+    config.removable = [Extensible(RemovableConfig(id: "install", path: "/tmp/x.iso", bus: .usb))]
+    config.install = Extensible(InstallConfig(media: "install"))
+}
+
+@Test func stopAppliesTheAfterStopHookForTheNextStart() async throws {
+    let helper = try await Harness.make(afterStop: detachMedia, configure: installing)
+    _ = try await helper.client.call("vm.start")
+    helper.backend.emit(.stopped(reason: "guest shut down"))
+    var saved = try ConfigStore.load(helper.bundle)
+    for _ in 0..<100 where saved.install != nil {
+        try await Task.sleep(for: .milliseconds(10))
+        saved = try ConfigStore.load(helper.bundle)
+    }
+    #expect(saved.install == nil && saved.removable.isEmpty)
+    #expect(try await helper.state() == "stopped")  // no restart
+    _ = try await helper.client.call("vm.start")
+    #expect(helper.backend.lastStartConfig?.removable.isEmpty == true)
+    await helper.tearDown()
+}
+
+@Test func afterStopHookWaitsWhileSavedStateExists() async throws {
+    let helper = try await Harness.make(afterStop: detachMedia, configure: installing)
+    _ = try await helper.client.call("vm.start")
+    _ = try await helper.client.call("vm.suspend")
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(try ConfigStore.load(helper.bundle).install != nil)  // detaching would discard the suspend state
+    #expect(helper.stateFiles() == ["suspend.json", "suspend.scripted"])
     await helper.tearDown()
 }
 

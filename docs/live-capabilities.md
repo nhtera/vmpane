@@ -23,9 +23,10 @@ succeeded and the guest kept running (Linux: serial ticks continue; macOS: the d
 | audio streams | no API after creation | impossible | impossible | `audio.*` | next start |
 | Rosetta, nested virt | configuration only | restart | restart | `vz.*` | next start |
 
-Not yet verified from inside the guest (needs the agent, Phase 07): that the guest sees the replaced
-shares without a remount, regains its network lease after a replug, and frees memory for the balloon.
-The matrix records what the host API accepts without harming the guest.
+Verified inside a Linux guest (itest `vz-devices`): a share added live appears in the `vmpane-shares` mount,
+both on a mount kept since boot and on a fresh one. Not yet verified from inside the guest (needs the
+agent, Phase 07): the network lease after a replug, memory freed for the balloon, and macOS guests'
+view of replaced shares.
 
 Host-side settings (`name`, `portForwards`, `mcp`, `ui`, `clipboard.allowWithAgents`) apply as soon as
 they are saved. Identity, disks, platform and the install source are never changed through settings.

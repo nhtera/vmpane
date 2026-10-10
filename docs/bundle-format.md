@@ -49,7 +49,21 @@ Every operation that replaces the live set (restore, disk replacement) gives `cu
 `generationId`. Saved RAM state is used only if its `generationId` and `deviceSetHash` (SHA-256 of the
 guest-visible hardware) match the live set; otherwise the VM cold boots and the state is deleted.
 Settings that do not change hardware (name, UI, MCP policy, clipboard, port forwards) do not invalidate
-state.
+state. Exception: a restore that fails because the Mac is locked keeps the state (`macLocked`); VZ can
+decrypt saved memory only while the Mac is unlocked.
+
+## Installing
+
+`install` is present only until the guest is installed:
+
+- `install.restoreImage` (macOS): the `.ipsw` to install from on first start. Removed after the install,
+  when `platform.machineIdentifier` is recorded.
+- `install.media` (Linux): the id of the `removable` entry holding the installer ISO (read-only USB mass
+  storage). Removed, with that entry, at the first stop after the install finished: the system disk has a
+  partition table and `current/aux/efi_vars.fd` has an OS boot entry (`\EFI\<os>\…`, written when the
+  installer sets up the boot loader). Not while saved RAM state waits (the device change would discard
+  it). VZ reboots Linux guests in place, so the installed system first runs with the ISO still attached;
+  its boot entry comes first, so the ISO goes unused.
 
 ## Snapshots and restore
 

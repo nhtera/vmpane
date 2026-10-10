@@ -10,11 +10,17 @@ public enum BackendFactory {
         public let config: VMConfigV1
         /// Config changes to save after a successful start (e.g. a macOS install finished).
         public let afterStart: (@Sendable (VMConfigV1) -> VMConfigV1?)?
+        /// Config changes once the VM has stopped (e.g. a Linux install finished).
+        public let afterStop: (@Sendable (VMConfigV1) -> VMConfigV1?)?
 
-        public init(backend: VMBackend?, config: VMConfigV1, afterStart: (@Sendable (VMConfigV1) -> VMConfigV1?)? = nil) {
+        public init(
+            backend: VMBackend?, config: VMConfigV1, afterStart: (@Sendable (VMConfigV1) -> VMConfigV1?)? = nil,
+            afterStop: (@Sendable (VMConfigV1) -> VMConfigV1?)? = nil
+        ) {
             self.backend = backend
             self.config = config
             self.afterStart = afterStart
+            self.afterStop = afterStop
         }
     }
 
@@ -25,14 +31,23 @@ public enum BackendFactory {
         switch config.backend {
         case .vz:
             guard config.os != .windows else { return Made(backend: nil, config: config) }
-            if let updated = VZBackend.prepare(config) {
-                try ConfigStore.save(updated, holding: prepared.lock)
-                config = updated
-            }
             let bundle = prepared.lock.bundle
+            // A finished Linux install whose media was not detached yet (the helper exited first); not while
+            // saved RAM state waits, which a device change would discard.
+            let hasSavedState = !((try? FileManager.default.contentsOfDirectory(atPath: bundle.stateDirectory.path)) ?? []).isEmpty
+            let steps: [(VMConfigV1) -> VMConfigV1?] =
+                [VZBackend.prepare] + (hasSavedState ? [] : [{ LinuxInstall.finished($0, bundle: bundle) }])
+            for step in steps {
+                if let updated = step(config) {
+                    try ConfigStore.save(updated, holding: prepared.lock)
+                    config = updated
+                }
+            }
             let plan = try VZPlanBuilder.plan(config, bundle: bundle)
             let backend = VZBackend(plan: plan, title: config.name, replan: { try VZPlanBuilder.plan($0, bundle: bundle) })
-            return Made(backend: backend, config: config) { VZBackend.installed($0, bundle: bundle) }
+            return Made(
+                backend: backend, config: config, afterStart: { VZBackend.installed($0, bundle: bundle) },
+                afterStop: { LinuxInstall.finished($0, bundle: bundle) })
         case .qemu:
             return Made(backend: nil, config: config)  // Phase 05
         }

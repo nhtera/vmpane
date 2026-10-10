@@ -82,9 +82,11 @@ it_socket() { echo "$VMPANE_SUPPORT_DIR/run/$(it_sid "$1").sock"; }
 
 # The golden Linux bundle (Ubuntu cloud image, cloud-init done, prints markers on the serial console).
 # Built once into ~/VMPaneItest/linux-base.vmpane; scenarios clone it.
+# Bump when the golden's guest setup changes: an older golden is rebuilt.
+IT_GOLDEN_LINUX_VERSION=4
 it_golden_linux() {
     local golden="$HOME/VMPaneItest/linux-base.vmpane"
-    if [[ -f "$golden/.ready" ]]; then echo "$golden"; return 0; fi
+    if [[ $(cat "$golden/.ready" 2>/dev/null) == "$IT_GOLDEN_LINUX_VERSION" ]]; then echo "$golden"; return 0; fi
     "$VMPANE_ROOT/itest/lib/build-golden-linux.sh" "$golden" >&2 || return 1
     echo "$golden"
 }
@@ -141,21 +143,37 @@ it_golden_macos() {
 }
 
 # Fraction (0–100) of non-black pixels in PNG $1, sampled.
-it_png_lit_percent() {
-    /usr/bin/python3 - "$1" <<'PY'
+it_png_lit_percent() { it_png_lit "$1" 16 percent; }
+# Number of non-black pixels in PNG $1 (every pixel: for text consoles).
+it_png_lit_pixels() { it_png_lit "$1" 1 count; }
+
+it_png_lit() {  # it_png_lit <png> <sample step> <percent|count>
+    /usr/bin/python3 - "$1" "$2" "$3" <<'PY'
 import sys, zlib, struct
 data = open(sys.argv[1], "rb").read()
-pos, chunks, w = 8, [], 0
+pos, chunks = 8, []
 while pos < len(data):
     n, t = struct.unpack(">I4s", data[pos:pos+8]); body = data[pos+8:pos+8+n]; pos += 12 + n
     if t == b"IHDR": w, h, depth, ctype = struct.unpack(">IIBB", body[:10])
     if t == b"IDAT": chunks.append(body)
-raw = zlib.decompress(b"".join(chunks)); bpp = 4 if ctype == 6 else 3; stride = w * bpp + 1
-lit = total = 0
-for y in range(0, h, 16):
-    row = raw[y * stride + 1:(y + 1) * stride]  # filter byte skipped; sampled values are approximate
-    for x in range(0, w, 16):
-        r, g, b = row[x * bpp:x * bpp + 3]; total += 1; lit += (r + g + b) > 60
-print(round(100 * lit / max(total, 1)))
+raw = zlib.decompress(b"".join(chunks)); bpp = 4 if ctype == 6 else 3; stride = w * bpp
+# Undo the per-row PNG filters (8-bit RGB/RGBA), then sample every 16th pixel.
+prev, rows = bytearray(stride), []
+for y in range(h):
+    f, line = raw[y * (stride + 1)], bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
+    for i in range(stride):
+        a = line[i - bpp] if i >= bpp else 0; b = prev[i]; c = prev[i - bpp] if i >= bpp else 0
+        if f == 1: line[i] = (line[i] + a) & 255
+        elif f == 2: line[i] = (line[i] + b) & 255
+        elif f == 3: line[i] = (line[i] + (a + b) // 2) & 255
+        elif f == 4:
+            p = a + b - c; pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+            line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
+    rows.append(line); prev = line
+step = int(sys.argv[2]); lit = total = 0
+for y in range(0, h, step):
+    for x in range(0, w, step):
+        r, g, b = rows[y][x * bpp:x * bpp + 3]; total += 1; lit += (r + g + b) > 60
+print(round(100 * lit / max(total, 1)) if sys.argv[3] == "percent" else lit)
 PY
 }
