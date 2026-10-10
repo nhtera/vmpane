@@ -67,7 +67,7 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
         let paths = VMPanePaths.standard()
         RunDirectoryReconciler.reconcile(paths: paths)
         let runtime = runtimeVersion(paths)
-        let prepared: PreparedBundle
+        var prepared: PreparedBundle
         do {
             let bundle = try VMBundle.open(arguments.bundle)
             prepared = try LaunchCoordinator.prepareBundle(
@@ -85,6 +85,9 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
             _ = try? registry.spawn(
                 URL(fileURLWithPath: "/bin/sleep"), .init(arguments: ["3600"], inheriting: [prepared.lock.fileDescriptor]))
         }
+        if let request = ProcessInfo.processInfo.environment["VMPANE_TEST_WIN_INSTALL"] {
+            prepared = Self.prepareWindowsInstall(prepared, request: URL(fileURLWithPath: request))
+        }
         let controller = makeController(prepared, runtimeVersion: runtime, paths: paths)
         Task {
             do {
@@ -98,6 +101,38 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
 }
 
 extension HelperDelegate {
+    /// Integration-test hook (win-install): the wizard's step, done before any start under this helper's lock, with
+    /// the same `WindowsInstall.prepare` and `ConfigStore.save`. The request (0600 JSON, read once and deleted, as
+    /// it holds the password): `{iso, tools?, locale, timeZone, computerName, userName, password, editionName}`.
+    fileprivate static func prepareWindowsInstall(_ prepared: PreparedBundle, request: URL) -> PreparedBundle {
+        struct Request: Decodable {
+            var iso: String
+            var tools: String?
+            var locale: String
+            var timeZone: String
+            var computerName: String
+            var userName: String
+            var password: String
+            var editionName: String
+        }
+        do {
+            let data = try Data(contentsOf: request)
+            try? FileManager.default.removeItem(at: request)
+            let wanted = try JSONDecoder().decode(Request.self, from: data)
+            let input = UnattendInput(
+                locale: wanted.locale, timeZone: wanted.timeZone, computerName: wanted.computerName, userName: wanted.userName,
+                password: wanted.password, editionName: wanted.editionName, eulaAcceptedAt: Date())
+            let config = try WindowsInstall.prepare(
+                prepared.config, iso: URL(fileURLWithPath: wanted.iso), input: input,
+                tools: wanted.tools.map { URL(fileURLWithPath: $0) }, holding: prepared.lock)
+            try ConfigStore.save(config, holding: prepared.lock)
+            return prepared.replacing(config: config)
+        } catch {
+            FileHandle.standardError.write(Data("VMPaneVM: cannot prepare the Windows install: \(error)\n".utf8))
+            exit(1)
+        }
+    }
+
     /// Shows the VM's window when it starts (unless headless) or when `vm.display.show` asks for it.
     fileprivate func observeDisplay(_ controller: HelperController, backend: VZBackend, config: VMConfigV1) {
         let headless = arguments.headless

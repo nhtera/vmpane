@@ -19,6 +19,11 @@ public struct PreparedBundle: Sendable {
     public let identityRegenerated: Bool
     /// The helper process this bundle was prepared for (recorded as the parent of its children).
     public let owner: ProcessRecord
+
+    /// The same bundle with a configuration saved under its lock since it was prepared.
+    public func replacing(config: VMConfigV1) -> PreparedBundle {
+        PreparedBundle(lock: lock, config: config, runFiles: runFiles, identityRegenerated: identityRegenerated, owner: owner)
+    }
 }
 
 /// Launch and reap rules shared by the app, the CLI and the helper.
