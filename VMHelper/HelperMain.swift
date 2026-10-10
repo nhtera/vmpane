@@ -13,6 +13,8 @@ import os
 final class HelperDelegate: NSObject, NSApplicationDelegate {
     private var controller: HelperController?
     private var signalSources: [DispatchSourceSignal] = []
+    /// Shows the VM's window (set once the display exists). Closing the window only hides it: the VM keeps running.
+    private var showWindow: (@MainActor () -> Void)?
 
     static func main() {
         let arguments = HelperArguments(CommandLine.arguments)
@@ -42,6 +44,12 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
 
     init(arguments: HelperArguments) {
         self.arguments = arguments
+    }
+
+    /// A click on the Dock tile brings a closed window back.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        if !hasVisibleWindows, !arguments.headless { MainActor.assumeIsolated { showWindow?() } }
+        return true
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -93,6 +101,7 @@ extension HelperDelegate {
     /// Shows the VM's window when it starts (unless headless) or when `vm.display.show` asks for it.
     fileprivate func observeDisplay(_ controller: HelperController, backend: VZBackend, config: VMConfigV1) {
         let headless = arguments.headless
+        showWindow = { backend.showDisplay() }
         Task { @MainActor in
             var selfTested = false
             for await state in controller.stateChanges where state == .running {
@@ -222,6 +231,7 @@ extension HelperDelegate {
         }
         let size = CGSize(width: max(config.display.widthPx / 2, 640), height: max(config.display.heightPx / 2, 400))
         let display = SpiceDisplay(socket: backend.displaySocket, title: config.name, size: size)
+        showWindow = { display.show() }
         let headless = arguments.headless
         let capture = ProcessInfo.processInfo.environment["VMPANE_TEST_SPICE_CAPTURE"].map { URL(fileURLWithPath: $0) }
         Task { await backend.setBeforeQuit { await display.disconnectAndWait() } }
