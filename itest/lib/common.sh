@@ -142,6 +142,39 @@ it_golden_macos() {
     echo "$golden"
 }
 
+# The golden Windows bundle (imported from the S1 install; see build-golden-windows.sh).
+# Built once into ~/VMPaneItest/win11-base.vmpane; scenarios clone it. Exit 77 when the source is missing.
+IT_GOLDEN_WINDOWS_VERSION=1
+it_golden_windows() {
+    local golden="$HOME/VMPaneItest/win11-base.vmpane" status
+    if [[ $(cat "$golden/.ready" 2>/dev/null) == "$IT_GOLDEN_WINDOWS_VERSION" ]]; then echo "$golden"; return 0; fi
+    "$VMPANE_ROOT/itest/lib/build-golden-windows.sh" "$golden" >&2 || { status=$?; return "$status"; }
+    echo "$golden"
+}
+
+# Saves a screenshot of the VM behind control socket $1 to PNG $2 (longest edge $3, default 800).
+it_screenshot() {
+    it_rpc "$1" vm.screenshot "{\"maxEdge\": ${3:-800}}" | jq -r '.dataB64 // empty' | base64 -d >"$2" && [[ -s $2 ]]
+}
+
+# Waits up to $2 s until the Windows guest behind socket $1 shows its desktop: two screenshots in a row,
+# 3 s apart, with most of the screen lit (firmware, boot spinner and lock screen fade-in are mostly black).
+# Windows blanks an idle display after ~10 min; a key press wakes it.
+it_wait_windows_desktop() {
+    local socket=$1 deadline=$((SECONDS + $2)) shot lit streak=0
+    shot=$(mktemp /tmp/vp-shot.XXXXXX)
+    while ((SECONDS < deadline)); do
+        if it_screenshot "$socket" "$shot" 400 2>/dev/null && lit=$(it_png_lit_percent "$shot") && ((lit >= 40)); then
+            ((++streak >= 2)) && { rm -f "$shot"; return 0; }
+        else
+            streak=0
+        fi
+        sleep 3
+    done
+    rm -f "$shot"
+    return 1
+}
+
 # Fraction (0–100) of non-black pixels in PNG $1, sampled.
 it_png_lit_percent() { it_png_lit "$1" 16 percent; }
 # Number of non-black pixels in PNG $1 (every pixel: for text consoles).
