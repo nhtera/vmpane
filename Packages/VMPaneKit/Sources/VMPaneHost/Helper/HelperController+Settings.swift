@@ -28,7 +28,8 @@ extension HelperController {
             try await Blocking.run { try ConfigStore.save(updated, holding: lock) }
             config = updated
 
-            let livePaths = accepted.filter { SettingsPatch.kind(of: $0) == .live }
+            // Port forwards are host settings, but a QEMU guest's live in QEMU's NAT: the backend applies them too.
+            let livePaths = accepted.filter { SettingsPatch.kind(of: $0) == .live || $0.hasPrefix("portForwards") }
             let live = running ? await backend?.applyLive(updated, paths: livePaths) ?? [] : []
             var outcomes = rejected.mapValues { _ in JSONValue.string(SettingOutcome.rejected.rawValue) }
             var inEffect: [String] = []

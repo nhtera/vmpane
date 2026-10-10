@@ -29,11 +29,12 @@ private final class Harness: @unchecked Sendable {
     let backend: QEMUBackend
     let layout: QEMULayout
     let bundleLock: BundleLock
+    let config: VMConfigV1
     private let spawner = Spawner()
     private let lock = NSLock()
     private var eventLog: [BackendEvent] = []
 
-    init(memoryMiB: Int = 1024, space: QEMUBackend.SpacePolicy = .standard) throws {
+    init(memoryMiB: Int = 1024, space: QEMUBackend.SpacePolicy = .standard, change: (inout VMConfigV1) -> Void = { _ in }) throws {
         // Through the /tmp symlink on purpose: the backend must hand QEMU resolved paths (sandbox rules match them).
         root = URL(fileURLWithPath: "/tmp/vp-be-\(UUID().uuidString.prefix(8))", isDirectory: true)
         let run = root.appendingPathComponent("run", isDirectory: true)
@@ -41,6 +42,8 @@ private final class Harness: @unchecked Sendable {
         var config = try windowsConfig()
         config.memory.mib = memoryMiB
         config.audio.output = false
+        change(&config)
+        self.config = config
         let bundle = try VMBundle.create(at: root.appendingPathComponent("W.vmpane"), config: config)
         try DiskImage.createRaw(at: bundle.currentDirectory.appendingPathComponent("disk.img"), sizeBytes: 1 << 30)
         let installation = QEMUInstallation(root: URL(fileURLWithPath: try #require(qemuBundle), isDirectory: true), source: .environment)
@@ -230,5 +233,30 @@ func aNearlyFullVolumePausesTheGuestUntilSpaceIsFreed() async throws {
     free.value = 10 << 30
     try await harness.backend.resume()
     #expect(try await harness.backend.qmp?.execute("query-status")["status"] == "running")
+    try await harness.backend.stop(.force)
+}
+
+@Test(.enabled(if: qemuBundle != nil))
+func portForwardsChangeWhileRunning() async throws {
+    func rule(_ id: String, _ port: Int) -> Extensible<PortForwardConfig> {
+        Extensible(PortForwardConfig(id: id, proto: .tcp, hostAddress: "127.0.0.1", hostPort: port, guestPort: 22, origin: .user))
+    }
+    let harness = try Harness { $0.portForwards = [rule("a", 47_101)] }
+    defer { harness.cleanUp() }
+    try await harness.backend.start(StartOptions(headless: true))
+    func usernet() async throws -> String {
+        try await harness.backend.qmp?.execute("human-monitor-command", ["command-line": "info usernet"]).stringValue ?? ""
+    }
+    #expect(try await usernet().contains("47101"))
+
+    var config = harness.config
+    config.portForwards = [rule("b", 47_102)]
+    #expect(await harness.backend.applyLive(config, paths: ["portForwards"]) == ["portForwards"])
+    let table = try await usernet()
+    #expect(table.contains("47102") && !table.contains("47101"))
+
+    config.portForwards = [rule("c", 0)]  // invalid: nothing changes
+    #expect(await harness.backend.applyLive(config, paths: ["portForwards"]).isEmpty)
+    #expect(try await usernet().contains("47102"))
     try await harness.backend.stop(.force)
 }

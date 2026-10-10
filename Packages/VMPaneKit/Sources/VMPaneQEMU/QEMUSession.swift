@@ -32,6 +32,8 @@ actor QEMUSession {
     func setBeforeQuit(_ hook: @escaping @Sendable () async -> Void) { beforeQuit = hook }
     /// The guest is paused because its volume is (nearly) full; `resume` checks the space first.
     private var pausedForSpace = false
+    /// The `hostfwd` rules active on the first NIC (`tcp:127.0.0.1:8080-:80`).
+    var forwards: [String] = []
 
     init(
         config: VMConfigV1, processes: QEMUProcesses, space: QEMUBackend.SpacePolicy,
@@ -65,6 +67,8 @@ actor QEMUSession {
         displaySize = nil
         pressedButtons = 0
         pausedForSpace = false
+        forwards =
+            config.network.contains { $0.mode == .nat } ? config.portForwards.compactMap { try? QEMUArgvBuilder.hostForward($0) } : []
         var swtpm: (ProcessRecord, ChildExitWatcher)?
         var qemu: ProcessRecord?
         do {
@@ -275,5 +279,4 @@ actor QEMUSession {
             _ = await Blocking.run { current.qemu.terminate() }
         }
     }
-
 }

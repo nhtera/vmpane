@@ -1,7 +1,7 @@
 # QEMU and swtpm under their sandbox profiles (the helper's VMPaneQEMU resources, applied with sandbox-exec), from a
 # runtime copy laid out like runtime/<version>/qemu: swtpm keeps its TPM state in the VM bundle and listens
-# in the run directory; QEMU boots the shipped firmware to the UEFI shell with HVF, the TPM, CoreAudio sound
-# and a SPICE socket, and reports no device it could not start; each is
+# in the run directory; QEMU boots the shipped firmware to the UEFI shell with HVF, the TPM, CoreAudio sound,
+# a SPICE socket and a port forward, and reports no device it could not start; each is
 # denied a file outside its bundle and run directory. With VMPANE_SIGN_IDENTITY set to a real identity the
 # copy is first signed like a release (hardened runtime, scripts/sign.sh --qemu-only), proving the profiles
 # against product-signed binaries.
@@ -70,7 +70,7 @@ scenario_run() {
         -nodefaults -display none -serial file:"$run/serial.log" -qmp unix:"$run/qmp.sock",server=on,wait=off \
         -drive if=pflash,format=raw,readonly=on,file="$bundle/code.fd" -drive if=pflash,format=raw,file="$bundle/vars.fd" \
         -chardev socket,id=chrtpm,path="$run/tpm.sock" -tpmdev emulator,id=tpm0,chardev=chrtpm \
-        -device tpm-tis-device,tpmdev=tpm0,ppi=off -device ramfb -netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
+        -device tpm-tis-device,tpmdev=tpm0,ppi=off -device ramfb -netdev user,id=n0,hostfwd=tcp:127.0.0.1:47301-:22 -device virtio-net-pci,netdev=n0 \
         -audiodev coreaudio,id=snd0 -device intel-hda -device hda-duplex,audiodev=snd0 \
         -spice unix=on,addr="$run/spice.sock",disable-ticketing=on 2>"$run/qemu.err" &
     qemu_pid=$!

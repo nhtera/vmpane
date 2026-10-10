@@ -68,6 +68,11 @@ public final class QEMUBackend: VMBackend {
     /// Runs before every quit of QEMU (the helper disconnects its SPICE client).
     public func setBeforeQuit(_ hook: @escaping @Sendable () async -> Void) async { await session.setBeforeQuit(hook) }
     public func screenshot(maxEdge: Int) async throws -> Screenshot { try await session.screenshot(maxEdge: maxEdge) }
+
+    /// Live: port forwards (slirp `hostfwd_add`/`hostfwd_remove`). Everything else takes effect at the next start.
+    public func applyLive(_ config: VMConfigV1, paths: [String]) async -> Set<String> {
+        await session.applyLive(config, paths: paths)
+    }
     public func send(_ input: InputEvent) async throws { try await session.send(input) }
 
     /// QMP for integration hooks and later features (snapshots, live settings).
