@@ -47,6 +47,10 @@ targets:
             echo "warning: no QEMU bundle at $bundle (qemu/scripts/package.sh); Windows guests will not run"
             exit 0
           fi
+          # A Release build (the one Developer ID signs) takes only the bundle the committed inputs produce.
+          if [[ "$CONFIGURATION" == Release ]]; then
+            "$SRCROOT/qemu/scripts/check-bundle.sh" "$bundle"
+          fi
           mkdir -p "$app/Contents/Helpers/qemu" "$app/Contents/Resources/qemu"
           ditto "$bundle/bin" "$app/Contents/Helpers/qemu/bin"
           ditto "$bundle/lib" "$app/Contents/Helpers/qemu/lib"
