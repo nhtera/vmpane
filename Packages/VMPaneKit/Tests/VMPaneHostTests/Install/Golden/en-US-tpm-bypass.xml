@@ -99,38 +99,38 @@
       <FirstLogonCommands>
         <SynchronousCommand wcm:action="add">
           <Order>1</Order>
-          <Description>Install VMPane guest tools</Description>
-          <CommandLine>powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$v = Get-Volume -FileSystemLabel VMPANE_TOOLS -ErrorAction SilentlyContinue | Select-Object -First 1; if ($v) { &amp; ($v.DriveLetter + &apos;:\install.ps1&apos;) -Unattended }&quot;</CommandLine>
-        </SynchronousCommand>
-        <SynchronousCommand wcm:action="add">
-          <Order>2</Order>
           <Description>No hibernation</Description>
           <CommandLine>powercfg /hibernate off</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
-          <Order>3</Order>
+          <Order>2</Order>
           <Description>Keep the display on</Description>
           <CommandLine>powercfg /change monitor-timeout-ac 0</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
-          <Order>4</Order>
+          <Order>3</Order>
           <Description>No sleep</Description>
           <CommandLine>powercfg /change standby-timeout-ac 0</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
-          <Order>5</Order>
+          <Order>4</Order>
           <Description>Remove the unattend copies</Description>
           <CommandLine>cmd /c del /q /f &quot;%WINDIR%\Panther\unattend*.xml&quot; &quot;%WINDIR%\Panther\Unattend\unattend*.xml&quot;</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
-          <Order>6</Order>
+          <Order>5</Order>
           <Description>Remove the auto-logon password</Description>
           <CommandLine>reg.exe delete &quot;HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon&quot; /v DefaultPassword /f</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
-          <Order>7</Order>
+          <Order>6</Order>
           <Description>Stop auto-logon</Description>
           <CommandLine>reg.exe add &quot;HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon&quot; /v AutoAdminLogon /t REG_SZ /d 0 /f</CommandLine>
+        </SynchronousCommand>
+        <SynchronousCommand wcm:action="add">
+          <Order>7</Order>
+          <Description>Install VMPane guest tools</Description>
+          <CommandLine>powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$v = Get-Volume -FileSystemLabel VMPANE_TOOLS -ErrorAction SilentlyContinue | Select-Object -First 1; if ($v) { &amp; ($v.DriveLetter + &apos;:\install.ps1&apos;) -Unattended }&quot;</CommandLine>
         </SynchronousCommand>
       </FirstLogonCommands>
     </component>

@@ -83,3 +83,20 @@ private func expectGolden(_ name: String, _ text: String, sourceFile: String = #
     #expect(text.contains("<Value>{{USER}}{{LAB_CONFIG}}</Value>"))
     #expect(!text.contains("LabConfig"))
 }
+
+/// VMPane shuts Windows down once install.ps1 reports its tools installed: every first-logon command after it
+/// could be cut short, so the password cleanup must come first and the tools last.
+@Test func guestToolsRunAfterThePasswordIsRemoved() throws {
+    let input = UnattendInput(
+        locale: "en-US", timeZone: "Pacific Standard Time", computerName: "WIN11", userName: "vmpane", password: "s3cret!",
+        eulaAcceptedAt: accepted)
+    let document = try XMLDocument(data: Data(try AutounattendGenerator.generate(input).utf8))
+    let commands = try document.nodes(forXPath: "//*[local-name()='FirstLogonCommands']/*[local-name()='SynchronousCommand']")
+    func value(_ node: XMLNode, _ name: String) throws -> String {
+        try node.nodes(forXPath: "*[local-name()='\(name)']").first?.stringValue ?? ""
+    }
+    let ordered = try commands.sorted { try Int(value($0, "Order"))! < Int(value($1, "Order"))! }.map { try value($0, "CommandLine") }
+    #expect(ordered.last?.contains("install.ps1") == true)
+    #expect(ordered.dropLast().contains { $0.contains("DefaultPassword") })
+    #expect(ordered.dropLast().contains { $0.contains("Panther") })
+}

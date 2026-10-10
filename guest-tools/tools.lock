@@ -1,0 +1,24 @@
+{
+  "comment": "Pinned inputs of the Windows guest-tools ISO (guest-tools/build-iso.sh). Drivers: the ARM64 w11 builds that passed Gate 00 S2, each verified on the host (Authenticode catalog chained to the pinned Microsoft root, signed by the Windows Hardware Compatibility Publisher; every PE file listed in its catalog). spice-vdagent: no upstream ARM64 build exists and third-party builds have no known source (GPLv2 needs it), so it is built from upstream on the Windows ARM runner (Phase 07); install.ps1 installs it when present.",
+  "version": "1",
+  "volumeLabel": "VMPANE_TOOLS",
+  "lastVerifiedWindowsBuild": 26300,
+  "trust": {
+    "file": "trust/microsoft-root-ca-2010.pem",
+    "subject": "CN=Microsoft Root Certificate Authority 2010,O=Microsoft Corporation,L=Redmond,ST=Washington,C=US",
+    "sha256": "df545bf919a2439c36983b54cdfc903dfa4f37d3996d8d84b4c31eec6f3c163e",
+    "signer": "CN=Microsoft Windows Hardware Compatibility Publisher,O=Microsoft Corporation,L=Redmond,ST=Washington,C=US"
+  },
+  "virtioWin": {
+    "name": "virtio-win",
+    "version": "0.1.302",
+    "license": "BSD-3-Clause",
+    "licenseFile": "virtio-win_license.txt",
+    "url": "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.302-1/virtio-win-0.1.302.iso",
+    "sha256": "303f7ae40dad495d6ae474fdc571df58958a4dbc5c37a522d80f9a203867949d",
+    "drivers": ["Balloon", "NetKVM", "pvpanic", "viogpudo", "vioinput", "viorng", "vioserial", "viostor"],
+    "driverPath": "w11/ARM64",
+    "excludeComment": "Optional utilities the INFs do not install, signed only with a self-signed test certificate (CN=Red Hat Inc.,OU=Dev,O=virtio-win): not shipped.",
+    "exclude": ["NetKVM/netkvmco.exe", "viogpudo/viogpures.exe"]
+  }
+}
