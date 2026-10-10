@@ -184,3 +184,14 @@ private func input(edition: String = "Windows 11 Pro") -> UnattendInput {
         }
     }
 }
+
+@Test func bundledGuestToolsAreFoundOnlyWhenTheAppHasThem() throws {
+    try withTemp { dir in
+        let app = dir.appendingPathComponent("VMPane.app")
+        #expect(WindowsInstall.bundledTools(app: app) == nil)
+        let tools = app.appendingPathComponent("Contents/Resources/GuestTools")
+        try FileManager.default.createDirectory(at: tools, withIntermediateDirectories: true)
+        try Data("iso".utf8).write(to: tools.appendingPathComponent("vmpane-guest-tools-windows.iso"))
+        #expect(WindowsInstall.bundledTools(app: app)?.lastPathComponent == "vmpane-guest-tools-windows.iso")
+    }
+}

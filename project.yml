@@ -45,7 +45,7 @@ targets:
           bundle="$SRCROOT/build/qemu-bundle"
           app="$TARGET_BUILD_DIR/$WRAPPER_NAME"
           frameworks="$app/Contents/Helpers/VMPaneVM.app/Contents/Frameworks"
-          rm -rf "$app/Contents/Helpers/qemu" "$app/Contents/Resources/qemu" "$frameworks"
+          rm -rf "$app/Contents/Helpers/qemu" "$app/Contents/Resources/qemu" "$frameworks" "$app/Contents/Resources/GuestTools"
           if [[ ! -x "$bundle/bin/qemu-system-aarch64" ]]; then
             echo "warning: no QEMU bundle at $bundle (qemu/scripts/package.sh); Windows guests will not run"
             exit 0
@@ -61,6 +61,16 @@ targets:
           cp "$bundle/MANIFEST.json" "$app/Contents/Resources/qemu/MANIFEST.json"
           # The SPICE client libraries the helper weak-links, all of them or none (a partial set aborts at launch).
           ditto "$bundle/frameworks" "$frameworks"
+          # The Windows guest tools of the version in guest-tools/tools.lock (guest-tools/build-iso.sh). A Windows
+          # install clones the ISO into the VM bundle.
+          tools_version=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' "$SRCROOT/guest-tools/tools.lock")
+          tools="$SRCROOT/build/guest-tools/vmpane-guest-tools-windows-$tools_version.iso"
+          if [[ ! -f "$tools" ]]; then
+            echo "warning: no guest-tools ISO in build/guest-tools (guest-tools/build-iso.sh); Windows installs get no drivers"
+          else
+            mkdir -p "$app/Contents/Resources/GuestTools"
+            cp "$tools" "$app/Contents/Resources/GuestTools/vmpane-guest-tools-windows.iso"
+          fi
     dependencies:
       - package: VMPaneKit
         product: VMPaneCore

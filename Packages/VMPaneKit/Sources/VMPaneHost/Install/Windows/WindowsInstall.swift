@@ -36,6 +36,13 @@ public enum WindowsInstall {
     /// watchdog's 2 GiB line and room for the first updates.
     public static let setupBytes: UInt64 = 20 << 30
 
+    /// The guest-tools ISO in the app (`Contents/Resources/GuestTools`, from guest-tools/build-iso.sh), the
+    /// `tools` argument of `prepare`; nil in a build without it.
+    public static func bundledTools(app: URL = Bundle.main.bundleURL) -> URL? {
+        let iso = app.appendingPathComponent("Contents/Resources/GuestTools/vmpane-guest-tools-windows.iso")
+        return FileManager.default.fileExists(atPath: iso.path) ? iso : nil
+    }
+
     public static func prepare(
         _ config: VMConfigV1, iso: URL, input: UnattendInput, tools: URL?, holding lock: BundleLock,
         freeBytes: (URL) throws -> UInt64 = SpaceGuard.freeBytes,
