@@ -203,7 +203,7 @@ private func utf16(_ text: String, at offset: Int) -> Data {
     let store = bundle.auxDirectory.appendingPathComponent("efi_vars.fd")
     try FileManager.default.createDirectory(at: bundle.auxDirectory, withIntermediateDirectories: true)
     try utf16(#"\EFI\debian\shimaa64.efi"#, at: 0).write(to: store)
-    let lock = try #require(try bundle.tryLock())
+    let lock = try #require(try bundle.tryLock(retryingFor: 5))
     defer { lock.release() }
     try LinuxInstall.forgetBootEntries(holding: lock)
     #expect(!FileManager.default.fileExists(atPath: store.path))

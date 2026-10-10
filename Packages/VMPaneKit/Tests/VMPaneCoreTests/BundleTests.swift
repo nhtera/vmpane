@@ -43,7 +43,7 @@ private func mode(_ url: URL) throws -> Int {
 @Test func bundleLockIsExclusiveUntilReleased() throws {
     try withTempDirectory { dir in
         let bundle = try VMBundle.create(at: dir.appendingPathComponent("A.vmpane"), config: makeConfig())
-        let first = try #require(try bundle.tryLock())
+        let first = try #require(try bundle.tryLock(retryingFor: 5))
         #expect(try bundle.tryLock() == nil)
         first.release()
         let second = try #require(try bundle.tryLock(retryingFor: 1))  // other tests launch processes meanwhile
@@ -55,7 +55,7 @@ private func mode(_ url: URL) throws -> Int {
 @Test func configSaveAndLoadRoundTrip() throws {
     try withTempDirectory { dir in
         let bundle = try VMBundle.create(at: dir.appendingPathComponent("A.vmpane"), config: makeConfig(name: "One"))
-        let lock = try #require(try bundle.tryLock())
+        let lock = try #require(try bundle.tryLock(retryingFor: 5))
         var config = try ConfigStore.load(bundle)
         config.name = "Two"
         config.extras["later"] = "kept"
@@ -70,7 +70,7 @@ private let toV2 = ConfigMigrator(currentVersion: 2, steps: [1: { doc in doc["ad
     try withTempDirectory { dir in
         let bundle = try VMBundle.create(at: dir.appendingPathComponent("A.vmpane"), config: makeConfig())
         let original = try Data(contentsOf: bundle.configURL)
-        let lock = try #require(try bundle.tryLock())
+        let lock = try #require(try bundle.tryLock(retryingFor: 5))
         let config = try ConfigStore.loadAndMigrate(lock, migrator: toV2, now: Date(timeIntervalSince1970: 1_000))
         #expect(config.schemaVersion == 2)
         #expect(config.extras["addedInV2"] == true)
@@ -83,7 +83,7 @@ private let toV2 = ConfigMigrator(currentVersion: 2, steps: [1: { doc in doc["ad
 @Test func migrationWithoutTheLockStaysInMemory() throws {
     try withTempDirectory { dir in
         let bundle = try VMBundle.create(at: dir.appendingPathComponent("A.vmpane"), config: makeConfig())
-        let helperLock = try #require(try bundle.tryLock())
+        let helperLock = try #require(try bundle.tryLock(retryingFor: 5))
         defer { helperLock.release() }
         let original = try Data(contentsOf: bundle.configURL)
         #expect(try bundle.tryLock() == nil)  // a helper holds it: the migration is deferred
@@ -154,7 +154,7 @@ func diskPathsMustStayInsideTheBundle(path: String) throws {
 @Test func deleteIsCrashSafe() throws {
     try withTempDirectory { dir in
         let bundle = try VMBundle.create(at: dir.appendingPathComponent("D.vmpane"), config: makeConfig())
-        try bundle.delete(holding: try #require(try bundle.tryLock()))
+        try bundle.delete(holding: try #require(try bundle.tryLock(retryingFor: 5)))
         #expect(try FileManager.default.contentsOfDirectory(atPath: dir.path).isEmpty)
     }
 }

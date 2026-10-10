@@ -45,7 +45,7 @@ private final class Harness: @unchecked Sendable {
         try DiskImage.createRaw(at: bundle.currentDirectory.appendingPathComponent("disk.img"), sizeBytes: 1 << 30)
         let installation = QEMUInstallation(root: URL(fileURLWithPath: try #require(qemuBundle), isDirectory: true), source: .environment)
         layout = QEMULayout(bundle: bundle, runDirectory: run, installation: installation)
-        bundleLock = try #require(try bundle.tryLock())
+        bundleLock = try #require(try bundle.tryLock(retryingFor: 5))
         let spawner = spawner
         let processes = QEMUProcesses(
             layout: layout, lockDescriptor: bundleLock.fileDescriptor, spawn: { try spawner.spawn($0, $1) }, forget: { _ in })

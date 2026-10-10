@@ -10,7 +10,7 @@ private let context = SnapshotContext(deviceSetHash: "hash", hostBuild: "24G419"
 private func makeBundle(_ dir: URL, marker: String = "OLD") throws -> (VMBundle, BundleLock) {
     let bundle = try VMBundle.create(at: dir.appendingPathComponent("A.vmpane"), config: makeConfig())
     try setMarker(bundle, marker)
-    return (bundle, try #require(try bundle.tryLock()))
+    return (bundle, try #require(try bundle.tryLock(retryingFor: 5)))
 }
 
 private func setMarker(_ bundle: VMBundle, _ marker: String) throws {
@@ -195,7 +195,7 @@ func shell(_ tool: String, _ arguments: [String]) throws {
         try Data("ram".utf8).write(to: source.stateDirectory.appendingPathComponent("suspend.qemustate"))
         try Data("id".utf8).write(to: source.auxDirectory.appendingPathComponent("MachineIdentifier"))
         try Data("vars".utf8).write(to: source.auxDirectory.appendingPathComponent("efi_vars.fd"))
-        let lock = try #require(try source.tryLock())
+        let lock = try #require(try source.tryLock(retryingFor: 5))
         let clone = try FullClone.clone(holding: lock, to: dir.appendingPathComponent("W2.vmpane"), name: "W2")
 
         let a = try ConfigStore.load(source), b = try ConfigStore.load(clone)
@@ -217,7 +217,7 @@ func shell(_ tool: String, _ arguments: [String]) throws {
         let bundle = try VMBundle.create(at: dir.appendingPathComponent("C.vmpane"), config: makeConfig())
         try Data("ram".utf8).write(to: bundle.stateDirectory.appendingPathComponent("suspend.vzvmsave"))
         let before = try ConfigStore.load(bundle)
-        let lock = try #require(try bundle.tryLock())
+        let lock = try #require(try bundle.tryLock(retryingFor: 5))
         let after = try FullClone.regenerateIdentity(holding: lock)
         #expect(after.id != before.id)
         #expect(after.network[0].macAddress != before.network[0].macAddress)
@@ -234,7 +234,7 @@ func thousandSnapshotCyclesStayFastAndFree() throws {
         let disk = bundle.currentDirectory.appendingPathComponent("disk.img")
         try DiskImage.createRaw(at: disk, sizeBytes: 64 << 30)
         let allocatedBefore = try DiskImage.allocatedBytes(disk)
-        let store = SnapshotStore(lock: try #require(try bundle.tryLock()))
+        let store = SnapshotStore(lock: try #require(try bundle.tryLock(retryingFor: 5)))
         let start = Date()
         for i in 0..<1000 {
             let meta = try store.create(name: "s\(i)", kind: .disk, origin: .user, context: context)

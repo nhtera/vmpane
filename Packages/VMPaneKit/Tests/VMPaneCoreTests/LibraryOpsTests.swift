@@ -18,7 +18,7 @@ private func makeLibrary(_ dir: URL) -> VMLibrary {
         #expect(clone.url.lastPathComponent == "Dev-Box 2.vmpane")
         #expect(try ops.list().count == 2)
 
-        let running = try #require(try vm.tryLock())
+        let running = try #require(try vm.tryLock(retryingFor: 5))
         #expect(throws: LibraryOps.VMRunning()) { try ops.delete(vm) }
         running.release()
         try ops.delete(vm)
@@ -32,7 +32,7 @@ private func makeLibrary(_ dir: URL) -> VMLibrary {
         let app = LibraryOps(library: library, identity: .ui)
         let hidden = try app.create(name: "Hidden", os: .linux, diskGiB: 1)
         let visible = try app.create(name: "Visible", os: .linux, diskGiB: 1)
-        let lock = try #require(try visible.tryLock())
+        let lock = try #require(try visible.tryLock(retryingFor: 5))
         var config = try ConfigStore.load(visible)
         config.mcp.policy = .observe
         try ConfigStore.save(config, holding: lock)

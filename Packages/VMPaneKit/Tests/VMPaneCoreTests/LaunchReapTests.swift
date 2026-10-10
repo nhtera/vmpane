@@ -39,7 +39,7 @@ private func makePrepared(_ dir: URL) throws -> (VMBundle, VMPanePaths) {
 @Test func unrelatedChildrenDoNotPinTheLock() throws {
     try withTempDirectory { dir in
         let (bundle, _) = try makePrepared(dir)
-        let lock = try #require(try bundle.tryLock())
+        let lock = try #require(try bundle.tryLock(retryingFor: 5))
         let bystander = try spawnSleeper()
         defer { kill9(bystander) }
         lock.release()
@@ -106,7 +106,7 @@ private func makePrepared(_ dir: URL) throws -> (VMBundle, VMPanePaths) {
         for url in [prepared.runFiles.pidURL, prepared.runFiles.socketURL, prepared.runFiles.childrenURL] {
             #expect(!FileManager.default.fileExists(atPath: url.path))
         }
-        #expect(try bundle.tryLock() != nil)
+        #expect(try bundle.tryLock(retryingFor: 5) != nil)
     }
 }
 
