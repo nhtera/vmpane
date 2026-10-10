@@ -98,7 +98,8 @@ public enum QEMUArgvBuilder {
         args += ["-device", "pvpanic-pci"]
 
         args += ["-qmp", "unix:\(path(layout.qmpSocket)),server=on,wait=off"]
-        if incoming { args += ["-incoming", "defer"] }
+        // Restoring: paused (-S) until the state is loaded and the backend continues it.
+        if incoming { args += ["-S", "-incoming", "defer"] }
         return args
     }
 

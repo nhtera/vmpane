@@ -159,3 +159,42 @@ extension JSONValue {
 extension QEMUBackend {
     fileprivate func screenshotPixels() async throws -> QEMUScreenshot.Pixels { try await session.capture() }
 }
+
+@Test(.enabled(if: qemuBundle != nil))
+func suspendThenResumeFromTheSavedState() async throws {
+    let harness = try Harness()
+    defer { harness.cleanUp() }
+    let state = harness.layout.bundle.stateDirectory
+    try await harness.backend.start(StartOptions(headless: true))
+    try await Task.sleep(for: .seconds(1))  // the firmware runs
+
+    // Live snapshot path: pause, save, continue.
+    try await harness.backend.pause()
+    try await harness.backend.saveState(to: state)
+    #expect(FileManager.default.fileExists(atPath: state.appendingPathComponent(QEMUState.fileName).path))
+    try await harness.backend.resume()
+    #expect(try await harness.backend.qmp?.execute("query-status")["status"] == "running")
+    for file in try FileManager.default.contentsOfDirectory(at: state, includingPropertiesForKeys: nil) {
+        try FileManager.default.removeItem(at: file)
+    }
+
+    // Suspend: saved, renamed from .partial, QEMU and swtpm gone when it returns.
+    try await harness.backend.suspend(to: state)
+    #expect(try FileManager.default.contentsOfDirectory(atPath: state.path).sorted() == [QEMUState.fileName, QEMUState.infoName].sorted())
+    #expect(!harness.anyChildAlive)
+    #expect(await harness.waitForEvent { $0 == .stopped(reason: "suspended") } != nil)
+
+    // Resume: a new swtpm and QEMU load the state and continue.
+    try await harness.backend.start(StartOptions(headless: true, stateDirectory: state))
+    #expect(try await harness.backend.qmp?.execute("query-status")["status"] == "running")
+    try await harness.backend.stop(.force)
+    #expect(await harness.waitForEvent { $0 == .stopped(reason: "forced off") } != nil)
+
+    // State from another QEMU build is refused (the helper then cold-boots), leaving nothing running.
+    try JSONEncoder().encode(QEMUState.Info(qemu: "10.0.0")).write(to: state.appendingPathComponent(QEMUState.infoName))
+    await #expect(throws: QEMUStateError.incompatible(saved: "10.0.0", running: "11.1.2")) {
+        try await harness.backend.start(StartOptions(headless: true, stateDirectory: state))
+    }
+    for _ in 0..<100 where harness.anyChildAlive { try await Task.sleep(for: .milliseconds(50)) }
+    #expect(!harness.anyChildAlive)
+}

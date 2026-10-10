@@ -18,7 +18,7 @@ public enum QEMUBackendError: Error, Equatable, Sendable, CustomStringConvertibl
 /// controlled over QMP. The helper owns the window; display and clipboard come from SPICE.
 public final class QEMUBackend: VMBackend {
     public let kind = BackendKind.qemu
-    public let capabilities: LiveCapabilities = [.pause, .screenshot, .input]
+    public let capabilities: LiveCapabilities = [.pause, .suspend, .liveSnapshot, .screenshot, .input]
     public let events: AsyncStream<BackendEvent>
 
     let session: QEMUSession
@@ -36,13 +36,8 @@ public final class QEMUBackend: VMBackend {
     public func pause() async throws { try await session.execute("stop") }
     public func resume() async throws { try await session.execute("cont") }
 
-    public func suspend(to stateDirectory: URL) async throws {
-        throw BackendUnsupported(feature: "suspend")  // Phase 05 increment 6
-    }
-
-    public func saveState(to stateDirectory: URL) async throws {
-        throw BackendUnsupported(feature: "live snapshots")
-    }
+    public func suspend(to stateDirectory: URL) async throws { try await session.suspend(to: stateDirectory) }
+    public func saveState(to stateDirectory: URL) async throws { try await session.saveState(to: stateDirectory) }
 
     public func stop(_ mode: StopMode) async throws { try await session.stop(mode) }
     public func screenshot(maxEdge: Int) async throws -> Screenshot { try await session.screenshot(maxEdge: maxEdge) }
@@ -118,6 +113,10 @@ actor QEMUSession {
             let (record, qemuExit) = try processes.startQEMU(arguments)
             qemu = record
             let qmp = try await connect(layout.qmpSocket, while: qemuExit, log: layout.qemuLog)
+            if let saved = options.stateDirectory {
+                try await QEMUState.load(qmp, from: layout.path(of: saved), memoryMiB: config.memory.mib)
+                try await qmp.execute("cont")
+            }
             running = Running(qemu: record, swtpm: swtpm?.0, qmp: qmp, layout: layout)
             watch(qmp)
             Task { await self.qemuExited(await qemuExit.wait(), qemu: record) }
@@ -225,6 +224,38 @@ actor QEMUSession {
                 _ = await Blocking.run { current.qemu.terminate() }
             }
         }
+    }
+
+    /// Saves RAM state of the paused VM (pausing it if needed, S12: never migrate a running guest).
+    func saveState(to directory: URL) async throws {
+        guard let current = running else { throw QEMUBackendError.notRunning }
+        if try await current.qmp.execute("query-status")["running"] == true { try await current.qmp.execute("stop") }
+        let target = current.layout.path(of: directory).appendingPathComponent(QEMUState.fileName)
+        try await QEMUState.save(current.qmp, to: target, memoryMiB: config.memory.mib)
+    }
+
+    /// Saves RAM state as `state.qemu.partial`, renames it, then powers QEMU off. On failure the partial file
+    /// is removed and the guest continues (the backend contract: never left paused).
+    func suspend(to directory: URL) async throws {
+        guard let current = running else { throw QEMUBackendError.notRunning }
+        let directory = current.layout.path(of: directory)
+        let final = directory.appendingPathComponent(QEMUState.fileName)
+        let partial = directory.appendingPathComponent(QEMUState.fileName + ".partial")
+        do {
+            if try await current.qmp.execute("query-status")["running"] == true { try await current.qmp.execute("stop") }
+            try await QEMUState.save(current.qmp, to: partial, memoryMiB: config.memory.mib)
+            try FileManager.default.moveItem(at: partial, to: final)
+            try DurableWrite.syncDirectory(directory)
+        } catch {
+            try? FileManager.default.removeItem(at: partial)
+            _ = try? await current.qmp.execute("cont")
+            throw error
+        }
+        exitReason = "suspended"
+        _ = try? await current.qmp.execute("quit")
+        // Done only once QEMU and swtpm are gone: the state files must not change after this returns.
+        let deadline = ContinuousClock.now + .seconds(30)
+        while running?.qemu == current.qemu, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(50)) }
     }
 
     func screenshot(maxEdge: Int) async throws -> Screenshot {

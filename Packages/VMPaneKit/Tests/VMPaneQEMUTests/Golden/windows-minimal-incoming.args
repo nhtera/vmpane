@@ -58,5 +58,6 @@ virtio-rng-pci
 pvpanic-pci
 -qmp
 unix:/run/abcd1234/qmp.sock,server=on,wait=off
+-S
 -incoming
 defer

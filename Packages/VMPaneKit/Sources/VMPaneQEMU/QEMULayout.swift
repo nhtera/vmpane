@@ -24,6 +24,13 @@ public struct QEMULayout: Sendable, Equatable {
         return bundleDirectory.appendingPathComponent(relativePath)
     }
 
+    /// `url` (a directory of the bundle, as the helper names it) under `bundleDirectory`, so QEMU gets the real path.
+    public func path(of url: URL) -> URL {
+        let base = bundle.url.standardizedFileURL.path, path = url.standardizedFileURL.path
+        guard path.hasPrefix(base + "/") else { return url }
+        return bundleDirectory.appendingPathComponent(String(path.dropFirst(base.count + 1)), isDirectory: url.hasDirectoryPath)
+    }
+
     private var aux: URL { bundleDirectory.appendingPathComponent("current/aux", isDirectory: true) }
     private var logs: URL { bundleDirectory.appendingPathComponent("logs", isDirectory: true) }
 
