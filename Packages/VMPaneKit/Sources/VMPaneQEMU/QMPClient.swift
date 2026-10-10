@@ -132,8 +132,7 @@ public final class QMPClient: @unchecked Sendable {
         }
         var message: [String: JSONValue] = ["execute": .string(command), "id": .int(id)]
         if let arguments { message["arguments"] = .object(arguments) }
-        var line = try JSONEncoder().encode(JSONValue.object(message))
-        line.append(0x0A)
+        let line = try JSONEncoder().encode(JSONValue.object(message)) + [0x0A]
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 queue.async {
