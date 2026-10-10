@@ -1,0 +1,50 @@
+;; Deny-by-default sandbox for qemu-system-aarch64 (applied by the helper with sandbox-exec).
+;; Parameters (-D):
+;;   BUNDLE   the VM bundle (read-write: disks, firmware variables, saved state)
+;;   RUNDIR   the VM's run directory (read-write: QMP/agent/swtpm sockets, logs; also TMPDIR, because
+;;            QEMU's memfd fallback writes memfd-XXXXXX into $TMPDIR)
+;;   RUNTIME  the QEMU runtime copy (read-only: programs, libraries, firmware)
+;; A guest that takes over QEMU can then reach only its own bundle and run directory.
+(version 1)
+(deny default)
+(debug deny)
+
+;; Process basics
+(allow process-exec (subpath (param "RUNTIME")))
+(allow process-fork)
+(allow signal (target self))
+(allow sysctl-read)
+(allow mach-lookup
+  (global-name "com.apple.system.notification_center")
+  (global-name "com.apple.system.opendirectoryd.libinfo")
+  (global-name "com.apple.logd")
+  (global-name "com.apple.diagnosticd"))
+(allow ipc-posix-shm-read-data ipc-posix-shm-read-metadata
+  (ipc-posix-name-prefix "apple.shm.notification_center"))
+
+;; Hypervisor.framework (the binary also carries the hypervisor entitlement)
+(allow iokit-open (iokit-user-client-class "AppleHVUserClient"))
+
+;; System libraries, the runtime copy, time zone data
+(allow file-read* file-map-executable
+  (subpath "/System") (subpath "/usr/lib") (subpath "/Library/Apple")
+  (subpath "/private/var/db/dyld") (subpath "/System/Volumes/Preboot/Cryptexes")
+  (subpath (param "RUNTIME")))
+(allow file-read* (literal "/"))   ; dyld reads the root directory at launch; without it QEMU aborts silently
+(allow file-read-metadata (literal "/private") (literal "/private/var") (literal "/Users"))
+;; QEMU and swtpm find their data relative to their own executable (realpath of every directory above it)
+(allow file-read-metadata (path-ancestors (param "RUNTIME")))
+(allow file-read* (literal "/dev/null") (literal "/dev/urandom") (literal "/dev/random")
+  (literal "/private/etc/localtime") (subpath "/usr/share/zoneinfo") (subpath "/private/var/db/timezone"))
+(allow file-write-data (literal "/dev/null"))
+
+;; The VM's own files
+(allow file-read* file-write* (subpath (param "BUNDLE")) (subpath (param "RUNDIR")))
+
+;; slirp user networking: outbound connections, local forwards
+(allow network-outbound)
+(allow network-bind (local ip "localhost:*"))
+(allow system-socket)
+;; Unix sockets inside RUNDIR (QMP server, agent, swtpm client)
+(allow network-bind network-outbound network-inbound (local unix-socket (subpath (param "RUNDIR"))))
+(allow network-outbound (remote unix-socket (subpath (param "RUNDIR"))))

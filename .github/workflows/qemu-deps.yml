@@ -46,6 +46,8 @@ jobs:
       - run: qemu/scripts/package.sh
       - run: scripts/check-dylibs.sh build/qemu-bundle
       - run: qemu/scripts/check-bundle.sh build/qemu-bundle
+      # The runner is a separate standard account: the bundle runs outside the account that built it locally.
+      - run: '[[ $(build/qemu-bundle/bin/qemu-system-aarch64 -accel help | tail -n +2) == hvf ]]'
       - run: tar --zstd -cf "build/qemu-bundle-${{ steps.inputs.outputs.hash }}.tar.zst" -C build qemu-bundle
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

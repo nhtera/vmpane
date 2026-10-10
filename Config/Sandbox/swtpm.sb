@@ -1,0 +1,38 @@
+;; Deny-by-default sandbox for swtpm (applied by the helper with sandbox-exec).
+;; Parameters (-D):
+;;   BUNDLE   the VM bundle (read-write: the TPM state directory lives in it)
+;;   RUNDIR   the VM's run directory (read-write: the control socket QEMU connects to, the log)
+;;   RUNTIME  the QEMU runtime copy (read-only: swtpm and its libraries)
+;; swtpm needs no network and no hypervisor: only its state, its socket and its libraries.
+(version 1)
+(deny default)
+(debug deny)
+
+(allow process-exec (subpath (param "RUNTIME")))
+(allow signal (target self))
+(allow sysctl-read)
+(allow mach-lookup
+  (global-name "com.apple.system.notification_center")
+  (global-name "com.apple.system.opendirectoryd.libinfo")
+  (global-name "com.apple.logd")
+  (global-name "com.apple.diagnosticd"))
+(allow ipc-posix-shm-read-data ipc-posix-shm-read-metadata
+  (ipc-posix-name-prefix "apple.shm.notification_center"))
+
+(allow file-read* file-map-executable
+  (subpath "/System") (subpath "/usr/lib") (subpath "/Library/Apple")
+  (subpath "/private/var/db/dyld") (subpath "/System/Volumes/Preboot/Cryptexes")
+  (subpath (param "RUNTIME")))
+(allow file-read* (literal "/"))
+(allow file-read-metadata (literal "/private") (literal "/private/var") (literal "/Users"))
+;; QEMU and swtpm find their data relative to their own executable (realpath of every directory above it)
+(allow file-read-metadata (path-ancestors (param "RUNTIME")))
+(allow file-read* (literal "/dev/null") (literal "/dev/urandom") (literal "/dev/random")
+  (literal "/private/etc/localtime") (subpath "/usr/share/zoneinfo") (subpath "/private/var/db/timezone"))
+(allow file-write-data (literal "/dev/null"))
+
+(allow file-read* file-write* (subpath (param "BUNDLE")) (subpath (param "RUNDIR")))
+
+;; The control socket (swtpm listens, QEMU connects)
+(allow system-socket)
+(allow network-bind network-inbound (local unix-socket (subpath (param "RUNDIR"))))

@@ -125,6 +125,18 @@ Choices that are not obvious from the recipes (`scripts/lib/recipes.sh`):
 - **pcre2** has no JIT: QEMU's hardened runtime has no `allow-jit` entitlement.
 - **dtc** (libfdt) is built separately because QEMU's copy is a download-only subproject.
 
+## Running the tools
+
+- **Sandbox:** the helper runs QEMU and swtpm under the deny-by-default profiles in
+  [`../Config/Sandbox`](../Config/Sandbox) (`sandbox-exec -D BUNDLE=… -D RUNDIR=… -D RUNTIME=…`, with
+  `TMPDIR` set to the run directory). Each may read the runtime copy and system libraries, and read and write
+  only its VM's bundle and run directory; QEMU may also open HVF and use slirp networking. The
+  `qemu-sandbox` itest boots the firmware with both sandboxed, checks that each is denied a file outside its
+  VM, and with `VMPANE_SIGN_IDENTITY` set does so with release-signed (hardened runtime) binaries.
+- **swtpm_setup** looks for its configuration under the build prefix (`/vmpane/qemu/etc`), which does not
+  exist: pass `--config <file>`, and point `HOME`/`XDG_CONFIG_HOME` at the VM's directory so it never writes
+  into the user's `~/.config`. swtpm alone creates a fresh TPM state on first start.
+
 ## CI and provenance
 
 `.github/workflows/qemu-deps.yml` runs on the project's Mac whenever an input changes (anything in `qemu/`
