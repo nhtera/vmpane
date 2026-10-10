@@ -1,2 +1,3 @@
 # Guest images used by integration scenarios: <name> <url> <sha256>
-# Filled in when the first VM scenarios land (Linux cloud image, macOS IPSW, Windows ISO handled by the user).
+ubuntu-24.04-arm64-cloud https://cloud-images.ubuntu.com/releases/noble/release-20260926/ubuntu-24.04-server-cloudimg-arm64.img 1d6bffe64b848468ac97f821d369a4846d983de1800ccf6b5ec8853e85cefc55
+macos-15.6.1-ipsw https://updates.cdn-apple.com/2025SummerFCS/fullrestores/093-10809/CFD6DD38-DAF0-40DA-854F-31AAD1294C6F/UniversalMac_15.6.1_24G90_Restore.ipsw 3d87686b691ac765eb6a6b3082b2334e2af9710096a00432dd519af89ff2ea78

@@ -7,20 +7,27 @@ import VMPaneCore
 public actor HelperController {
     public let prepared: PreparedBundle
     public let runtimeVersion: String
-    private var config: VMConfigV1
-    private var state: VMRunState = .stopped
-    private let backend: VMBackend?
-    private var server: UDSServer?
+    var config: VMConfigV1
+    var state: VMRunState = .stopped
+    let backend: VMBackend?
+    var server: UDSServer?
     private let onShutdown: @Sendable () -> Void
     private var shuttingDown = false
+    var pumpTask: Task<Void, Never>?
+    /// How long shutdown waits for a guest to power off after the ACPI request before forcing it off.
+    var gracefulStopTimeout: Duration = .seconds(30)
+    /// Whether the VM was last started without a window (restarts after a restore keep it).
+    var lastStartHeadless = true
+
+    public func setGracefulStopTimeout(_ timeout: Duration) { gracefulStopTimeout = timeout }
 
     public init(
-        prepared: PreparedBundle, runtimeVersion: String, backend: VMBackend?,
+        prepared: PreparedBundle, runtimeVersion: String, backend: VMBackend?, config: VMConfigV1? = nil,
         onShutdown: @escaping @Sendable () -> Void
     ) {
         self.prepared = prepared
         self.runtimeVersion = runtimeVersion
-        self.config = prepared.config
+        self.config = config ?? prepared.config
         self.backend = backend
         self.onShutdown = onShutdown
     }
@@ -33,12 +40,15 @@ public actor HelperController {
         }
         try server.start()
         self.server = server
+        startEventPump()
     }
 
     /// Stops the server, stops recorded children, removes run files and releases the bundle lock.
     public func shutdown() async {
         guard !shuttingDown else { return }
         shuttingDown = true
+        await stopBackendForShutdown()  // the VM must be down before its disks' lock is released
+        pumpTask?.cancel()
         server?.stop()
         server = nil
         let prepared = prepared
@@ -65,15 +75,9 @@ public actor HelperController {
         case .eventsSubscribe?: return subscribe(request.params, connection)
         case .vmSettingsGet?: return RPCParams.encode(config)
         case .vmStart?, .vmPause?, .vmResume?, .vmSuspend?, .vmStop?:
-            guard backend != nil else {
-                return .failure(RPCError(.backendUnavailable, "no \(config.backend.rawValue) backend in this build"))
-            }
-            return .failure(RPCError(.methodNotFound, "\(request.method) is not available yet"))
+            return await lifecycle(request.method, request.params)
         case .vmSnapshotList?, .vmSnapshotCreate?, .vmSnapshotDelete?, .vmSnapshotRestore?:
-            let (lock, config, state) = (prepared.lock, config, state)
-            let method = ControlMethod(rawValue: request.method)
-            let params = request.params
-            return await Blocking.run { Self.snapshot(method, params, lock: lock, config: config, state: state) }
+            return await snapshotRequest(request.method, request.params)
         default:
             return .failure(RPCError(.methodNotFound, "\(request.method) is not available in this helper"))
         }
@@ -134,52 +138,6 @@ public actor HelperController {
         RPCParams.decode(SubscribeParams.self, from: params).map { params in
             connection.subscribe(Set(params.topics))
             return .object([:])
-        }
-    }
-
-    // MARK: - Snapshots (stopped VM; live snapshots need a backend)
-
-    private struct CreateParams: Decodable {
-        var name: String
-        var kind: SnapshotMeta.Kind
-        var origin: SnapshotMeta.Origin?
-    }
-
-    private struct IDParams: Decodable { var id: UUID }
-
-    private static func snapshot(
-        _ method: ControlMethod?, _ params: JSONValue?, lock: BundleLock, config: VMConfigV1,
-        state: VMRunState
-    ) -> Result<JSONValue, RPCError> {
-        let store = SnapshotStore(lock: lock)
-        do {
-            switch method {
-            case .vmSnapshotList?:
-                return RPCParams.encode(try store.list())
-            case .vmSnapshotCreate?:
-                let create = try RPCParams.decode(CreateParams.self, from: params).get()
-                guard create.kind == .disk else { return .failure(RPCError(.backendUnavailable, "live snapshots need a running backend")) }
-                guard state == .stopped else { return .failure(RPCError(.unsupportedLive, "disk snapshots need the VM stopped")) }
-                let context = SnapshotContext(
-                    deviceSetHash: DeviceSet(config).hash, hostBuild: Self.hostBuild,
-                    backendVersion: VMPane.version)
-                return RPCParams.encode(try store.create(name: create.name, kind: .disk, origin: create.origin ?? .user, context: context))
-            case .vmSnapshotDelete?:
-                try store.delete(try RPCParams.decode(IDParams.self, from: params).get().id)
-                return .success(.object([:]))
-            case .vmSnapshotRestore?:
-                guard state == .stopped else { return .failure(RPCError(.unsupportedLive, "restore needs the VM stopped")) }
-                let generation = try store.restore(try RPCParams.decode(IDParams.self, from: params).get().id)
-                return .success(["generationId": .string(generation.generationId.uuidString)])
-            default:
-                return .failure(RPCError(.methodNotFound, "unknown snapshot method"))
-            }
-        } catch let error as RPCError {
-            return .failure(error)
-        } catch SnapshotError.notFound(let id) {
-            return .failure(RPCError(.invalidParams, "no snapshot \(id)"))
-        } catch {
-            return .failure(RPCError(.internalError, String(describing: error)))
         }
     }
 

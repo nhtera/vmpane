@@ -34,6 +34,8 @@ public enum HelperStateMachine {
             case (.paused, .resumed): .running
             case (.running, .suspend), (.paused, .suspend): .suspending
             case (.suspending, .suspended): .stopped
+            // A failed suspend leaves the VM running (the backend resumes it).
+            case (.suspending, .resumed): .running
             case (.running, .stop), (.paused, .stop), (.starting, .stop): .stopping
             case (.error, .stop): .stopped
             // The guest can power off by itself in any running state.

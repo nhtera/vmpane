@@ -57,11 +57,16 @@ public struct SnapshotStore: Sendable {
     // MARK: - Create
 
     @discardableResult
+    /// `memoryBytes` (guest RAM) is required for live snapshots: `SpaceGuard` refuses them on a nearly full volume.
     public func create(
         name: String, kind: SnapshotMeta.Kind, origin: SnapshotMeta.Origin, context: SnapshotContext,
-        stateFiles: [URL] = [], now: Date = Date()
+        stateFiles: [URL] = [], memoryBytes: UInt64? = nil, now: Date = Date(),
+        availableSpace: (URL) throws -> UInt64 = SpaceGuard.availableBytes
     ) throws -> SnapshotMeta {
-        if kind == .live && stateFiles.isEmpty { throw SnapshotError.missingState }
+        if kind == .live {
+            guard !stateFiles.isEmpty, let memoryBytes else { throw SnapshotError.missingState }
+            try SpaceGuard.check(memoryBytes: memoryBytes, at: bundle.url, available: availableSpace)
+        }
         var generation = try Generation.read(from: bundle.generationURL)
         let id = UUID()
         let partial = bundle.snapshotsDirectory.appendingPathComponent("\(id.uuidString).partial", isDirectory: true)
@@ -204,7 +209,8 @@ public struct SnapshotStore: Sendable {
             if !committed { try fm.removeItem(at: entry) }
         }
         // Temp files of interrupted durable writes.
-        for dir in [bundle.url, bundle.currentDirectory] {
+        for dir in [bundle.url, bundle.currentDirectory, bundle.stateDirectory]
+        where fm.fileExists(atPath: dir.path) {
             for entry in try fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
             where entry.lastPathComponent.hasPrefix(".") && entry.lastPathComponent.contains(".tmp-") {
                 try fm.removeItem(at: entry)

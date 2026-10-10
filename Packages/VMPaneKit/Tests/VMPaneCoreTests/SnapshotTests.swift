@@ -114,9 +114,13 @@ func snapshotRestoreCrashLeavesOldOrNewSet(at crashStep: SnapshotStep) throws {
         let store = SnapshotStore(lock: lock)
         let snapshot = try store.create(
             name: "live", kind: .live, origin: .user, context: context,
-            stateFiles: [
-                saved.appendingPathComponent("suspend.qemustate"), saved.appendingPathComponent(StateMeta.fileName),
-            ])
+            stateFiles: [saved.appendingPathComponent("suspend.qemustate"), saved.appendingPathComponent(StateMeta.fileName)],
+            memoryBytes: 1 << 20, availableSpace: { _ in 100 << 30 })
+        #expect(throws: InsufficientSpace.self) {
+            try store.create(
+                name: "full", kind: .live, origin: .user, context: context, stateFiles: [saved],
+                memoryBytes: 8 << 30, availableSpace: { _ in 1 << 30 })
+        }
         let restored = try store.restore(snapshot.id)
         let stateMetaURL = bundle.stateDirectory.appendingPathComponent(StateMeta.fileName)
         let meta = try CanonicalJSON.decoder().decode(StateMeta.self, from: Data(contentsOf: stateMetaURL))

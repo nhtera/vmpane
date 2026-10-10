@@ -1,0 +1,207 @@
+import Foundation
+import VMPaneControl
+import VMPaneCore
+import os
+
+/// VM lifecycle in the helper. State changes come from the backend's events; a request only checks that
+/// it is allowed now, applies its intermediate state (starting, suspending, stopping) and calls the
+/// backend. A backend event that repeats the current state, or does not fit it, is logged and ignored.
+extension HelperController {
+    static let log = Logger(subsystem: VMPane.SigningIdentifier.helper, category: "lifecycle")
+
+    /// Reads `backend.events` (single consumer) for the helper's lifetime.
+    func startEventPump() {
+        guard let backend, pumpTask == nil else { return }
+        let events = backend.events
+        pumpTask = Task { [weak self] in
+            for await event in events {
+                await self?.apply(event)
+            }
+        }
+    }
+
+    func apply(_ event: BackendEvent) {
+        switch event {
+        case .started: transition(.started)
+        case .paused: transition(.paused)
+        case .resumed: transition(.resumed)
+        case .suspended: transition(.suspended)
+        case .stopped(let reason): transition(.stopped, reason: reason)
+        case .failed(let message): transition(.failed, reason: message)
+        case .consoleOutput(let data):
+            server?.broadcast(
+                topic: "console", method: ControlNotification.consoleOutput.rawValue,
+                params: ["dataB64": .string(data.base64EncodedString())])
+        }
+    }
+
+    /// Applies `event` if it fits the current state and announces the change.
+    @discardableResult
+    func transition(_ event: HelperStateMachine.Event, reason: String? = nil) -> Bool {
+        switch HelperStateMachine.transition(state, event) {
+        case .success(let next):
+            guard next != state else { return true }
+            state = next
+            server?.broadcast(
+                topic: "vm", method: ControlNotification.vmStateChanged.rawValue,
+                params: ["state": .string(next.rawValue), "reason": reason.map { .string($0) } ?? .null])
+            return true
+        case .failure:
+            Self.log.notice("ignored \(event.rawValue, privacy: .public) in state \(self.state.rawValue, privacy: .public)")
+            return false
+        }
+    }
+
+    // MARK: - Requests
+
+    private struct StartParams: Decodable { var headless: Bool? }
+    private struct StopParams: Decodable { var mode: StopMode? }
+
+    func lifecycle(_ method: String, _ params: JSONValue?) async -> Result<JSONValue, RPCError> {
+        guard let backend else {
+            return .failure(RPCError(.backendUnavailable, "no \(config.backend.rawValue) backend in this build"))
+        }
+        let request: HelperStateMachine.Event =
+            switch ControlMethod(rawValue: method) {
+            case .vmStart?: .start
+            case .vmPause?: .pause
+            case .vmResume?: .resume
+            case .vmSuspend?: .suspend
+            default: .stop
+            }
+        guard HelperStateMachine.allowedRequests(in: state).contains(request) else {
+            return .failure(RPCError(.invalidState, "cannot \(request.rawValue) while \(state.rawValue)"))
+        }
+        do {
+            switch request {
+            case .start:
+                let headless = try RPCParams.decode(StartParams.self, from: params).get().headless ?? false
+                try await startVM(backend, headless: headless)
+            case .pause:
+                try await backend.pause()
+                transition(.paused)
+            case .resume:
+                try await backend.resume()
+                transition(.resumed)
+            case .suspend:
+                try await suspendVM(backend)
+            default:
+                let mode = try RPCParams.decode(StopParams.self, from: params).get().mode ?? .graceful
+                transition(.stop)
+                try await backend.stop(mode)  // `.stopped` arrives as an event (graceful stops take a while)
+            }
+            return .success(["state": .string(state.rawValue)])
+        } catch let error as RPCError {
+            return .failure(error)
+        } catch let error as InsufficientSpace {
+            return .failure(
+                RPCError(.insufficientSpace, "needs \(error.requiredBytes >> 30) GiB free, \(error.availableBytes >> 30) GiB available"))
+        } catch {
+            if state == .starting || state == .stopping { transition(.failed, reason: String(describing: error)) }
+            return .failure(RPCError(.internalError, String(describing: error)))
+        }
+    }
+
+    // MARK: - Start / suspend
+
+    var stateDirectory: URL { prepared.lock.bundle.stateDirectory }
+
+    /// Starts the VM, resuming saved RAM state when the generation rule allows; otherwise (or if the
+    /// restore fails) a cold boot, and the state is deleted: one rule, no retry.
+    @discardableResult
+    func startVM(_ backend: VMBackend, headless: Bool) async throws -> Bool {
+        lastStartHeadless = headless
+        transition(.start)
+        let decision = await savedStateDecision()
+        if decision == .discard { await clearSavedState() }
+        do {
+            try await backend.start(StartOptions(headless: headless, stateDirectory: decision == .resume ? stateDirectory : nil))
+        } catch  where decision == .resume {
+            Self.log.notice("restoring saved state failed, cold boot: \(String(describing: error), privacy: .public)")
+            await clearSavedState()
+            try await backend.start(StartOptions(headless: headless))
+        }
+        transition(.started)
+        if decision == .resume { await clearSavedState() }  // the running VM has moved on from it
+        return decision == .resume
+    }
+
+    func writeStateMeta() async throws {
+        let (bundle, directory, hash) = (prepared.lock.bundle, stateDirectory, DeviceSet(config).hash)
+        try await Blocking.run {
+            let meta = StateMeta(
+                generationId: try Generation.read(from: bundle.generationURL).generationId,
+                deviceSetHash: hash, hostBuild: HelperController.hostBuild, backendVersion: VMPane.version)
+            try DurableWrite.write(CanonicalJSON.encode(meta), to: directory.appendingPathComponent(StateMeta.fileName))
+        }
+    }
+
+    /// Saves RAM state and stops. `suspend.json` is written last: it is the commit marker.
+    func suspendVM(_ backend: VMBackend) async throws {
+        let bundle = prepared.lock.bundle
+        let memory = UInt64(config.memory.mib) << 20
+        try await Blocking.run { try SpaceGuard.check(memoryBytes: memory, at: bundle.url) }
+        transition(.suspend)
+        await clearSavedState()
+        do {
+            try await backend.suspend(to: stateDirectory)
+            let meta = StateMeta(
+                generationId: try Generation.read(from: bundle.generationURL).generationId,
+                deviceSetHash: DeviceSet(config).hash, hostBuild: Self.hostBuild, backendVersion: VMPane.version)
+            try DurableWrite.write(CanonicalJSON.encode(meta), to: stateDirectory.appendingPathComponent(StateMeta.fileName))
+        } catch {
+            await clearSavedState()
+            transition(.resumed, reason: "suspend failed")  // the backend contract: still running
+            throw error
+        }
+        transition(.suspended)
+    }
+
+    func savedStateDecision() async -> SavedStateDecision {
+        let (directory, bundle, hash) = (stateDirectory, prepared.lock.bundle, DeviceSet(config).hash)
+        return await Blocking.run {
+            let entries = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+            let meta = (try? Data(contentsOf: directory.appendingPathComponent(StateMeta.fileName)))
+                .flatMap { try? CanonicalJSON.decoder().decode(StateMeta.self, from: $0) }
+            guard let generation = try? Generation.read(from: bundle.generationURL) else { return entries.isEmpty ? .none : .discard }
+            return SavedStateRule.decide(stateMeta: meta, stateExists: !entries.isEmpty, current: generation, deviceSetHash: hash)
+        }
+    }
+
+    func clearSavedState() async {
+        let directory = stateDirectory
+        await Blocking.run {
+            for entry in (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? [] {
+                try? FileManager.default.removeItem(at: entry)
+            }
+        }
+    }
+
+    // MARK: - Shutdown
+
+    /// Before the helper exits: suspend (if the VM's close action says so and the backend can), else a
+    /// graceful stop, then a forced one. The bundle lock is released only after this.
+    func stopBackendForShutdown() async {
+        guard let backend, [.starting, .running, .paused].contains(state) else { return }
+        if config.ui.closeAction == .suspend, backend.capabilities.contains(.suspend), state != .starting,
+            (try? await suspendVM(backend)) != nil
+        {
+            return
+        }
+        transition(.stop)
+        try? await backend.stop(.graceful)
+        if await waitForState(.stopped, timeout: gracefulStopTimeout) { return }
+        try? await backend.stop(.force)
+        _ = await waitForState(.stopped, timeout: .seconds(10))
+    }
+
+    /// Waits (with actor reentrancy, so events keep arriving) until `target` or `timeout`.
+    func waitForState(_ target: VMRunState, timeout: Duration) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+        while state != target {
+            if ContinuousClock.now >= deadline { return false }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return true
+    }
+}

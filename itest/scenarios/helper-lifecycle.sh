@@ -2,45 +2,8 @@
 # kill -9 recovery with an orphaned child, Finder-duplicate identity, clean shutdown.
 # Sourced by scripts/itest.sh with $APP set. Uses a throwaway support directory, never the user's library.
 
-it_rpc() { /usr/bin/python3 "$VMPANE_ROOT/itest/lib/rpc.py" "$@"; }
-
-it_fail() {
-    echo "helper-lifecycle: $*" >&2
-    return 1
-}
-
-# Creates a minimal valid bundle (config v1, generation, directories) at $1.
-it_create_bundle() {
-    local bundle=$1 id mac
-    id=$(uuidgen)
-    mac=$(printf '52:54:00:%02x:%02x:%02x' $((RANDOM % 256)) $((RANDOM % 256)) $((RANDOM % 256)))
-    mkdir -p "$bundle/current/aux" "$bundle/current/state" "$bundle/snapshots" "$bundle/logs"
-    chmod -R 700 "$bundle"
-    jq -n --arg id "$id" --arg mac "$mac" '{
-        schemaVersion: 1, id: $id, name: "itest", os: "linux", backend: "vz",
-        cpu: {count: 2}, memory: {mib: 2048, balloon: true},
-        display: {widthPx: 1280, heightPx: 800, ppi: 144, autoResize: true, scaling: "retina"},
-        disks: [{id: "root", file: "current/disk.img", format: "raw", sizeGiB: 8, bus: "virtio"}],
-        removable: [], platform: {}, network: [{id: "nic0", mode: "nat", macAddress: $mac}],
-        portForwards: [], shares: [], audio: {output: true, input: false},
-        clipboard: {mode: "both", allowWithAgents: false}, vz: {rosetta: false, nestedVirtualization: false},
-        agent: {transport: "auto"},
-        mcp: {policy: "off", confirmExec: true, autoSnapshot: true, auditTypedText: false},
-        ui: {closeAction: "keepRunning"}}' >"$bundle/config.json"
-    jq -n --arg gen "$(uuidgen)" '{schemaVersion: 1, generationId: $gen}' >"$bundle/current/generation.json"
-    chmod 600 "$bundle/config.json" "$bundle/current/generation.json"
-}
-
-it_wait_for() {  # it_wait_for <seconds> <test command…>
-    local deadline=$((SECONDS + $1))
-    shift
-    until "$@"; do
-        ((SECONDS < deadline)) || return 1
-        sleep 0.1
-    done
-}
-
-it_sid() { jq -r .id "$1/config.json" | tr 'A-F' 'a-f' | cut -c1-8; }
+source "$VMPANE_ROOT/itest/lib/common.sh"
+IT_SCENARIO=helper-lifecycle
 
 scenario_run() {
     local helper="$APP/Contents/Helpers/VMPaneVM.app/Contents/MacOS/VMPaneVM"

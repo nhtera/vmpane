@@ -42,6 +42,11 @@ public struct VMConfigFields: ExtensibleFields {
 
 public struct CPUConfig: ExtensibleFields {
     public var count: Int
+
+    public init(count: Int) {
+        self.count = count
+    }
+
     enum CodingKeys: String, CodingKey, CaseIterable { case count }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
@@ -49,6 +54,12 @@ public struct CPUConfig: ExtensibleFields {
 public struct MemoryConfig: ExtensibleFields {
     public var mib: Int
     public var balloon: Bool
+
+    public init(mib: Int, balloon: Bool) {
+        self.mib = mib
+        self.balloon = balloon
+    }
+
     enum CodingKeys: String, CodingKey, CaseIterable { case mib, balloon }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
@@ -60,6 +71,15 @@ public struct DisplayConfig: ExtensibleFields {
     public var ppi: Int
     public var autoResize: Bool
     public var scaling: Scaling
+
+    public init(widthPx: Int, heightPx: Int, ppi: Int, autoResize: Bool, scaling: Scaling) {
+        self.widthPx = widthPx
+        self.heightPx = heightPx
+        self.ppi = ppi
+        self.autoResize = autoResize
+        self.scaling = scaling
+    }
+
     enum CodingKeys: String, CodingKey, CaseIterable { case widthPx, heightPx, ppi, autoResize, scaling }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
@@ -74,6 +94,15 @@ public struct DiskConfig: ExtensibleFields {
     public var format: Format
     public var sizeGiB: Int
     public var bus: StorageBus
+
+    public init(id: String, file: String, format: Format, sizeGiB: Int, bus: StorageBus) {
+        self.id = id
+        self.file = file
+        self.format = format
+        self.sizeGiB = sizeGiB
+        self.bus = bus
+    }
+
     enum CodingKeys: String, CodingKey, CaseIterable { case id, file, format, sizeGiB, bus }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
@@ -83,6 +112,13 @@ public struct RemovableConfig: ExtensibleFields {
     /// Absolute host path of an image (ISO, IMG).
     public var path: String
     public var bus: StorageBus
+
+    public init(id: String, path: String, bus: StorageBus) {
+        self.id = id
+        self.path = path
+        self.bus = bus
+    }
+
     enum CodingKeys: String, CodingKey, CaseIterable { case id, path, bus }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
@@ -91,6 +127,11 @@ public struct PlatformConfig: ExtensibleFields {
     /// Base64 `VZGenericMachineIdentifier`/`VZMacMachineIdentifier` data. Part of the device set, so the
     /// guest keeps its identity across restarts; a clone gets a new one.
     public var machineIdentifier: String?
+
+    public init(machineIdentifier: String? = nil) {
+        self.machineIdentifier = machineIdentifier
+    }
+
     enum CodingKeys: String, CodingKey, CaseIterable { case machineIdentifier }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
@@ -101,6 +142,13 @@ public struct NetworkConfig: ExtensibleFields {
     public var mode: Mode
     /// Locally administered unicast MAC, persisted so the guest keeps its leases.
     public var macAddress: String
+
+    public init(id: String, mode: Mode, macAddress: String) {
+        self.id = id
+        self.mode = mode
+        self.macAddress = macAddress
+    }
+
     enum CodingKeys: String, CodingKey, CaseIterable { case id, mode, macAddress }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
@@ -115,6 +163,16 @@ public struct PortForwardConfig: ExtensibleFields {
     public var hostPort: Int
     public var guestPort: Int
     public var origin: RuleOrigin
+
+    public init(id: String, proto: Proto, hostAddress: String, hostPort: Int, guestPort: Int, origin: RuleOrigin) {
+        self.id = id
+        self.proto = proto
+        self.hostAddress = hostAddress
+        self.hostPort = hostPort
+        self.guestPort = guestPort
+        self.origin = origin
+    }
+
     enum CodingKeys: String, CodingKey, CaseIterable { case id, proto, hostAddress, hostPort, guestPort, origin }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
@@ -124,6 +182,14 @@ public struct ShareConfig: ExtensibleFields {
     public var name: String
     public var hostPath: String
     public var readOnly: Bool
+
+    public init(id: String, name: String, hostPath: String, readOnly: Bool) {
+        self.id = id
+        self.name = name
+        self.hostPath = hostPath
+        self.readOnly = readOnly
+    }
+
     enum CodingKeys: String, CodingKey, CaseIterable { case id, name, hostPath, readOnly }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
@@ -131,6 +197,12 @@ public struct ShareConfig: ExtensibleFields {
 public struct AudioConfig: ExtensibleFields {
     public var output: Bool
     public var input: Bool
+
+    public init(output: Bool, input: Bool) {
+        self.output = output
+        self.input = input
+    }
+
     enum CodingKeys: String, CodingKey, CaseIterable { case output, input }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
@@ -140,6 +212,12 @@ public struct ClipboardConfig: ExtensibleFields {
     public var mode: Mode
     /// Whether agents (MCP, non-interactive CLI) may read or write the clipboard content.
     public var allowWithAgents: Bool
+
+    public init(mode: Mode, allowWithAgents: Bool) {
+        self.mode = mode
+        self.allowWithAgents = allowWithAgents
+    }
+
     enum CodingKeys: String, CodingKey, CaseIterable { case mode, allowWithAgents }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
@@ -147,6 +225,12 @@ public struct ClipboardConfig: ExtensibleFields {
 public struct VZConfig: ExtensibleFields {
     public var rosetta: Bool
     public var nestedVirtualization: Bool
+
+    public init(rosetta: Bool, nestedVirtualization: Bool) {
+        self.rosetta = rosetta
+        self.nestedVirtualization = nestedVirtualization
+    }
+
     enum CodingKeys: String, CodingKey, CaseIterable { case rosetta, nestedVirtualization }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
@@ -158,6 +242,15 @@ public struct QEMUConfig: ExtensibleFields {
     public var gpu: GPU
     public var storageBus: StorageBus
     public var smbiosUUID: UUID
+
+    public init(tpm: Bool, secureBoot: Bool, gpu: GPU, storageBus: StorageBus, smbiosUUID: UUID) {
+        self.tpm = tpm
+        self.secureBoot = secureBoot
+        self.gpu = gpu
+        self.storageBus = storageBus
+        self.smbiosUUID = smbiosUUID
+    }
+
     enum CodingKeys: String, CodingKey, CaseIterable { case tpm, secureBoot, gpu, storageBus, smbiosUUID }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
@@ -165,6 +258,11 @@ public struct QEMUConfig: ExtensibleFields {
 public struct AgentConfig: ExtensibleFields {
     public enum Transport: String, Codable, Sendable { case auto, vsock, virtioSerial, tcp }
     public var transport: Transport
+
+    public init(transport: Transport) {
+        self.transport = transport
+    }
+
     enum CodingKeys: String, CodingKey, CaseIterable { case transport }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
@@ -176,6 +274,15 @@ public struct MCPConfig: ExtensibleFields {
     public var auditTypedText: Bool
     /// HMAC over the VM id and these settings, written only by the app. Missing or wrong → policy `off`.
     public var tag: String?
+
+    public init(policy: PolicyLevel, confirmExec: Bool, autoSnapshot: Bool, auditTypedText: Bool, tag: String? = nil) {
+        self.policy = policy
+        self.confirmExec = confirmExec
+        self.autoSnapshot = autoSnapshot
+        self.auditTypedText = auditTypedText
+        self.tag = tag
+    }
+
     enum CodingKeys: String, CodingKey, CaseIterable { case policy, confirmExec, autoSnapshot, auditTypedText, tag }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
@@ -184,12 +291,23 @@ public struct UIConfig: ExtensibleFields {
     public enum CloseAction: String, Codable, Sendable { case keepRunning, suspend, stop }
     public var closeAction: CloseAction
     public var icon: String?
+
+    public init(closeAction: CloseAction, icon: String? = nil) {
+        self.closeAction = closeAction
+        self.icon = icon
+    }
+
     enum CodingKeys: String, CodingKey, CaseIterable { case closeAction, icon }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
 
 public struct WindowsConfig: ExtensibleFields {
     public var eulaAcceptedAt: Date?
+
+    public init(eulaAcceptedAt: Date? = nil) {
+        self.eulaAcceptedAt = eulaAcceptedAt
+    }
+
     enum CodingKeys: String, CodingKey, CaseIterable { case eulaAcceptedAt }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }

@@ -12,6 +12,17 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
 
     static func main() {
         let arguments = HelperArguments(CommandLine.arguments)
+        if let arguments, arguments.validateOnly {
+            // Checks the VM's configuration with the real entitlement (integration tests), then exits.
+            do {
+                try BackendFactory.validate(try VMBundle.open(arguments.bundle))
+                print("VMPaneVM: configuration valid")
+                exit(0)
+            } catch {
+                FileHandle.standardError.write(Data("VMPaneVM: configuration invalid: \(error)\n".utf8))
+                exit(1)
+            }
+        }
         guard let arguments else {
             FileHandle.standardError.write(Data("usage: VMPaneVM --vm <bundle> [--headless]\n".utf8))
             exit(64)  // EX_USAGE
@@ -61,7 +72,16 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
             _ = try? registry.spawn(
                 URL(fileURLWithPath: "/bin/sleep"), .init(arguments: ["3600"], inheriting: [prepared.lock.fileDescriptor]))
         }
-        let controller = HelperController(prepared: prepared, runtimeVersion: VMPane.version, backend: nil) {
+        let made: BackendFactory.Made
+        do {
+            made = try BackendFactory.make(prepared)
+        } catch {
+            FileHandle.standardError.write(Data("VMPaneVM: cannot prepare the VM: \(error)\n".utf8))
+            made = BackendFactory.Made(backend: nil, config: prepared.config)
+        }
+        let controller = HelperController(
+            prepared: prepared, runtimeVersion: VMPane.version, backend: made.backend, config: made.config
+        ) {
             DispatchQueue.main.async { exit(0) }
         }
         self.controller = controller
@@ -79,11 +99,14 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
 struct HelperArguments {
     let bundle: URL
     let headless: Bool
+    let validateOnly: Bool
 
-    /// Parses `--vm <path>` and `--headless`; ignores what LaunchServices adds (e.g. `-psn_…`).
+    /// Parses `--vm <path>`, `--headless` and `--validate-config`; ignores what LaunchServices adds
+    /// (e.g. `-psn_…`).
     init?(_ argv: [String]) {
         guard let index = argv.firstIndex(of: "--vm"), argv.indices.contains(index + 1) else { return nil }
         bundle = URL(fileURLWithPath: argv[index + 1])
         headless = argv.contains("--headless")
+        validateOnly = argv.contains("--validate-config")
     }
 }

@@ -12,7 +12,7 @@ private let allowed: [VMRunState: [Event: VMRunState]] = [
     .starting: [.started: .running, .stop: .stopping, .stopped: .stopped],
     .running: [.pause: .paused, .paused: .paused, .suspend: .suspending, .stop: .stopping, .stopped: .stopped],
     .paused: [.resume: .running, .resumed: .running, .suspend: .suspending, .stop: .stopping, .stopped: .stopped],
-    .suspending: [.suspended: .stopped, .stopped: .stopped],
+    .suspending: [.suspended: .stopped, .stopped: .stopped, .resumed: .running],
     .stopping: [.stopped: .stopped],
     .error: [.start: .starting, .stop: .stopped],
 ]
@@ -41,40 +41,53 @@ func transitionTableIsExhaustive(state: VMRunState) {
 /// A backend that follows a script, for helper tests without a hypervisor.
 final class ScriptedBackend: VMBackend, @unchecked Sendable {
     let kind = BackendKind.vz
-    let capabilities: LiveCapabilities = [.pause, .suspend, .screenshot, .input]
+    let capabilities: LiveCapabilities = [.pause, .suspend, .liveSnapshot, .screenshot, .input]
     let events: AsyncStream<BackendEvent>
     private let continuation: AsyncStream<BackendEvent>.Continuation
     private let lock = NSLock()
     private var calls: [String] = []
-    var failNext: String?
+    private var failures: Set<String> = []
+    /// Graceful stops are ignored (a guest that does not shut down), forcing the force path.
+    var ignoresGracefulStop = false
 
     init() {
         (events, continuation) = AsyncStream.makeStream(of: BackendEvent.self)
     }
 
     var recordedCalls: [String] { lock.withLock { calls } }
+    func failOnce(_ call: String) { lock.withLock { _ = failures.insert(call) } }
 
-    private func record(_ call: String, then event: BackendEvent) throws {
+    private func record(_ call: String) throws {
         try lock.withLock {
             calls.append(call)
-            if failNext == call {
-                failNext = nil
-                throw POSIXError(.EIO)
-            }
+            if failures.remove(call) != nil { throw POSIXError(.EIO) }
         }
-        continuation.yield(event)
     }
 
-    func start(_ options: StartOptions) async throws { try record("start", then: .started) }
-    func pause() async throws { try record("pause", then: .paused) }
-    func resume() async throws { try record("resume", then: .resumed) }
-    func suspend(to stateDirectory: URL) async throws { try record("suspend", then: .suspended) }
-    func stop(_ mode: StopMode) async throws { try record("stop.\(mode.rawValue)", then: .stopped(reason: "requested")) }
+    func start(_ options: StartOptions) async throws {
+        try record(options.stateDirectory == nil ? "start" : "start.resume")
+        continuation.yield(.started)
+    }
+    func pause() async throws { try record("pause"); continuation.yield(.paused) }
+    func resume() async throws { try record("resume"); continuation.yield(.resumed) }
+    func suspend(to stateDirectory: URL) async throws {
+        try record("suspend")
+        try Data("ram".utf8).write(to: stateDirectory.appendingPathComponent("suspend.scripted"))
+    }
+    func saveState(to stateDirectory: URL) async throws {
+        try record("saveState")
+        try Data("ram".utf8).write(to: stateDirectory.appendingPathComponent("suspend.scripted"))
+    }
+    func stop(_ mode: StopMode) async throws {
+        try record("stop.\(mode.rawValue)")
+        if mode == .graceful && ignoresGracefulStop { return }
+        continuation.yield(.stopped(reason: "requested"))
+    }
     func screenshot(maxEdge: Int) async throws -> Data { Data([0x89, 0x50, 0x4E, 0x47]) }
     func send(_ input: InputEvent) async throws { lock.withLock { calls.append("input") } }
 
-    /// Simulates the guest powering off by itself.
-    func guestPowersOff() { continuation.yield(.stopped(reason: "guest")) }
+    /// Simulates the guest powering off by itself, or any other event.
+    func emit(_ event: BackendEvent) { continuation.yield(event) }
 }
 
 @Test func scriptedBackendDrivesTheStateMachine() async throws {
@@ -85,7 +98,7 @@ final class ScriptedBackend: VMBackend, @unchecked Sendable {
     state = try HelperStateMachine.transition(state, .start).get()
     if case .started? = await iterator.next() { state = try HelperStateMachine.transition(state, .started).get() }
     #expect(state == .running)
-    backend.guestPowersOff()
+    backend.emit(.stopped(reason: "guest"))
     if case .stopped? = await iterator.next() { state = try HelperStateMachine.transition(state, .stopped).get() }
     #expect(state == .stopped)
     #expect(backend.recordedCalls == ["start"])

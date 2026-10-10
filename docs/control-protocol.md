@@ -43,8 +43,8 @@ denied.
 | `vm.suspend` | — | `{state}` | control |
 | `vm.stop` | `{mode: graceful\|force}` | `{state}` | admin |
 | `vm.snapshot.list` | — | `[SnapshotMeta]` | observe |
-| `vm.snapshot.create` | `{name, kind: live\|disk, origin}` | `SnapshotMeta` | control |
-| `vm.snapshot.restore` | `{id}` | `{generationId}` | control |
+| `vm.snapshot.create` | `{name, kind: live\|disk, origin}` (disk: VM stopped; live: VM running, paused briefly) | `SnapshotMeta` | control |
+| `vm.snapshot.restore` | `{id}` (a running VM is powered off first, then started again) | `{generationId, state, resumed?, message?}` | control |
 | `vm.snapshot.delete` | `{id}` | `{}` | admin |
 | `vm.screenshot` | `{maxEdge, format}` | `{dataB64, width, height}` | observe |
 | `vm.input.key` | `{usage, down}` | `{}` | control |

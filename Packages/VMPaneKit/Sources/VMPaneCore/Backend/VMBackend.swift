@@ -68,8 +68,11 @@ public protocol VMBackend: AnyObject, Sendable {
     func start(_ options: StartOptions) async throws
     func pause() async throws
     func resume() async throws
-    /// Saves RAM state into `stateDirectory` (`*.partial`, renamed when complete) and stops.
+    /// Saves RAM state into `stateDirectory` (`*.partial`, renamed when complete) and stops. If it
+    /// throws, the VM must be running again (resumed), never left paused.
     func suspend(to stateDirectory: URL) async throws
+    /// Saves RAM state of the *paused* VM into `stateDirectory` (for live snapshots); the VM stays paused.
+    func saveState(to stateDirectory: URL) async throws
     func stop(_ mode: StopMode) async throws
     /// PNG of the guest display, longest edge at most `maxEdge`.
     func screenshot(maxEdge: Int) async throws -> Data
