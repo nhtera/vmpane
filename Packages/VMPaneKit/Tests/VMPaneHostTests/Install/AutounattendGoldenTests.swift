@@ -95,7 +95,8 @@ private func expectGolden(_ name: String, _ text: String, sourceFile: String = #
     func value(_ node: XMLNode, _ name: String) throws -> String {
         try node.nodes(forXPath: "*[local-name()='\(name)']").first?.stringValue ?? ""
     }
-    let ordered = try commands.sorted { try Int(value($0, "Order"))! < Int(value($1, "Order"))! }.map { try value($0, "CommandLine") }
+    let ordered = try commands.sorted { try Int(value($0, "Order")) ?? 0 < Int(value($1, "Order")) ?? 0 }
+        .map { try value($0, "CommandLine") }
     #expect(ordered.last?.contains("install.ps1") == true)
     #expect(ordered.dropLast().contains { $0.contains("DefaultPassword") })
     #expect(ordered.dropLast().contains { $0.contains("Panther") })
