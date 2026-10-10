@@ -1,0 +1,23 @@
+diff --git a/CocoaSpice/CSDisplay.m b/CocoaSpice/CSDisplay.m
+index 95fca04..1d7052c 100644
+--- a/CocoaSpice/CSDisplay.m
++++ b/CocoaSpice/CSDisplay.m
+@@ -249,6 +249,10 @@ static void cs_gl_draw(SpiceDisplayChannel *channel,
+         // the shadow buffer belongs to the old device
+         self.shadowTexture = nil;
+         self.presentTexture = nil;
++        // VMPane: vertices first. Rebuilding the texture pushes the current frame to the renderers, which
++        // drop it while the display has no vertices; with a static guest screen no later update arrives,
++        // and the view stays black.
++        [self rebuildDisplayVertices];
+         if (self.isGLEnabled) {
+             if (self.delayedScanoutSurface) {
+                 [self rebuildScanoutTextureWithSurface:self.delayedScanoutSurface width:self.delayedScanoutInfo.width height:self.delayedScanoutInfo.height];
+@@ -266,7 +270,6 @@ static void cs_gl_draw(SpiceDisplayChannel *channel,
+         } else {
+             [self rebuildCanvasTexture];
+         }
+-        [self rebuildDisplayVertices];
+     }];
+     // possibly retrigger cursor rebuild
+     self.cursor.display = self;

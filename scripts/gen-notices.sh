@@ -41,6 +41,18 @@ resolved=VMPane.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resol
                 echo
             done
     fi
+    echo "## Vendored source (Windows display)"
+    echo
+    cocoaspice=$(sed -n 's/^commit=//p' scripts/vendor-cocoaspice.sh)
+    echo "### CocoaSpice $cocoaspice"
+    echo
+    echo "<https://github.com/utmapp/CocoaSpice>, in \`Packages/VMPaneSpice/Sources/CocoaSpice*\`, modified by VMPane"
+    echo "(\`Packages/VMPaneSpice/patches\`)."
+    echo
+    echo '```'
+    cat Packages/VMPaneSpice/Sources/CocoaSpice/LICENSE
+    echo '```'
+    echo
     echo "## Rust crates (guest agent)"
     echo
     rust=$(cd agent && cargo about generate --locked --fail about.hbs)

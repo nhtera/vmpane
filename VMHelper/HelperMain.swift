@@ -1,6 +1,8 @@
 import AppKit
 import VMPaneCore
 import VMPaneHost
+import VMPaneQEMU
+import VMPaneSpice
 import VMPaneVZ
 import os
 
@@ -181,6 +183,9 @@ extension HelperDelegate {
             DispatchQueue.main.async { exit(0) }
         }
         self.controller = controller
+        if let qemu = made.backend as? QEMUBackend {
+            observeSpiceDisplay(controller, backend: qemu, config: made.config)
+        }
         if let vz = made.backend as? VZBackend {
             observeDisplay(controller, backend: vz, config: made.config)
             if let output = ProcessInfo.processInfo.environment["VMPANE_TEST_PROBE_LIVE"] {
@@ -203,5 +208,51 @@ struct HelperArguments {
         bundle = URL(fileURLWithPath: argv[index + 1])
         headless = argv.contains("--headless")
         validateOnly = argv.contains("--validate-config")
+    }
+}
+
+extension HelperDelegate {
+    /// Windows VMs: the SPICE display, connected while the VM runs (QEMU restarts on resume and restore), its
+    /// window shown at start (unless headless) and on `vm.display.show`. Needs the SPICE client libraries
+    /// (weak-linked; they come with the QEMU bundle).
+    fileprivate func observeSpiceDisplay(_ controller: HelperController, backend: QEMUBackend, config: VMConfigV1) {
+        guard SpiceLibraries.available else {
+            Self.log.error("SPICE client libraries missing: the VM has no display window")
+            return
+        }
+        let size = CGSize(width: max(config.display.widthPx / 2, 640), height: max(config.display.heightPx / 2, 400))
+        let display = SpiceDisplay(socket: backend.displaySocket, title: config.name, size: size)
+        let headless = arguments.headless
+        let capture = ProcessInfo.processInfo.environment["VMPANE_TEST_SPICE_CAPTURE"].map { URL(fileURLWithPath: $0) }
+        Task { await backend.setBeforeQuit { await display.disconnectAndWait() } }
+        Task { @MainActor in
+            var shown = false
+            for await state in controller.stateChanges {
+                switch state {
+                case .running, .paused:
+                    display.connect()
+                    if !headless, !shown {
+                        shown = true
+                        display.show()
+                    }
+                    if let capture { Task { await Self.captureSpice(display, to: capture) } }
+                case .stopped, .error:
+                    display.disconnect()
+                default:
+                    break
+                }
+            }
+        }
+        Task { @MainActor in
+            for await _ in controller.displayRequests { display.show() }
+        }
+    }
+
+    /// Integration-test hook: rewrites what the SPICE client has, as PNG, every 2 s for 2 minutes after a start.
+    @MainActor static func captureSpice(_ display: SpiceDisplay, to output: URL) async {
+        for _ in 0..<60 {
+            try? await Task.sleep(for: .seconds(2))
+            if let png = await display.capturePNG() { try? png.write(to: output, options: .atomic) }
+        }
     }
 }

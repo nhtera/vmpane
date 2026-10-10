@@ -35,6 +35,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-xcode
       - run: scripts/lint.sh
+      - run: scripts/vendor-cocoaspice.sh --check
 
   swift-pr:
     if: github.event_name == 'pull_request'

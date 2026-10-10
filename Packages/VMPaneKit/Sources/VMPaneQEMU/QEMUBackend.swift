@@ -21,6 +21,8 @@ public final class QEMUBackend: VMBackend {
     public let events: AsyncStream<BackendEvent>
 
     let session: QEMUSession
+    /// QEMU's SPICE socket (`run/<sid>/spice.sock`), for the helper's display.
+    public let displaySocket: URL
 
     /// When the guest is paused for a full disk: below `pauseBelow` free bytes on the bundle's volume, and it
     /// resumes only from `resumeFrom`. The NVMe device has no error policy, so a write into a full volume
@@ -49,6 +51,7 @@ public final class QEMUBackend: VMBackend {
     ) {
         let (stream, continuation) = AsyncStream.makeStream(of: BackendEvent.self)
         events = stream
+        displaySocket = processes.layout.spiceSocket
         session = QEMUSession(
             config: config, processes: processes, space: space, resolveInstallation: resolveInstallation, events: continuation)
     }
@@ -61,6 +64,9 @@ public final class QEMUBackend: VMBackend {
     public func saveState(to stateDirectory: URL) async throws { try await session.saveState(to: stateDirectory) }
 
     public func stop(_ mode: StopMode) async throws { try await session.stop(mode) }
+
+    /// Runs before every quit of QEMU (the helper disconnects its SPICE client).
+    public func setBeforeQuit(_ hook: @escaping @Sendable () async -> Void) async { await session.setBeforeQuit(hook) }
     public func screenshot(maxEdge: Int) async throws -> Screenshot { try await session.screenshot(maxEdge: maxEdge) }
     public func send(_ input: InputEvent) async throws { try await session.send(input) }
 

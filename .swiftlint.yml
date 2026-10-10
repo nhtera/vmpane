@@ -5,11 +5,13 @@ included:
   - UITests
   - Packages/VMPaneKit/Sources
   - Packages/VMPaneKit/Tests
+  - Packages/VMPaneSpice/Sources/VMPaneSpice
 excluded:
   - build
   - spikes
   - agent
   - Packages/VMPaneKit/.build
+  - Packages/VMPaneSpice/.build
 opt_in_rules:
   - force_unwrapping
   - empty_count

@@ -14,6 +14,8 @@ configFiles:
 packages:
   VMPaneKit:
     path: Packages/VMPaneKit
+  VMPaneSpice:
+    path: Packages/VMPaneSpice
   swift-argument-parser:
     url: https://github.com/apple/swift-argument-parser
     exactVersion: 1.8.2
@@ -42,7 +44,8 @@ targets:
           set -euo pipefail
           bundle="$SRCROOT/build/qemu-bundle"
           app="$TARGET_BUILD_DIR/$WRAPPER_NAME"
-          rm -rf "$app/Contents/Helpers/qemu" "$app/Contents/Resources/qemu"
+          frameworks="$app/Contents/Helpers/VMPaneVM.app/Contents/Frameworks"
+          rm -rf "$app/Contents/Helpers/qemu" "$app/Contents/Resources/qemu" "$frameworks"
           if [[ ! -x "$bundle/bin/qemu-system-aarch64" ]]; then
             echo "warning: no QEMU bundle at $bundle (qemu/scripts/package.sh); Windows guests will not run"
             exit 0
@@ -56,6 +59,8 @@ targets:
           ditto "$bundle/lib" "$app/Contents/Helpers/qemu/lib"
           ditto "$bundle/share" "$app/Contents/Resources/qemu/share"
           cp "$bundle/MANIFEST.json" "$app/Contents/Resources/qemu/MANIFEST.json"
+          # The SPICE client libraries the helper weak-links, all of them or none (a partial set aborts at launch).
+          ditto "$bundle/frameworks" "$frameworks"
     dependencies:
       - package: VMPaneKit
         product: VMPaneCore
@@ -86,7 +91,15 @@ targets:
         PRODUCT_NAME: VMPaneVM
         GENERATE_INFOPLIST_FILE: NO
         SKIP_INSTALL: YES
+        # The SPICE client libraries (Windows display) are weak-linked against SpiceSDK's stubs and embedded in
+        # Contents/Frameworks from the QEMU bundle; without them the helper still runs VZ VMs.
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+        OTHER_LDFLAGS: >-
+          $(inherited) -L$(SRCROOT)/Packages/VMPaneSpice/SpiceSDK/stubs
+          -weak-lglib-2.0.0 -weak-lgobject-2.0.0 -weak-lspice-client-glib-2.0.8
     dependencies:
+      - package: VMPaneSpice
+        product: VMPaneSpice
       - package: VMPaneKit
         product: VMPaneHost
       - package: VMPaneKit

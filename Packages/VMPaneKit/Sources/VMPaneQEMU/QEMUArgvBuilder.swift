@@ -59,6 +59,8 @@ public enum QEMUArgvBuilder {
             "-smp", String(config.cpu.count), "-m", "\(config.memory.mib)M",
             "-L", path(layout.qemuData),
             "-display", "none",
+            // A guest power-off pauses QEMU instead of exiting it; the backend disconnects the display, then quits.
+            "-no-shutdown",
             "-rtc", profile.rtc,
             "-drive", "if=pflash,format=raw,readonly=on,file=\(path(layout.firmwareCode))",
             "-drive", "if=pflash,format=raw,file=\(path(layout.efiVariables))",

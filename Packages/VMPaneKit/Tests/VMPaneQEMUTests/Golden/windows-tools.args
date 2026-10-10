@@ -18,6 +18,7 @@ host
 /runtime/1.0-q12345678/qemu/share/qemu
 -display
 none
+-no-shutdown
 -rtc
 base=localtime
 -drive

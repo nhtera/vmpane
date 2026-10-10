@@ -3,12 +3,16 @@
 # only bundle-relative run paths. Catches leaked build or Homebrew paths before notarization does.
 # Rules: LC_RPATH entries start with @loader_path/, @executable_path/ or are /usr/lib/swift; libraries
 # are system paths or resolve inside the bundle; dylibs use @loader_path or @rpath, not @executable_path.
+# Weak-linked libraries (the helper's SPICE client libraries) may be missing only when the app has no QEMU
+# bundle at all; with it, every library must resolve (a partial set aborts the helper at launch).
 # Debug builds carry absolute run paths into DerivedData, so run this on Release builds.
 # Usage: scripts/check-dylibs.sh <VMPane.app>
 set -euo pipefail
 
 app=${1:?usage: scripts/check-dylibs.sh <VMPane.app>}
 failures=0
+has_qemu=false
+[[ -d "$app/Contents/Helpers/qemu" ]] && has_qemu=true
 fail() {
     echo "$1" >&2
     failures=$((failures + 1))
@@ -34,6 +38,7 @@ while IFS= read -r -d '' f; do
     done < <(otool -l "$f" | awk '$1 == "cmd" && $2 == "LC_RPATH" {getline; getline; print $2}')
 
     own_id=$($is_dylib && otool -D "$f" | tail -n +2 | head -1 || true)
+    weak=$(otool -l "$f" | awk '$1 == "cmd" && $2 == "LC_LOAD_WEAK_DYLIB" {getline; getline; print $2}')
     # Skip otool's "<file>:" / "<file> (architecture …):" header lines.
     while read -r lib; do
         [[ "$lib" == "$own_id" ]] && continue
@@ -58,7 +63,7 @@ while IFS= read -r -d '' f; do
                         break
                     fi
                 done
-                $found || fail "unresolved: $rel -> $lib"
+                if ! $found && ! { ! $has_qemu && grep -qxF "$lib" <<<"$weak"; }; then fail "unresolved: $rel -> $lib"; fi
                 ;;
             *) fail "outside bundle: $rel -> $lib" ;;
         esac

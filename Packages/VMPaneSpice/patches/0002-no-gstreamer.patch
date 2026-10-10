@@ -1,0 +1,22 @@
+diff --git a/CocoaSpice/CSMain.m b/CocoaSpice/CSMain.m
+index bbee095..6fecd09 100644
+--- a/CocoaSpice/CSMain.m
++++ b/CocoaSpice/CSMain.m
+@@ -18,7 +18,6 @@
+ #import <glib.h>
+ #import <spice-client.h>
+ #import <pthread.h>
+-#import "gst_ios_init.h"
+ 
+ @interface CSMain ()
+ 
+@@ -91,7 +90,8 @@ void *spice_main_loop(void *args) {
+     CSMain *self = (__bridge_transfer CSMain *)args;
+     
+     pthread_setname_np("SPICE Main Loop");
+-    gst_ios_init();
++    // VMPane: no GStreamer initialisation. Audio goes through QEMU and the server never streams video
++    // (streaming-video=off), and gst_ios_init would override HOME, TMPDIR and XDG_* process-wide.
+     
+     g_main_context_ref(self->_main_context);
+     g_main_context_push_thread_default(self->_main_context);

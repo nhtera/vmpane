@@ -4,7 +4,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/lib/env.sh
 
-swift_paths=(App VMHelper CLI UITests Packages/VMPaneKit/Sources Packages/VMPaneKit/Tests Packages/VMPaneKit/Package.swift)
+swift_paths=(App VMHelper CLI UITests Packages/VMPaneKit/Sources Packages/VMPaneKit/Tests Packages/VMPaneKit/Package.swift
+    Packages/VMPaneSpice/Sources/VMPaneSpice Packages/VMPaneSpice/Package.swift)
 
 echo "== swiftlint"
 # --strict: lint fails on any finding, warnings included.

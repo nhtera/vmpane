@@ -39,6 +39,8 @@ Folder names follow the convention of the toolchain that owns them:
 | `scripts/notarize.sh <dmg>` | notarytool (keychain profile `vmpane-notary` or `$VMPANE_NOTARY_PROFILE`), staple, Gatekeeper check |
 | `scripts/check-dylibs.sh <app>` | no Mach-O links a library or carries a run path outside the system or the bundle (Release builds; Debug has DerivedData run paths) |
 | `scripts/gen-notices.sh [--check]` | regenerates `THIRD_PARTY_NOTICES.md` |
+| `scripts/vendor-cocoaspice.sh [--check]` | re-vendors CocoaSpice (Windows display) at its pinned commit with `Packages/VMPaneSpice/patches` |
+| `qemu/scripts/spice-sdk.sh [--check]` | regenerates `Packages/VMPaneSpice/SpiceSDK` (headers + link stubs of the SPICE client libraries) from the QEMU build |
 | `scripts/itest.sh <scenario\|all> [--app <app\|dmg\|zip>] [--allow-skip]` | integration scenarios on this Mac (`itest/scenarios/`, e.g. `smoke`, `helper-lifecycle`, `qemu-smoke`) |
 
 Xcode signs ad hoc; that signature is for development only (Xcode adds entitlements such as
