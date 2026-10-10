@@ -109,6 +109,7 @@ public actor HelperController {
         case .vmDisplayShow?:
             displayContinuation.yield()
             return .success(.object([:]))
+        case .vmInstallCancel?: return await cancelInstall()
         case .eventsSubscribe?: return subscribe(request.params, connection)
         case .vmSettingsGet?: return RPCParams.encode(config)
         case .vmSettingsApply?: return await applySettings(request.params)

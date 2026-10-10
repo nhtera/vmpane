@@ -147,10 +147,13 @@ private func input(edition: String = "Windows 11 Pro") -> UnattendInput {
                     .posixPermissions] as? Int == 0o600)
         }
 
-        // Every ending runs the same cleanup: the password and the ISO copies are gone, the config is back.
+        #expect(InstallState.load(from: bundle)?.phase == .prepared)
+
+        // Every ending runs the same cleanup: the password and the ISO copies are gone, the config is back; only
+        // the record of how the install ended stays.
         let cleaned = WindowsInstall.cleanUp(prepared, bundle: bundle)
         #expect(cleaned.install == nil && cleaned.removable.isEmpty)
-        #expect(try FileManager.default.contentsOfDirectory(atPath: bundle.installDirectory.path).isEmpty)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: bundle.installDirectory.path) == [InstallState.fileName])
         _ = WindowsInstall.cleanUp(cleaned, bundle: bundle)  // repeatable
     }
 }

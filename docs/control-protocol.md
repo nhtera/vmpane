@@ -53,6 +53,7 @@ denied.
 | `vm.input.scroll` | `{dx, dy}` | `{}` | control |
 | `vm.display.show` | — | `{}` | control |
 | `vm.display.resize` | `{widthPx, heightPx}` | `{}` | control |
+| `vm.install.cancel` | — (ends a Windows install; a running VM is ejected from its install discs and stopped) | `{state}` | uiOnly |
 | `vm.settings.get` | — | `config` | observe |
 | `vm.settings.apply` | `{patch}` (JSON merge patch over the config) | `{fields: {path: applied\|nextBoot\|rejected}, reasons?}` | admin; sensitive patch: uiOnly |
 | `vm.ports.list` | — | rules with resolved guest IP and bind status | observe |

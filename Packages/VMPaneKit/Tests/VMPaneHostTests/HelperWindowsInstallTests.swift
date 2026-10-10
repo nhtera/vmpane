@@ -35,7 +35,8 @@ private final class AgentPort: @unchecked Sendable {
     }
 }
 
-private func installingHarness(state: InstallState? = nil) async throws -> (Harness, AgentPort) {
+/// `state` as `WindowsInstall.prepare` leaves it by default; nil: no state file at all.
+private func installingHarness(state: InstallState? = InstallState()) async throws -> (Harness, AgentPort) {
     let harness = try await Harness.make(configure: { (config: inout VMConfigV1) in
         config.os = .windows
         config.qemu = Extensible(QEMUConfig(tpm: true, secureBoot: true, gpu: .ramfb, storageBus: .nvme, smbiosUUID: UUID()))
@@ -77,6 +78,7 @@ private func waitUntil(_ condition: () async throws -> Bool) async throws -> Boo
     // Setup's first reboot ejects the Windows ISO, once.
     helper.backend.emit(.guestReset)
     #expect(try await waitUntil { InstallState.load(from: bundle)?.mediaEjected == true })
+    #expect(try await waitUntil { try !ConfigStore.load(bundle).removable.contains { $0.id == WindowsInstall.mediaID } })
     helper.backend.emit(.guestReset)
     try await Task.sleep(for: .milliseconds(100))
     #expect(helper.backend.recordedCalls.filter { $0 == "eject.windows" }.count == 1)
@@ -115,4 +117,57 @@ private func waitUntil(_ condition: () async throws -> Bool) async throws -> Boo
     #expect(try await waitUntil { (try? ConfigStore.load(bundle))?.install == nil })
     #expect(try ConfigStore.load(bundle).removable.isEmpty)
     #expect(InstallState.load(from: bundle)?.reason?.contains("in time") == true)
+}
+
+/// Setup may already have written the disk: a lost state file never means a fresh first boot (no key presses).
+@Test func aLostStateFileResumesSetupWithoutKeyPresses() async throws {
+    let (helper, _) = try await installingHarness(state: nil)
+    defer { Task { await helper.tearDown() } }
+    _ = try await helper.client.call("vm.start", params: ["headless": true])
+    #expect(try await waitUntil { InstallState.load(from: helper.bundle)?.phase == .setupRunning })
+    try await Task.sleep(for: .milliseconds(400))  // longer than the key window
+    #expect(!helper.backend.recordedCalls.contains { $0.hasPrefix("input.") })
+}
+
+/// An install that failed while no helper saw the VM stop is cleaned up at the next start.
+@Test func aFinishedInstallIsCleanedUpAtTheNextStart() async throws {
+    var failed = InstallState()
+    failed.end(.failed, reason: "timed out")
+    let (helper, _) = try await installingHarness(state: failed)
+    defer { Task { await helper.tearDown() } }
+    _ = try await helper.client.call("vm.start", params: ["headless": true])
+    let config = try ConfigStore.load(helper.bundle)
+    #expect(config.install == nil && config.removable.isEmpty)
+    #expect(!FileManager.default.fileExists(atPath: UnattendMedia.url(in: helper.bundle).path))
+    #expect(!helper.backend.recordedCalls.contains { $0.hasPrefix("input.") })
+}
+
+/// Tools installed, but the helper stopped before finalize: the next start finalizes first.
+@Test func aPendingFinalizeRunsAtTheNextStart() async throws {
+    var installed = InstallState()
+    for phase in [InstallState.Phase.firstBoot, .setupRunning, .firstLogon, .toolsInstalled] { installed.advance(to: phase) }
+    let (helper, _) = try await installingHarness(state: installed)
+    defer { Task { await helper.tearDown() } }
+    _ = try await helper.client.call("vm.start", params: ["headless": true])
+    let config = try ConfigStore.load(helper.bundle)
+    #expect(config.install == nil && config.removable.isEmpty && config.qemu?.gpu == .virtio)
+    #expect(InstallState.load(from: helper.bundle)?.phase == .done)
+    #expect(helper.backend.recordedCalls.filter { $0 == "start" }.count == 1)
+}
+
+/// Cancel takes both discs away from the running QEMU (a deleted image stays readable through its open file), ends
+/// the install, stops the VM and cleans up.
+@Test func cancellingEjectsTheDiscsAndStopsTheVM() async throws {
+    let (helper, _) = try await installingHarness()
+    defer { Task { await helper.tearDown() } }
+    _ = try await helper.client.call("vm.start", params: ["headless": true])
+    let bundle = helper.bundle
+    #expect(try await waitUntil { InstallState.load(from: bundle)?.phase == .setupRunning })
+    _ = try await helper.client.call("vm.install.cancel", params: [:])
+    #expect(InstallState.load(from: bundle)?.phase == .cancelled)
+    #expect(helper.backend.recordedCalls.contains("eject.windows") && helper.backend.recordedCalls.contains("eject.unattend"))
+    #expect(!FileManager.default.fileExists(atPath: UnattendMedia.url(in: bundle).path))
+    #expect(try await waitUntil { try await helper.state() == "stopped" })
+    #expect(try await waitUntil { (try? ConfigStore.load(bundle))?.install == nil })
+    await #expect(throws: (any Error).self) { _ = try await helper.client.call("vm.install.cancel", params: [:]) }
 }

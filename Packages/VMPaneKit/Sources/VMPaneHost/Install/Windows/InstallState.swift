@@ -49,6 +49,15 @@ public struct InstallState: Codable, Equatable, Sendable {
         reason = nil
     }
 
+    /// An install whose state file is missing or unreadable (`prepare` always writes one): Setup may already have
+    /// written the disk, so it is taken as running. A fresh first boot would press keys and let the ISO's Setup
+    /// start over and wipe the disk.
+    public static func unrecorded(now: Date = Date()) -> InstallState {
+        var state = InstallState(now: now)
+        state.phase = .setupRunning
+        return state
+    }
+
     public var isFinished: Bool { [.done, .failed, .cancelled].contains(phase) }
 
     /// The phases an install moves through in order.

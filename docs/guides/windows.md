@@ -31,7 +31,7 @@ with no clicks, in about 40 minutes:
 
 The install survives a quit, an app update or a Mac restart: VMPane records where it is in the VM and carries
 on from there. If a step takes far too long, the automatic install stops: VMPane deletes the password image and
-leaves the VM for you to finish (see below).
+leaves the VM for you to finish (see below). *Cancel install* ends it and shuts the VM down.
 
 **The password** you choose goes into one file in the VM (`install/unattend.iso`, readable only by you), which
 VMPane deletes as soon as the install ends, whether it succeeded, failed or was cancelled. It is never written
@@ -54,7 +54,9 @@ It logs to `C:\ProgramData\VMPane\tools-install.log`.
 
 ## Finishing by hand
 
-If the automatic install stopped, the VM keeps what Windows already did. Open its window and:
+If the automatic install stopped, the VM keeps what Windows already did. Windows Setup may still hold a copy
+of its answers, password included, so change the account's password once you are signed in. Open the VM's
+window and:
 
 - **Setup is still running or waiting**: follow Setup's screens. Without a network, choose *I don't have
   internet* to create a local account.

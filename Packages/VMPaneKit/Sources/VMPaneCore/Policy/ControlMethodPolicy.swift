@@ -60,6 +60,7 @@ public enum ControlMethodPolicy {
         "vm.input.scroll": .level(.control),
         "vm.display.show": .level(.control),
         "vm.display.resize": .level(.control),
+        "vm.install.cancel": .uiOnly,
         "vm.settings.get": .level(.observe),
         "vm.settings.apply": .settingsApply,
         "vm.ports.list": .level(.observe),

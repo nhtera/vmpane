@@ -10,7 +10,8 @@ import VMPaneCore
 /// script reports `firstLogon`, then `toolsInstalled` on the agent port → the VM shuts down → finalize: install
 /// media and the unattend image (the password) are removed, the virtio display replaces ramfb, the NIC comes
 /// back (no longer an install), and the VM starts again. A phase that runs out of time ends the install as
-/// failed: the image is deleted at once and the VM is left for the user to finish by hand.
+/// failed: the unattend disc is ejected and its image deleted at once, and the VM is left for the user to finish by
+/// hand. `vm.install.cancel` ends it as cancelled and stops the VM; its media go at that stop.
 extension HelperController {
     /// Lines the guest's `install.ps1` writes to `\\.\Global\app.vmpane.agent.0`.
     static let installReports: [String: InstallState.Phase] = [
@@ -27,13 +28,29 @@ extension HelperController {
 
     var isInstallingWindows: Bool { config.os == .windows && config.install?.media == WindowsInstall.mediaID }
 
-    /// Before a start: the persisted install, or a new one.
+    /// Before a start: the persisted install (`prepare` writes it), resumed where it was.
     func installWillStart() async {
         guard isInstallingWindows else { return }
-        var state = windowsInstall ?? InstallState.load(from: prepared.lock.bundle) ?? InstallState()
-        guard !state.isFinished else { return }
+        loadInstall()
+        guard var state = windowsInstall else { return }
+        if state.isFinished {
+            // It ended while no VM ran its stop (e.g. timed out, then the helper was killed): clean up now.
+            await installStopped()
+            return
+        }
+        if state.phase == .toolsInstalled {
+            // The tools were installed but the VM did not get through finalize (the helper stopped): do it now.
+            await finalizeInstall()
+            return
+        }
         if state.phase == .prepared { state.advance(to: .firstBoot) }
         await persistInstall(state)
+    }
+
+    /// The install this helper drives: in memory, else persisted, else (file lost) taken as Setup running.
+    private func loadInstall() {
+        guard windowsInstall == nil, isInstallingWindows else { return }
+        windowsInstall = InstallState.load(from: prepared.lock.bundle) ?? .unrecorded()
     }
 
     /// After the VM started: key presses on a fresh first boot, the guest's reports, the timeouts.
@@ -75,6 +92,10 @@ extension HelperController {
             try await backend.ejectMedia(WindowsInstall.mediaID)
             state.mediaEjected = true
             await persistInstall(state)
+            // Out of the config too: a later start (helper restarted, Mac rebooted) cannot boot the ISO at all.
+            var updated = config
+            updated.removable.removeAll { $0.id == WindowsInstall.mediaID }
+            _ = await saveConfig(updated)
             announceInstall("Windows Setup restarted; the installer disc is ejected", percent: 30)
         } catch {
             Self.log.error("cannot eject the Windows ISO: \(String(describing: error), privacy: .public)")
@@ -87,8 +108,7 @@ extension HelperController {
         await advanceInstall(to: phase)
         if phase == .toolsInstalled, state == .running, let backend {
             // Finalize changes devices (NIC, display): QEMU must restart, so the guest shuts down first.
-            transition(.stop)
-            try? await backend.stop(.graceful)
+            await stopForInstall(backend)
         }
     }
 
@@ -106,16 +126,10 @@ extension HelperController {
 
     /// The VM stopped during an install: finalize after the tools, clean up after a failure.
     func installStopped() async {
-        guard var state = windowsInstall, let backend else { return }
+        guard let state = windowsInstall else { return }
         switch state.phase {
         case .toolsInstalled:
-            var finalized = WindowsInstall.cleanUp(config, bundle: prepared.lock.bundle)
-            finalized.qemu?.gpu = .virtio  // viogpudo is installed now
-            guard await saveConfig(finalized) else { return }
-            state.advance(to: .done)
-            await persistInstall(state)
-            stopInstallWatchers()
-            announceInstall("Windows is installed", percent: 100)
+            guard let backend, await finalizeInstall() else { return }
             _ = try? await startVM(backend, headless: lastStartHeadless)
         case .failed, .cancelled:
             _ = await saveConfig(WindowsInstall.cleanUp(config, bundle: prepared.lock.bundle))
@@ -125,22 +139,71 @@ extension HelperController {
         }
     }
 
+    /// Install media and the unattend image go, the virtio display replaces ramfb (viogpudo is installed now)
+    /// and the NIC comes back (no longer an install). The VM must be stopped.
+    @discardableResult
+    private func finalizeInstall() async -> Bool {
+        guard var state = windowsInstall else { return false }
+        var finalized = WindowsInstall.cleanUp(config, bundle: prepared.lock.bundle)
+        finalized.qemu?.gpu = .virtio
+        guard await saveConfig(finalized) else { return false }
+        state.advance(to: .done)
+        await persistInstall(state)
+        stopInstallWatchers()
+        announceInstall("Windows is installed", percent: 100)
+        return true
+    }
+
     func checkInstallTimeout() async {
         guard let state = windowsInstall, !state.isFinished, state.timedOut() else { return }
         await endInstall(.failed, reason: "Windows Setup did not reach \(state.phase.rawValue) in time")
     }
 
-    /// Ends the install unsuccessfully: the unattend image (the password) is deleted now; the VM is left as it
-    /// is for the user to finish by hand, and its install media go at the next stop.
+    /// `vm.install.cancel`: ends the install and stops the VM (finalize needs a stopped VM anyway, and a
+    /// half-installed Windows without network is no place to be left). The stop runs after the answer.
+    func cancelInstall() async -> Result<JSONValue, RPCError> {
+        loadInstall()
+        guard let install = windowsInstall, !install.isFinished else {
+            return .failure(RPCError(.invalidState, "no Windows install is in progress"))
+        }
+        if [.running, .paused].contains(state), let backend, !install.mediaEjected {
+            try? await backend.ejectMedia(WindowsInstall.mediaID)
+        }
+        await endInstall(.cancelled, reason: "cancelled")
+        if [.running, .paused].contains(state), let backend {
+            Task { await self.stopForInstall(backend) }
+        }
+        return .success(["state": .string(state.rawValue)])
+    }
+
+    /// Ends the install unsuccessfully. The password goes first, whatever happens next: a running QEMU loses the
+    /// unattend disc (it keeps a deleted file readable), then the image is deleted. A failed install's VM is left
+    /// as it is for the user to finish by hand; its install media go at the next stop.
     func endInstall(_ phase: InstallState.Phase, reason: String) async {
         guard var state = windowsInstall, !state.isFinished else { return }
-        // The password goes first: whatever happens next, it is not left behind.
+        if [.running, .paused].contains(self.state), let backend { try? await backend.ejectMedia(WindowsInstall.unattendID) }
         let bundle = prepared.lock.bundle
         await Blocking.run { UnattendMedia.remove(from: bundle) }
         state.end(phase, reason: reason)
         await persistInstall(state)
-        announceInstall("The automatic install stopped: \(reason). Finish it in the VM's window.", percent: 0, phase: "failed")
+        if phase == .cancelled {
+            announceInstall("The Windows install was cancelled.", percent: 0, phase: "cancelled")
+        } else {
+            // Setup keeps a copy of its answers (with the password) until the first sign-in removes it.
+            announceInstall(
+                "The automatic install stopped: \(reason). Finish it in the VM's window, then change the account's password.",
+                percent: 0, phase: "failed")
+        }
         if self.state == .stopped { await installStopped() }
+    }
+
+    /// A graceful stop, forced if the guest has not shut down in time.
+    private func stopForInstall(_ backend: VMBackend) async {
+        guard [.running, .paused].contains(state) else { return }
+        transition(.stop)
+        try? await backend.stop(.graceful)
+        if await waitForState(.stopped, timeout: gracefulStopTimeout) { return }
+        try? await backend.stop(.force)
     }
 
     private func persistInstall(_ state: InstallState) async {

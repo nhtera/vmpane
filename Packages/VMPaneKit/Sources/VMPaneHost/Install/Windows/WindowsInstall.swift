@@ -74,6 +74,7 @@ public enum WindowsInstall {
         let installISO = try place(iso, as: isoName, in: bundle)
         let toolsISO = try tools.map { try place($0, as: toolsName, in: bundle) }
         let unattend = try UnattendMedia.build(xml, in: bundle)
+        try InstallState().save(holding: lock)  // a new install: the helper starts it from its first boot
 
         var config = config
         config.removable.removeAll { [mediaID, unattendID, toolsID].contains($0.id) }
