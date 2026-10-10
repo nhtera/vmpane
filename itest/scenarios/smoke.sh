@@ -2,7 +2,11 @@
 # Sourced by scripts/itest.sh with $APP set to the .app under test.
 
 scenario_run() {
-    local exe pid
+    local exe pid support
+    # Never touch the user's real library.
+    support=$(mktemp -d /tmp/vp-smoke.XXXXXX)
+    export VMPANE_SUPPORT_DIR="$support/s"
+    trap 'rm -rf "$support"' RETURN
     exe="$APP/Contents/MacOS/$(plutil -extract CFBundleExecutable raw "$APP/Contents/Info.plist")"
     "$exe" >/dev/null 2>&1 &
     pid=$!

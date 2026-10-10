@@ -1,0 +1,104 @@
+{
+  "agent" : {
+    "transport" : "auto"
+  },
+  "audio" : {
+    "input" : false,
+    "output" : true
+  },
+  "backend" : "vz",
+  "bigNumber" : 9007199254740993,
+  "clipboard" : {
+    "allowWithAgents" : false,
+    "mode" : "both"
+  },
+  "cpu" : {
+    "count" : 4,
+    "futureCPUKnob" : "x"
+  },
+  "disks" : [
+    {
+      "bus" : "virtio",
+      "cache" : {
+        "mode" : "writeback"
+      },
+      "file" : "current/disk.img",
+      "format" : "raw",
+      "id" : "root",
+      "sizeGiB" : 64
+    }
+  ],
+  "display" : {
+    "autoResize" : true,
+    "heightPx" : 1600,
+    "ppi" : 220,
+    "scaling" : "retina",
+    "widthPx" : 2560
+  },
+  "futureTopLevel" : {
+    "nested" : [
+      1,
+      2.5,
+      "three",
+      null,
+      true
+    ]
+  },
+  "id" : "6F1C2D0E-8E2B-4C3A-9D3E-1A2B3C4D5E6F",
+  "mcp" : {
+    "auditTypedText" : false,
+    "autoSnapshot" : true,
+    "confirmExec" : true,
+    "policy" : "off"
+  },
+  "memory" : {
+    "balloon" : true,
+    "mib" : 8192
+  },
+  "name" : "Ubuntu 24.04",
+  "network" : [
+    {
+      "id" : "nic0",
+      "macAddress" : "52:54:00:12:34:56",
+      "mode" : "nat"
+    }
+  ],
+  "os" : "linux",
+  "platform" : {
+    "machineIdentifier" : "YnBsaXN0MDA="
+  },
+  "portForwards" : [
+    {
+      "guestPort" : 22,
+      "hostAddress" : "127.0.0.1",
+      "hostPort" : 2222,
+      "id" : "ssh",
+      "origin" : "user",
+      "proto" : "tcp"
+    }
+  ],
+  "removable" : [
+    {
+      "bus" : "usb",
+      "id" : "installer",
+      "path" : "/Users/me/ISOs/ubuntu-arm64.iso"
+    }
+  ],
+  "schemaVersion" : 1,
+  "shares" : [
+    {
+      "hostPath" : "/Users/me/Projects",
+      "id" : "proj",
+      "name" : "Projects",
+      "readOnly" : false
+    }
+  ],
+  "ui" : {
+    "closeAction" : "keepRunning",
+    "icon" : "icon.png"
+  },
+  "vz" : {
+    "nestedVirtualization" : false,
+    "rosetta" : true
+  }
+}

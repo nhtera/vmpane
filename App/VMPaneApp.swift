@@ -5,6 +5,8 @@ import VMPaneUI
 /// VMPane main app: VM library, wizard and settings (filled in by later phases).
 @main
 struct VMPaneApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     var body: some Scene {
         WindowGroup("VMPane") {
             VStack(spacing: 8) {
@@ -14,5 +16,14 @@ struct VMPaneApp: App {
             }
             .padding(40)
         }
+    }
+}
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    let supervisor = HelperSupervisor()
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        supervisor.start()
     }
 }

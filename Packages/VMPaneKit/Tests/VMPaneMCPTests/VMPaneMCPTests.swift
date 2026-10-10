@@ -1,4 +1,5 @@
 import Testing
+
 @testable import VMPaneMCP
 
 @Test func statelessRevisionIsPreferred() {

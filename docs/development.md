@@ -38,7 +38,7 @@ Folder names follow the convention of the toolchain that owns them:
 | `scripts/notarize.sh <dmg>` | notarytool (keychain profile `vmpane-notary` or `$VMPANE_NOTARY_PROFILE`), staple, Gatekeeper check |
 | `scripts/check-dylibs.sh <app>` | no Mach-O links a library or carries a run path outside the system or the bundle (Release builds; Debug has DerivedData run paths) |
 | `scripts/gen-notices.sh [--check]` | regenerates `THIRD_PARTY_NOTICES.md` |
-| `scripts/itest.sh <scenario\|all> [--app <app\|dmg\|zip>] [--allow-skip]` | integration scenarios on this Mac |
+| `scripts/itest.sh <scenario\|all> [--app <app\|dmg\|zip>] [--allow-skip]` | integration scenarios on this Mac (`smoke`, `helper-lifecycle`) |
 
 Xcode signs ad hoc; that signature is for development only (Xcode adds entitlements such as
 `application-identifier` to the CLI). `scripts/build.sh` re-signs every Mach-O from the manifest. To sign
@@ -47,7 +47,12 @@ hardened runtime: without a team ID, library validation would refuse the app's o
 
 ## Tests
 
-- Unit tests use Swift Testing in `Packages/VMPaneKit/Tests` and `cargo test` in `agent/`.
+- Unit tests use Swift Testing in `Packages/VMPaneKit/Tests` and `cargo test` in `agent/`. Slow tests
+  (1,000 snapshot cycles, about 40 s) run with `VMPANE_SLOW_TESTS=1`; phase gates set it.
+- Tests and scenarios never touch the real library: `VMPANE_SUPPORT_DIR` replaces
+  `~/Library/Application Support/VMPane`.
+- Run the Swift tests with `--release` and `--asan` before relying on new concurrency code. (The thread
+  sanitizer cannot load under `swift test` on this toolchain.)
 - Integration tests need real VMs, so they run locally, not on hosted CI. Each scenario in
   `itest/scenarios/` defines `scenario_run` (return 0 pass, 77 skipped, anything else fail). Results are
   written to `itest/results/` keyed by the artifact's SHA-256, scenario, chip and macOS build;

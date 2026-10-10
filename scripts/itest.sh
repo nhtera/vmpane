@@ -8,6 +8,7 @@
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
+export VMPANE_ROOT=$root
 
 scenario=${1:?usage: scripts/itest.sh <scenario|all> [--app <path>]}
 shift

@@ -10,4 +10,10 @@ public enum ControlProtocol {
     public static func isCompatible(peerVersion: Int) -> Bool {
         peerVersion >= minimumVersion
     }
+
+    /// The highest version both sides speak, or nil if their ranges do not overlap.
+    public static func negotiate(peerVersion: Int, peerMinimum: Int) -> Int? {
+        let version = min(version, peerVersion)
+        return version >= max(minimumVersion, peerMinimum) ? version : nil
+    }
 }

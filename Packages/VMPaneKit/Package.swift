@@ -31,7 +31,7 @@ let package = Package(
         // Shared SwiftUI views and app/helper view models.
         .target(name: "VMPaneUI", dependencies: ["VMPaneCore", "VMPaneControl", "VMPaneHost"]),
 
-        .testTarget(name: "VMPaneCoreTests", dependencies: ["VMPaneCore"]),
+        .testTarget(name: "VMPaneCoreTests", dependencies: ["VMPaneCore"], resources: [.copy("Fixtures")]),
         .testTarget(name: "VMPaneControlTests", dependencies: ["VMPaneControl"]),
         .testTarget(name: "VMPaneVZTests", dependencies: ["VMPaneVZ"]),
         .testTarget(name: "VMPaneQEMUTests", dependencies: ["VMPaneQEMU"]),

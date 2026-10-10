@@ -20,10 +20,20 @@ opt_in_rules:
 disabled_rules:
   - explicit_acl
   - todo
+  - trailing_comma  # swift-format owns trailing commas
 force_unwrapping: warning
 line_length:
   warning: 140
   error: 200
   ignores_comments: true
 identifier_name:
-  excluded: [id, vm, ok, to]
+  # JSON keys of the config schema (os, vz, ui), POSIX names (fd) and conventional short names.
+  excluded: [id, vm, ok, to, os, vz, ui, fd, fm, dx, dy, i, j, x, y, a, b]
+# swift-format moves `{` to its own line after multi-line headers and conditions.
+opening_brace:
+  ignore_multiline_statement_conditions: true
+  ignore_multiline_type_headers: true
+  ignore_multiline_function_signatures: true
+# Table-like switches (state machines, lookups) count as one branch.
+cyclomatic_complexity:
+  ignores_case_statements: true
