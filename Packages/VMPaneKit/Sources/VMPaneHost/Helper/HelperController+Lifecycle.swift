@@ -31,8 +31,11 @@ extension HelperController {
             if afterStop != nil, state == .stopped { Task { await self.vmStopped() } }
         case .failed(let message): transition(.failed, reason: message)
         case .diskFull(let message):
-            // Paused with the reason; "Resume" continues once space has been freed.
-            if !transition(.paused, reason: message) || state == .paused {
+            // Paused with the reason; "Resume" continues once space has been freed. Already paused: the
+            // transition announces nothing, so the reason is broadcast here.
+            if state != .paused {
+                transition(.paused, reason: message)
+            } else {
                 server?.broadcast(
                     topic: "vm", method: ControlNotification.vmStateChanged.rawValue,
                     params: ["state": .string(state.rawValue), "reason": .string(message)])

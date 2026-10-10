@@ -26,8 +26,9 @@ public final class ChildExitWatcher: @unchecked Sendable {
     private var result: ChildExit?
     private var waiters: [CheckedContinuation<ChildExit, Never>] = []
 
-    /// `pid` must be a child of this process (spawned by it).
-    public init(pid: pid_t, queue: DispatchQueue = .global()) {
+    /// `pid` must be a child of this process (spawned by it). The exit event and the start-up check run on
+    /// one serial queue, so they never race to reap the child.
+    public init(pid: pid_t, queue: DispatchQueue = DispatchQueue(label: "app.vmpane.child-exit")) {
         source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: queue)
         source.setEventHandler { [weak self] in self?.reap(pid) }
         source.resume()

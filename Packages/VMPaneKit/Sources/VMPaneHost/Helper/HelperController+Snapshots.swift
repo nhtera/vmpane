@@ -93,16 +93,19 @@ extension HelperController {
             }
             await clearSavedState()  // the state now belongs to the snapshot
             if wasRunning {
-                try await backend.resume()
-                transition(.resumed)
+                // The snapshot exists either way; a guest that cannot continue (e.g. paused for a full disk)
+                // stays paused and its backend says why.
+                do {
+                    try await backend.resume()
+                    transition(.resumed)
+                } catch {
+                    Self.log.error("snapshot taken, but the VM stays paused: \(String(describing: error), privacy: .public)")
+                }
             }
             return meta
         } catch {
             await clearSavedState()
-            if wasRunning {
-                try? await backend.resume()
-                transition(.resumed)
-            }
+            if wasRunning, (try? await backend.resume()) != nil { transition(.resumed) }
             throw error
         }
     }

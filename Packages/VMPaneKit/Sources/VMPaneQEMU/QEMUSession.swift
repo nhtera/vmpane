@@ -23,6 +23,8 @@ actor QEMUSession {
     /// Set when the VM must be reported as failed when QEMU exits (e.g. the TPM went away).
     private var failure: String?
     var displaySize: (width: Int, height: Int)?
+    /// When `displaySize` was read (screendump).
+    var displaySizeAge: ContinuousClock.Instant?
     var pressedButtons = 0
     private let space: QEMUBackend.SpacePolicy
     /// Runs before QEMU is told to quit: the helper disconnects its SPICE client (QEMU's spice-server can hang
@@ -121,17 +123,18 @@ actor QEMUSession {
         }
     }
 
-    /// QMP events → backend events.
+    /// QMP events → backend events, only while `qmp` is the running QEMU's connection.
     private func watch(_ qmp: QMPClient) {
         Task {
-            for await event in qmp.events {
+            for await event in qmp.events where self.running?.qmp === qmp {
                 self.handle(event)
             }
         }
     }
 
-    private func handle(_ event: QMPEvent) {
+    func handle(_ event: QMPEvent) {
         switch event.name {
+        case "STOP" where exitReason != nil: break  // QEMU is going away: the stop is not a pause
         case "STOP" where pausedForSpace: events.yield(.diskFull(message: Self.diskFullMessage))
         case "STOP": events.yield(.paused)
         case "BLOCK_IO_ERROR" where event.data["action"] == "stop":
@@ -148,8 +151,12 @@ actor QEMUSession {
             }
             if event.data["guest"] == true, let current = running { Task { await self.quit(current) } }
         case "GUEST_PANICKED":
+            // With -no-shutdown a panic only pauses QEMU: power it off, so the VM can be started again.
             Self.log.error("guest panicked: \(String(describing: event.data), privacy: .public)")
-            events.yield(.failed(message: "Windows stopped with an error (guest panic). Restart the VM; the logs have details."))
+            guard exitReason == nil, let current = running else { break }
+            failure = "Windows stopped with an error (guest panic). Start the VM again; the logs have details."
+            exitReason = "guest panic"
+            Task { await self.quit(current) }
         default:
             break
         }
@@ -178,19 +185,26 @@ actor QEMUSession {
     }
 
     /// The TPM must not disappear under a running Windows (BitLocker): stop QEMU and report the failure.
+    /// swtpm also exits (--terminate) right after QEMU does, so give QEMU's own exit a moment to be seen.
     private func swtpmExited(_ exit: ChildExit, swtpm: ProcessRecord) async {
-        guard let current = running, current.swtpm == swtpm, exitReason == nil else { return }
+        try? await Task.sleep(for: .milliseconds(300))
+        guard let current = running, current.swtpm == swtpm, exitReason == nil, current.qemu.isAlive else { return }
         failure = "The VM's TPM emulator stopped (\(exit)); the VM was powered off to protect its TPM state."
         exitReason = "TPM emulator stopped"
         await quit(current)
     }
 
-    /// Quits QEMU (after `beforeQuit`), or terminates it when QMP no longer answers.
+    /// Quits QEMU (after `beforeQuit`) and waits until it has exited (up to 15 s); terminates it when QMP no
+    /// longer answers or it does not exit, so the bundle lock never stays with a QEMU that hangs on its way out.
     private func quit(_ current: Running) async {
         await beforeQuit?()
-        if (try? await current.qmp.execute("quit")) == nil {
-            _ = await Blocking.run { current.qemu.terminate() }
+        if (try? await current.qmp.execute("quit")) != nil {
+            let deadline = ContinuousClock.now + .seconds(15)
+            while running?.qemu == current.qemu, ContinuousClock.now < deadline { try? await Task.sleep(for: .milliseconds(50)) }
+            guard running?.qemu == current.qemu else { return }
+            Self.log.error("QEMU did not exit after quit: terminating it")
         }
+        _ = await Blocking.run { current.qemu.terminate() }
     }
 
     static let diskFullMessage = "The disk holding this VM is almost full, so the VM was paused. Free some space, then resume it."
@@ -235,7 +249,18 @@ actor QEMUSession {
         guard let current = running else { throw QEMUBackendError.notRunning }
         switch mode {
         case .graceful:
-            // ACPI power button: Windows shuts down (can take a minute); QEMU then exits by itself.
+            // ACPI power button: Windows shuts down (can take a minute), then QEMU is quit. A paused guest
+            // cannot see the button: one paused for a full disk (or a restore) is powered off, one the
+            // user paused continues first.
+            let status = try await current.qmp.execute("query-status")
+            if status["running"] != true {
+                guard status["status"] == "paused", !pausedForSpace else {
+                    exitReason = exitReason ?? "powered off while paused"
+                    await quit(current)
+                    return
+                }
+                try await current.qmp.execute("cont")
+            }
             try await current.qmp.execute("system_powerdown")
         case .force:
             exitReason = exitReason ?? "forced off"
@@ -258,25 +283,22 @@ actor QEMUSession {
         let directory = current.layout.path(of: directory)
         let final = directory.appendingPathComponent(QEMUState.fileName)
         let partial = directory.appendingPathComponent(QEMUState.fileName + ".partial")
+        var wasRunning = false
         do {
-            if try await current.qmp.execute("query-status")["running"] == true { try await current.qmp.execute("stop") }
+            wasRunning = try await current.qmp.execute("query-status")["running"] == true
+            if wasRunning { try await current.qmp.execute("stop") }
             try await QEMUState.save(current.qmp, to: partial, memoryMiB: config.memory.mib)
             try FileManager.default.moveItem(at: partial, to: final)
             try DurableWrite.syncDirectory(directory)
         } catch {
             try? FileManager.default.removeItem(at: partial)
-            _ = try? await current.qmp.execute("cont")
+            // Back to how it was: running again only if it ran, and never past a disk-full pause.
+            if wasRunning, !pausedForSpace { _ = try? await current.qmp.execute("cont") }
             throw error
         }
+        // Returns once QEMU and swtpm are gone: the state files must not change after this, and the bundle lock
+        // must not stay with a QEMU that is still there (`quit` waits, and terminates a QEMU that hangs).
         exitReason = "suspended"
         await quit(current)
-        // Done only once QEMU and swtpm are gone: the state files must not change after this returns, and the
-        // bundle lock must not stay with a QEMU that is still there.
-        let deadline = ContinuousClock.now + .seconds(30)
-        while running?.qemu == current.qemu, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(50)) }
-        if running?.qemu == current.qemu {
-            Self.log.error("QEMU did not exit after saving its state: terminating it")
-            _ = await Blocking.run { current.qemu.terminate() }
-        }
     }
 }

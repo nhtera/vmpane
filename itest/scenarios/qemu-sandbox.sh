@@ -95,5 +95,19 @@ scenario_run() {
     grep -qiE "Operation not permitted|Permission denied" "$run/deny.err" ||
         { cat "$run/deny.err"; it_fail "QEMU opened a file outside the bundle"; return 1; }
     echo "qemu-sandbox: QEMU denied outside the bundle ($(head -1 "$run/deny.err" | sed 's/.*: //' | cut -c1-60))"
+
+    # Nor connect to a Unix socket outside its run directory (another VM's or another app's).
+    /usr/bin/python3 -c 'import socket, sys, time; s = socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.listen(1); time.sleep(20)' \
+        "$outside/x.sock" &
+    local listener=$!
+    it_wait_for 5 test -S "$outside/x.sock"
+    sb qemu "$runtime/bin/qemu-system-aarch64" -machine virt -accel hvf -cpu host -m 256 -nodefaults -display none -S \
+        -chardev socket,id=c0,path="$outside/x.sock" >/dev/null 2>"$run/deny-unix.err" &
+    qemu_pid=$!
+    sleep 3
+    kill "$qemu_pid" "$listener" 2>/dev/null || true
+    grep -qiE "Operation not permitted|Permission denied" "$run/deny-unix.err" ||
+        { cat "$run/deny-unix.err"; it_fail "QEMU connected to a Unix socket outside its run directory"; return 1; }
+    echo "qemu-sandbox: QEMU denied a Unix socket outside its run directory"
     return 0
 }

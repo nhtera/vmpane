@@ -171,14 +171,16 @@ func suspendThenResumeFromTheSavedState() async throws {
     try await harness.backend.start(StartOptions(headless: true))
     try await Task.sleep(for: .seconds(1))  // the firmware runs
 
-    // Live snapshot path: pause, save, continue.
-    try await harness.backend.pause()
-    try await harness.backend.saveState(to: state)
-    #expect(FileManager.default.fileExists(atPath: state.appendingPathComponent(QEMUState.fileName).path))
-    try await harness.backend.resume()
-    #expect(try await harness.backend.qmp?.execute("query-status")["status"] == "running")
-    for file in try FileManager.default.contentsOfDirectory(at: state, includingPropertiesForKeys: nil) {
-        try FileManager.default.removeItem(at: file)
+    // Live snapshot path, twice in one QEMU run: pause, save, continue.
+    for _ in 0..<2 {
+        try await harness.backend.pause()
+        try await harness.backend.saveState(to: state)
+        #expect(FileManager.default.fileExists(atPath: state.appendingPathComponent(QEMUState.fileName).path))
+        try await harness.backend.resume()
+        #expect(try await harness.backend.qmp?.execute("query-status")["status"] == "running")
+        for file in try FileManager.default.contentsOfDirectory(at: state, includingPropertiesForKeys: nil) {
+            try FileManager.default.removeItem(at: file)
+        }
     }
 
     // Suspend: saved, renamed from .partial, QEMU and swtpm gone when it returns.
@@ -259,4 +261,45 @@ func portForwardsChangeWhileRunning() async throws {
     #expect(await harness.backend.applyLive(config, paths: ["portForwards"]).isEmpty)
     #expect(try await usernet().contains("47102"))
     try await harness.backend.stop(.force)
+}
+
+/// With -no-shutdown a guest panic only pauses QEMU: the backend powers it off and reports the failure.
+@Test(.enabled(if: qemuBundle != nil))
+func aGuestPanicPowersTheVMOff() async throws {
+    let harness = try Harness()
+    defer { harness.cleanUp() }
+    try await harness.backend.start(StartOptions(headless: true))
+    await harness.backend.session.handle(QMPEvent(name: "GUEST_PANICKED", data: ["action": "pause"]))
+    let failed = await harness.waitForEvent {
+        if case .failed = $0 { return true }
+        return false
+    }
+    #expect(failed == .failed(message: "Windows stopped with an error (guest panic). Start the VM again; the logs have details."))
+    for _ in 0..<100 where harness.anyChildAlive { try await Task.sleep(for: .milliseconds(50)) }
+    #expect(!harness.anyChildAlive)
+}
+
+/// A guest paused for a full disk cannot see the power button: a graceful stop powers it off; a failed
+/// suspend leaves it paused (never continued onto the full volume).
+@Test(.enabled(if: qemuBundle != nil))
+func aGuestPausedForAFullDiskStaysPausedAndStillStops() async throws {
+    let free = FreeSpace()
+    let policy = QEMUBackend.SpacePolicy(pauseBelow: 2 << 30, resumeFrom: 3 << 30, interval: .milliseconds(100)) { _ in free.value }
+    let harness = try Harness(space: policy)
+    defer { harness.cleanUp() }
+    try await harness.backend.start(StartOptions(headless: true))
+    free.value = 1 << 30
+    _ = await harness.waitForEvent(timeout: 5) {
+        if case .diskFull = $0 { return true }
+        return false
+    }
+    let state = harness.layout.bundle.stateDirectory
+    chmod(state.path, 0o500)
+    await #expect(throws: (any Error).self) { try await harness.backend.suspend(to: state) }
+    chmod(state.path, 0o700)
+    #expect(try await harness.backend.qmp?.execute("query-status")["status"] == "paused")
+
+    try await harness.backend.stop(.graceful)
+    #expect(await harness.waitForEvent { $0 == .stopped(reason: "powered off while paused") } != nil)
+    #expect(!harness.anyChildAlive)
 }

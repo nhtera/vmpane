@@ -64,7 +64,10 @@ it_start_helper() {
     mkdir -p "$VMPANE_SUPPORT_DIR"
     "$(it_helper)" --vm "$bundle" --headless >>"$VMPANE_SUPPORT_DIR/helper-$sid.log" 2>&1 &
     local pid=$!
-    it_wait_for 10 test -S "$run/$sid.sock" || { it_fail "helper for $bundle did not bind its socket"; return 1; }
+    # Wait until the helper answers: a helper that died leaves its socket file behind, and a new one may first
+    # reap what the old one left running (seconds).
+    it_wait_for 30 bash -c "/usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' '$run/$sid.sock' vm.info >/dev/null 2>&1" \
+        || { it_fail "helper for $bundle did not answer on its socket"; return 1; }
     echo "$pid"
 }
 

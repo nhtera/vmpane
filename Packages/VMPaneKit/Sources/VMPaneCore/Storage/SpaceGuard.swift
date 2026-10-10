@@ -34,9 +34,11 @@ public enum SpaceGuard {
         return UInt64(info.f_bavail) * UInt64(info.f_bsize)
     }
 
+    /// Uses `freeBytes` (no purgeable space), the same measure the QEMU disk-full watchdog pauses on, so a
+    /// save that passes this check does not itself trip the watchdog.
     public static func check(
         memoryBytes: UInt64, at url: URL,
-        available: (URL) throws -> UInt64 = SpaceGuard.availableBytes
+        available: (URL) throws -> UInt64 = SpaceGuard.freeBytes
     ) throws {
         let required = requiredBytes(memoryBytes: memoryBytes)
         let free = try available(url)

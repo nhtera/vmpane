@@ -50,8 +50,9 @@
 ;; The VM's own files
 (allow file-read* file-write* (subpath (param "BUNDLE")) (subpath (param "RUNDIR")))
 
-;; slirp user networking: outbound connections, and the listening sockets of port forwards (hostfwd)
-(allow network-outbound)
+;; slirp user networking: outbound IP connections, and the listening sockets of port forwards (hostfwd).
+;; IP only: an unscoped network-outbound would also allow connecting to any Unix socket on the Mac.
+(allow network-outbound (remote ip "*:*"))
 (allow network-bind network-inbound (local ip "localhost:*"))
 (allow system-socket)
 ;; Unix sockets inside RUNDIR (QMP server, agent, swtpm client)

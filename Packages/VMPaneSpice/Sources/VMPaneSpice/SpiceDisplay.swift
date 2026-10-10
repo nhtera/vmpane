@@ -133,59 +133,66 @@ public final class SpiceDisplay: NSObject {
         return rep.representation(using: .png, properties: [:])
     }
 
-    fileprivate func connected(_ display: CSDisplay) {
-        guard display.isPrimaryDisplay else { return }
+    fileprivate func connected(_ display: CSDisplay, on source: CSConnection) {
+        guard source === connection, display.isPrimaryDisplay else { return }
         self.display = display
         display.addRenderer(renderer)
         layoutDisplay()
         Self.log.info("SPICE display \(Int(display.displaySize.width))x\(Int(display.displaySize.height))")
     }
 
-    fileprivate func updated(_ display: CSDisplay) {
-        guard display === self.display else { return }
+    fileprivate func updated(_ display: CSDisplay, on source: CSConnection) {
+        guard source === connection, display === self.display else { return }
         layoutDisplay()
     }
 
-    fileprivate func inputAvailable(_ input: CSInput) { view.input = input }
+    fileprivate func inputAvailable(_ input: CSInput, on source: CSConnection) {
+        guard source === connection else { return }
+        view.input = input
+    }
 
-    fileprivate func lost(_ reason: String) {
-        Self.log.notice("SPICE session ended: \(reason, privacy: .public)")
-        if closing != nil {
+    /// Callbacks name their connection: an old session's late callbacks must not touch the current one.
+    fileprivate func lost(_ reason: String, on source: CSConnection) {
+        if source === closing {
             finishClosing()
-            return
+        } else if source === connection {
+            Self.log.notice("SPICE session ended: \(reason, privacy: .public)")
+            retryLater()
         }
-        retryLater()
     }
 }
 
-// CocoaSpice calls its delegate on the SPICE main loop thread; everything moves to the main actor.
+// CocoaSpice calls its delegate on the SPICE main loop thread; everything moves to the main actor, together
+// with the connection that called (CocoaSpice objects are not Sendable; they are only used on the main actor).
 extension SpiceDisplay: CSConnectionDelegate {
     nonisolated public func spiceConnected(_ connection: CSConnection) {}
 
     nonisolated public func spiceDisconnected(_ connection: CSConnection) {
-        DispatchQueue.main.async { MainActor.assumeIsolated { self.lost("disconnected") } }
+        nonisolated(unsafe) let source = connection
+        DispatchQueue.main.async { MainActor.assumeIsolated { self.lost("disconnected", on: source) } }
     }
 
     nonisolated public func spiceError(_ connection: CSConnection, code: CSConnectionError, message: String?) {
         let reason = "error \(code.rawValue): \(message ?? "")"
-        DispatchQueue.main.async { MainActor.assumeIsolated { self.lost(reason) } }
+        nonisolated(unsafe) let source = connection
+        DispatchQueue.main.async { MainActor.assumeIsolated { self.lost(reason, on: source) } }
     }
 
     nonisolated public func spiceInputAvailable(_ connection: CSConnection, input: CSInput) {
-        nonisolated(unsafe) let input = input
-        DispatchQueue.main.async { MainActor.assumeIsolated { self.inputAvailable(input) } }
+        nonisolated(unsafe) let (source, input) = (connection, input)
+        DispatchQueue.main.async { MainActor.assumeIsolated { self.inputAvailable(input, on: source) } }
     }
 
     nonisolated public func spiceInputUnavailable(_ connection: CSConnection, input: CSInput) {}
 
     nonisolated public func spiceDisplayCreated(_ connection: CSConnection, display: CSDisplay) {
-        nonisolated(unsafe) let display = display
-        DispatchQueue.main.async { MainActor.assumeIsolated { self.connected(display) } }
+        nonisolated(unsafe) let (source, display) = (connection, display)
+        DispatchQueue.main.async { MainActor.assumeIsolated { self.connected(display, on: source) } }
     }
 
     nonisolated public func spiceDisplayUpdated(_ connection: CSConnection, display: CSDisplay) {
-        nonisolated(unsafe) let display = display
-        DispatchQueue.main.async { MainActor.assumeIsolated { self.updated(display) } }
+        nonisolated(unsafe) let (source, display) = (connection, display)
+        DispatchQueue.main.async { MainActor.assumeIsolated { self.updated(display, on: source) } }
     }
 
     nonisolated public func spiceDisplayDestroyed(_ connection: CSConnection, display: CSDisplay) {}

@@ -20,12 +20,16 @@ extension QEMUSession {
         let pixels = try QEMUScreenshot.decodePPM(
             try Self.readCapped(file, limit: QEMUScreenshot.maxDimension * QEMUScreenshot.maxDimension * 3 + 64))
         displaySize = (pixels.width, pixels.height)
+        displaySizeAge = .now
         return pixels
     }
 
     func send(_ input: InputEvent) async throws {
         guard let current = running else { throw QEMUBackendError.notRunning }
-        if case .pointer = input, displaySize == nil { _ = try await capture() }  // pointer coordinates need the display size
+        // Pointer coordinates need the current display size (the guest can change resolution).
+        if case .pointer = input, displaySize == nil || displaySizeAge.map({ $0.duration(to: .now) > .seconds(5) }) ?? true {
+            _ = try await capture()
+        }
         let size = displaySize ?? (config.display.widthPx, config.display.heightPx)
         for step in try QEMUInput.steps(for: input, display: size, pressed: &pressedButtons) {
             switch step {

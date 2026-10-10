@@ -36,6 +36,8 @@ extension HelperController {
             for path in accepted {
                 let now: Bool =
                     switch SettingsPatch.kind(of: path) {
+                    // A running QEMU VM's forwards are in QEMU: in effect only if it took them.
+                    case .host where path.hasPrefix("portForwards") && running && backend?.kind == .qemu: live.contains(path)
                     case .host: true
                     case .live: !running || live.contains(path)
                     default: !running
