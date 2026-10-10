@@ -195,3 +195,18 @@ private func input(edition: String = "Windows 11 Pro") -> UnattendInput {
         #expect(WindowsInstall.bundledTools(app: app)?.lastPathComponent == "vmpane-guest-tools-windows.iso")
     }
 }
+
+// Opt-in: VMPANE_WINDOWS_ISO=<a Windows 11 Arm64 ISO from Microsoft> checks the inspector on real media (its
+// install.wim/esd header, editions and build).
+private let realWindowsISO = ProcessInfo.processInfo.environment["VMPANE_WINDOWS_ISO"]
+
+@Test(.enabled(if: realWindowsISO != nil)) func realWindowsMediaAreRecognized() throws {
+    let iso = URL(fileURLWithPath: try #require(realWindowsISO))
+    guard case .windows11(let editions) = WindowsISOInspector.inspect(iso) else {
+        Issue.record("not recognised as Windows 11 Arm64: \(WindowsISOInspector.inspect(iso))")
+        return
+    }
+    #expect(editions.contains { $0.name == "Windows 11 Pro" })
+    #expect(editions.allSatisfy { $0.isARM64 && $0.isWindows11 })
+    print("real ISO editions: \(editions.map { "\($0.index) \($0.name) build \($0.build ?? 0)" })")
+}
