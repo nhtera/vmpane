@@ -62,6 +62,10 @@ targets:
     dependencies:
       - package: VMPaneKit
         product: VMPaneHost
+      - package: VMPaneKit
+        product: VMPaneVZ
+      - package: VMPaneKit
+        product: VMPaneCore
   # Target name differs from the product: `vmpane` and `VMPane` collide on case-insensitive APFS (build dirs).
   VMPaneCLI:
     type: tool

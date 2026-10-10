@@ -76,6 +76,7 @@ for name in "${scenarios[@]}"; do
     file=itest/scenarios/$name.sh
     [[ -f "$file" ]] || { echo "error: no scenario $file" >&2; exit 2; }
     start=$(date +%s)
+    helpers_before=$(pgrep -f 'VMPaneVM.app/Contents/MacOS/VMPaneVM' | sort || true)
     set +e
     (
         set -euo pipefail
@@ -85,6 +86,15 @@ for name in "${scenarios[@]}"; do
     )
     rc=$?
     set -e
+    # A scenario must not leave helpers (and their VMs) running: report, stop them, and fail it.
+    leaked=$(comm -13 <(echo "$helpers_before") <(pgrep -f 'VMPaneVM.app/Contents/MacOS/VMPaneVM' | sort || true) | sed '/^$/d')
+    if [[ -n $leaked ]]; then
+        echo "itest $name: leaked helper(s): $(echo $leaked)" >&2
+        kill -TERM $leaked 2>/dev/null || true
+        sleep 3
+        kill -KILL $leaked 2>/dev/null || true
+        [[ $rc == 0 ]] && rc=1
+    fi
     duration=$(($(date +%s) - start))
     case $rc in 0) result=pass ;; 77) result=skipped; skipped=1 ;; *) result=fail; failed=1 ;; esac
 

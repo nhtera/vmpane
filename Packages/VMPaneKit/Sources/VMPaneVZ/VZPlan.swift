@@ -1,6 +1,19 @@
 import Foundation
 import VMPaneCore
 
+/// The files of a macOS guest's platform, in `current/aux/`.
+public struct VZMacAux: Sendable, Equatable {
+    public var hardwareModel: URL
+    public var machineIdentifier: URL
+    public var auxiliaryStorage: URL
+
+    public init(directory: URL) {
+        hardwareModel = directory.appendingPathComponent("HardwareModel")
+        machineIdentifier = directory.appendingPathComponent("MachineIdentifier")
+        auxiliaryStorage = directory.appendingPathComponent("AuxiliaryStorage")
+    }
+}
+
 /// How a disk is attached to the guest.
 public enum VZDiskKind: Sendable, Equatable { case virtioBlock, usbMassStorage }
 
@@ -11,6 +24,9 @@ public struct VZPlan: Sendable, Equatable {
     public enum Platform: Sendable, Equatable {
         /// Linux: generic platform with a persisted machine identifier and an EFI variable store.
         case generic(machineIdentifier: Data, efiVariableStore: URL, nestedVirtualization: Bool)
+        /// macOS: hardware model, machine identifier and auxiliary storage from `current/aux/`. When the
+        /// guest is not installed yet, `installFrom` names the restore image and the installer makes them.
+        case mac(aux: VZMacAux, installFrom: URL?)
     }
 
     public struct Disk: Sendable, Equatable {
@@ -47,6 +63,8 @@ public struct VZPlan: Sendable, Equatable {
     /// virtiofs shares, all under one tag (`vmpane-shares`).
     public var shares: [Share]
     public var rosetta: Bool
+    /// Display density for macOS guests (Mac graphics device).
+    public var pixelsPerInch: Int
     /// Guest serial console (hvc0) is appended here.
     public var serialLog: URL
 
@@ -56,6 +74,8 @@ public struct VZPlan: Sendable, Equatable {
 
 public enum VZPlanError: Error, Equatable, Sendable {
     case unsupportedGuest(GuestOS)
+    /// A macOS guest that is neither installed nor has a restore image to install from.
+    case notInstalled
     case missingMachineIdentifier
     case invalidMachineIdentifier
     case invalidMACAddress(String)
@@ -71,9 +91,7 @@ public enum VZPlanBuilder {
             FileManager.default.fileExists(atPath: $0.path)
         }
     ) throws -> VZPlan {
-        guard config.os == .linux else { throw VZPlanError.unsupportedGuest(config.os) }
-        guard let encoded = config.platform.machineIdentifier else { throw VZPlanError.missingMachineIdentifier }
-        guard let identifier = Data(base64Encoded: encoded), !identifier.isEmpty else { throw VZPlanError.invalidMachineIdentifier }
+        let platform = try platformPlan(config, bundle: bundle, fileExists: fileExists)
 
         var disks: [VZPlan.Disk] = []
         for disk in config.disks {
@@ -99,10 +117,7 @@ public enum VZPlanBuilder {
         }
 
         return VZPlan(
-            platform: .generic(
-                machineIdentifier: identifier,
-                efiVariableStore: bundle.auxDirectory.appendingPathComponent("efi_vars.fd"),
-                nestedVirtualization: config.vz?.nestedVirtualization ?? false),
+            platform: platform,
             cpuCount: config.cpu.count,
             memoryBytes: UInt64(config.memory.mib) << 20,
             disks: disks,
@@ -111,10 +126,33 @@ public enum VZPlanBuilder {
             audioOutput: config.audio.output,
             audioInput: config.audio.input,
             balloon: config.memory.balloon,
-            spiceClipboard: config.clipboard.mode != .off,
+            spiceClipboard: config.os == .linux && config.clipboard.mode != .off,  // macOS guests: agent (Phase 07)
             shares: config.shares.map { .init(name: $0.name, url: URL(fileURLWithPath: $0.hostPath), readOnly: $0.readOnly) },
-            rosetta: config.vz?.rosetta ?? false,
+            rosetta: config.os == .linux && (config.vz?.rosetta ?? false),
+            pixelsPerInch: config.display.ppi,
             serialLog: bundle.logsDirectory.appendingPathComponent("serial.log"))
+    }
+
+    private static func platformPlan(_ config: VMConfigV1, bundle: VMBundle, fileExists: (URL) -> Bool) throws -> VZPlan.Platform {
+        switch config.os {
+        case .linux:
+            guard let encoded = config.platform.machineIdentifier else { throw VZPlanError.missingMachineIdentifier }
+            guard let identifier = Data(base64Encoded: encoded), !identifier.isEmpty else { throw VZPlanError.invalidMachineIdentifier }
+            return .generic(
+                machineIdentifier: identifier, efiVariableStore: bundle.auxDirectory.appendingPathComponent("efi_vars.fd"),
+                nestedVirtualization: config.vz?.nestedVirtualization ?? false)
+        case .macos:
+            let aux = VZMacAux(directory: bundle.auxDirectory)
+            if [aux.hardwareModel, aux.machineIdentifier, aux.auxiliaryStorage].allSatisfy(fileExists) {
+                return .mac(aux: aux, installFrom: nil)
+            }
+            guard let image = config.install?.restoreImage, fileExists(URL(fileURLWithPath: image)) else {
+                throw VZPlanError.notInstalled
+            }
+            return .mac(aux: aux, installFrom: URL(fileURLWithPath: image))
+        case .windows:
+            throw VZPlanError.unsupportedGuest(config.os)
+        }
     }
 
     static func isValidMAC(_ mac: String) -> Bool {

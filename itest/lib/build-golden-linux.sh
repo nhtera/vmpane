@@ -3,6 +3,7 @@
 # itest/images.lock) as a raw sparse 8 GiB disk, plus a cloud-init seed that, on every boot, prints
 #   VMPANE-ITEST-READY boot=<boot id>          once the system is up
 #   VMPANE-TICK uptime=<s> boot=<boot id>       every 2 s (proves a restored VM kept running processes)
+#   VMPANE-TYPED <line>                         for each line typed on the graphical console (tty1)
 # on the serial console (logs/serial.log). The first boot runs here, through VMPane's own helper, so
 # cloud-init's one-time work is done before scenarios clone it.
 # Usage: build-golden-linux.sh <bundle path>   (needs $APP and $VMPANE_ROOT; uses a throwaway support dir)
@@ -55,12 +56,37 @@ write_files:
       Restart=always
       [Install]
       WantedBy=multi-user.target
+  - path: /usr/local/bin/vmpane-itest-typed
+    permissions: '0755'
+    content: |
+      #!/bin/sh
+      # Lines typed on the graphical console (tty1) are echoed to the serial log, so tests can check
+      # synthesized keyboard input. Raw reads, so every printable character arrives as typed.
+      while IFS= read -r line; do echo "VMPANE-TYPED $line" > /dev/hvc0; done
+  - path: /etc/systemd/system/vmpane-itest-typed.service
+    content: |
+      [Unit]
+      Description=VMPane itest: echo tty1 input to the serial console
+      After=multi-user.target
+      Conflicts=getty@tty1.service
+      [Service]
+      ExecStart=/usr/local/bin/vmpane-itest-typed
+      StandardInput=tty
+      StandardOutput=tty
+      TTYPath=/dev/tty1
+      TTYReset=yes
+      TTYVHangup=yes
+      Restart=always
+      [Install]
+      WantedBy=multi-user.target
 runcmd:
   # The serial getty hangs up hvc0 when it starts, cutting off the markers: no login prompt there.
   - [systemctl, mask, --now, serial-getty@hvc0.service]
   - [systemctl, daemon-reload]
   - [systemctl, enable, --now, vmpane-itest.service]
   - [systemctl, restart, vmpane-itest.service]
+  - [systemctl, mask, --now, getty@tty1.service]
+  - [systemctl, enable, --now, vmpane-itest-typed.service]
 USER
 hdiutil makehybrid -quiet -o "$golden.partial/seed.iso" "$seed" -iso -joliet -default-volume-name cidata
 mv "$golden.partial" "$golden"

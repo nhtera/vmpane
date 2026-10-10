@@ -7,6 +7,9 @@ public enum VZMaterializer {
     public enum Failure: Error, Equatable, Sendable {
         case cannotCreateEFIVariableStore
         case invalidMachineIdentifier
+        case invalidHardwareModel
+        /// A macOS guest's platform files are missing: install it first.
+        case notInstalled
     }
 
     public static func configuration(_ plan: VZPlan, serialLog: FileHandle?) throws -> VZVirtualMachineConfiguration {
@@ -51,6 +54,20 @@ public enum VZMaterializer {
                 ? VZEFIVariableStore(url: efiURL)
                 : try VZEFIVariableStore(creatingVariableStoreAt: efiURL)
             configuration.bootLoader = boot
+        case .mac(let aux, _):
+            guard let modelData = try? Data(contentsOf: aux.hardwareModel), let idData = try? Data(contentsOf: aux.machineIdentifier) else {
+                throw Failure.notInstalled
+            }
+            guard let model = VZMacHardwareModel(dataRepresentation: modelData), model.isSupported else {
+                throw Failure.invalidHardwareModel
+            }
+            guard let identifier = VZMacMachineIdentifier(dataRepresentation: idData) else { throw Failure.invalidMachineIdentifier }
+            let platform = VZMacPlatformConfiguration()
+            platform.hardwareModel = model
+            platform.machineIdentifier = identifier
+            platform.auxiliaryStorage = VZMacAuxiliaryStorage(url: aux.auxiliaryStorage)
+            configuration.platform = platform
+            configuration.bootLoader = VZMacOSBootLoader()
         }
     }
 
@@ -75,6 +92,17 @@ public enum VZMaterializer {
     }
 
     private static func applyDisplayAndInput(_ plan: VZPlan, to configuration: VZVirtualMachineConfiguration) {
+        if case .mac = plan.platform {
+            let graphics = VZMacGraphicsDeviceConfiguration()
+            graphics.displays = [
+                VZMacGraphicsDisplayConfiguration(
+                    widthInPixels: plan.display.widthPx, heightInPixels: plan.display.heightPx, pixelsPerInch: plan.pixelsPerInch)
+            ]
+            configuration.graphicsDevices = [graphics]
+            configuration.keyboards = [VZMacKeyboardConfiguration()]
+            configuration.pointingDevices = [VZMacTrackpadConfiguration(), VZUSBScreenCoordinatePointingDeviceConfiguration()]
+            return
+        }
         let gpu = VZVirtioGraphicsDeviceConfiguration()
         gpu.scanouts = [VZVirtioGraphicsScanoutConfiguration(widthInPixels: plan.display.widthPx, heightInPixels: plan.display.heightPx)]
         configuration.graphicsDevices = [gpu]
@@ -114,7 +142,11 @@ public enum VZMaterializer {
     private static func directoryShares(_ plan: VZPlan) -> [VZDirectorySharingDeviceConfiguration] {
         var devices: [VZDirectorySharingDeviceConfiguration] = []
         if !plan.shares.isEmpty {
-            let device = VZVirtioFileSystemDeviceConfiguration(tag: VZPlan.sharesTag)
+            var isMac = false
+            if case .mac = plan.platform { isMac = true }
+            // macOS guests mount the automount tag by themselves (under /Volumes/My Shared Files).
+            let device = VZVirtioFileSystemDeviceConfiguration(
+                tag: isMac ? VZVirtioFileSystemDeviceConfiguration.macOSGuestAutomountTag : VZPlan.sharesTag)
             var directories: [String: VZSharedDirectory] = [:]
             for share in plan.shares { directories[share.name] = VZSharedDirectory(url: share.url, readOnly: share.readOnly) }
             device.share = VZMultipleDirectoryShare(directories: directories)

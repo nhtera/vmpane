@@ -1,6 +1,7 @@
 import AppKit
 import VMPaneCore
 import VMPaneHost
+import VMPaneVZ
 
 /// Per-VM helper app: one process per running VM, with its own Dock tile and window.
 /// Usage: VMPaneVM --vm <bundle> [--headless]
@@ -72,19 +73,7 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
             _ = try? registry.spawn(
                 URL(fileURLWithPath: "/bin/sleep"), .init(arguments: ["3600"], inheriting: [prepared.lock.fileDescriptor]))
         }
-        let made: BackendFactory.Made
-        do {
-            made = try BackendFactory.make(prepared)
-        } catch {
-            FileHandle.standardError.write(Data("VMPaneVM: cannot prepare the VM: \(error)\n".utf8))
-            made = BackendFactory.Made(backend: nil, config: prepared.config)
-        }
-        let controller = HelperController(
-            prepared: prepared, runtimeVersion: VMPane.version, backend: made.backend, config: made.config
-        ) {
-            DispatchQueue.main.async { exit(0) }
-        }
-        self.controller = controller
+        let controller = makeController(prepared)
         Task {
             do {
                 try await controller.start()
@@ -93,6 +82,45 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
                 await controller.shutdown()
             }
         }
+    }
+}
+
+extension HelperDelegate {
+    /// Shows the VM's window when it starts (unless headless) or when `vm.display.show` asks for it.
+    fileprivate func observeDisplay(_ controller: HelperController, backend: VZBackend, config: VMConfigV1) {
+        let headless = arguments.headless
+        Task { @MainActor in
+            for await state in controller.stateChanges where state == .running && !headless {
+                backend.showDisplay()
+            }
+        }
+        Task { @MainActor in
+            for await _ in controller.displayRequests { backend.showDisplay() }
+        }
+    }
+}
+
+extension HelperDelegate {
+    /// Chooses the backend (saving first-start config changes) and builds the controller.
+    fileprivate func makeController(_ prepared: PreparedBundle) -> HelperController {
+        let made: BackendFactory.Made
+        do {
+            made = try BackendFactory.make(prepared)
+        } catch {
+            FileHandle.standardError.write(Data("VMPaneVM: cannot prepare the VM: \(error)\n".utf8))
+            made = BackendFactory.Made(backend: nil, config: prepared.config)
+        }
+        let controller = HelperController(
+            prepared: prepared, runtimeVersion: VMPane.version, backend: made.backend, config: made.config,
+            afterStart: made.afterStart
+        ) {
+            DispatchQueue.main.async { exit(0) }
+        }
+        self.controller = controller
+        if let vz = made.backend as? VZBackend {
+            observeDisplay(controller, backend: vz, config: made.config)
+        }
+        return controller
     }
 }
 

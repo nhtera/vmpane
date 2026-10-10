@@ -46,6 +46,19 @@ public enum InputEvent: Sendable, Equatable, Codable {
     case scroll(dx: Double, dy: Double)
 }
 
+/// A captured guest display.
+public struct Screenshot: Sendable, Equatable {
+    public let png: Data
+    public let width: Int
+    public let height: Int
+
+    public init(png: Data, width: Int, height: Int) {
+        self.png = png
+        self.width = width
+        self.height = height
+    }
+}
+
 /// Events a backend reports to its helper.
 public enum BackendEvent: Sendable, Equatable {
     case started
@@ -57,6 +70,8 @@ public enum BackendEvent: Sendable, Equatable {
     case stopped(reason: String)
     case failed(message: String)
     case consoleOutput(Data)
+    /// OS installation progress (0…1) while starting a VM that is not installed yet.
+    case installProgress(fraction: Double, message: String)
 }
 
 /// A hypervisor backend driving one VM (Virtualization.framework or QEMU).
@@ -75,6 +90,6 @@ public protocol VMBackend: AnyObject, Sendable {
     func saveState(to stateDirectory: URL) async throws
     func stop(_ mode: StopMode) async throws
     /// PNG of the guest display, longest edge at most `maxEdge`.
-    func screenshot(maxEdge: Int) async throws -> Data
+    func screenshot(maxEdge: Int) async throws -> Screenshot
     func send(_ input: InputEvent) async throws
 }

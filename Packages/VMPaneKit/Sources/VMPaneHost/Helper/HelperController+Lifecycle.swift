@@ -28,6 +28,10 @@ extension HelperController {
         case .suspended: transition(.suspended)
         case .stopped(let reason): transition(.stopped, reason: reason)
         case .failed(let message): transition(.failed, reason: message)
+        case .installProgress(let fraction, let message):
+            server?.broadcast(
+                topic: "install", method: ControlNotification.installProgress.rawValue,
+                params: ["phase": "install", "percent": .int(Int64(fraction * 100)), "message": .string(message)])
         case .consoleOutput(let data):
             server?.broadcast(
                 topic: "console", method: ControlNotification.consoleOutput.rawValue,
@@ -42,6 +46,7 @@ extension HelperController {
         case .success(let next):
             guard next != state else { return true }
             state = next
+            stateContinuation.yield(next)
             server?.broadcast(
                 topic: "vm", method: ControlNotification.vmStateChanged.rawValue,
                 params: ["state": .string(next.rawValue), "reason": reason.map { .string($0) } ?? .null])
@@ -123,6 +128,15 @@ extension HelperController {
         }
         transition(.started)
         if decision == .resume { await clearSavedState() }  // the running VM has moved on from it
+        if let updated = afterStart?(config) {
+            let lock = prepared.lock
+            do {
+                try await Blocking.run { try ConfigStore.save(updated, holding: lock) }
+                config = updated
+            } catch {
+                Self.log.error("cannot save the config after start: \(String(describing: error), privacy: .public)")
+            }
+        }
         return decision == .resume
     }
 
@@ -182,14 +196,16 @@ extension HelperController {
     /// Before the helper exits: suspend (if the VM's close action says so and the backend can), else a
     /// graceful stop, then a forced one. The bundle lock is released only after this.
     func stopBackendForShutdown() async {
-        guard let backend, [.starting, .running, .paused].contains(state) else { return }
+        guard let backend, [.starting, .running, .paused, .stopping].contains(state) else { return }
         if config.ui.closeAction == .suspend, backend.capabilities.contains(.suspend), state != .starting,
             (try? await suspendVM(backend)) != nil
         {
             return
         }
-        transition(.stop)
-        try? await backend.stop(.graceful)
+        if state != .stopping {
+            transition(.stop)
+            try? await backend.stop(.graceful)
+        }
         if await waitForState(.stopped, timeout: gracefulStopTimeout) { return }
         try? await backend.stop(.force)
         _ = await waitForState(.stopped, timeout: .seconds(10))

@@ -203,6 +203,7 @@ private func buildSleeper(in dir: URL) throws -> URL {
     try withTempDirectory { dir in
         let binary = try buildSleeper(in: dir)
         let child = try ChildSpawner.spawn(binary)
+        usleep(300_000)  // let it finish loading: real deletions (runtime GC) happen long after start
         try FileManager.default.removeItem(at: binary)
         #expect(child.isAlive)  // whether or not the kernel can still report the deleted path
         #expect(child.terminate())

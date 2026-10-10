@@ -18,16 +18,27 @@ public actor HelperController {
     var gracefulStopTimeout: Duration = .seconds(30)
     /// Whether the VM was last started without a window (restarts after a restore keep it).
     var lastStartHeadless = true
+    let afterStart: (@Sendable (VMConfigV1) -> VMConfigV1?)?
+    /// Every state the VM enters (the helper's window follows it). Single consumer.
+    public nonisolated let stateChanges: AsyncStream<VMRunState>
+    let stateContinuation: AsyncStream<VMRunState>.Continuation
+    /// Asked to show the VM's window (`vm.display.show`).
+    public nonisolated let displayRequests: AsyncStream<Void>
+    let displayContinuation: AsyncStream<Void>.Continuation
 
     public func setGracefulStopTimeout(_ timeout: Duration) { gracefulStopTimeout = timeout }
 
     public init(
         prepared: PreparedBundle, runtimeVersion: String, backend: VMBackend?, config: VMConfigV1? = nil,
+        afterStart: (@Sendable (VMConfigV1) -> VMConfigV1?)? = nil,
         onShutdown: @escaping @Sendable () -> Void
     ) {
         self.prepared = prepared
         self.runtimeVersion = runtimeVersion
         self.config = config ?? prepared.config
+        self.afterStart = afterStart
+        (stateChanges, stateContinuation) = AsyncStream.makeStream(of: VMRunState.self)
+        (displayRequests, displayContinuation) = AsyncStream.makeStream(of: Void.self)
         self.backend = backend
         self.onShutdown = onShutdown
     }
@@ -72,6 +83,11 @@ public actor HelperController {
             }
             return .success(.object([:]))
         case .vmInfo?: return info()
+        case .vmScreenshot?, .vmInputKey?, .vmInputText?, .vmInputPointer?, .vmInputScroll?:
+            return await displayRequest(request.method, request.params)
+        case .vmDisplayShow?:
+            displayContinuation.yield()
+            return .success(.object([:]))
         case .eventsSubscribe?: return subscribe(request.params, connection)
         case .vmSettingsGet?: return RPCParams.encode(config)
         case .vmStart?, .vmPause?, .vmResume?, .vmSuspend?, .vmStop?:

@@ -13,7 +13,7 @@ private let allowed: [VMRunState: [Event: VMRunState]] = [
     .running: [.pause: .paused, .paused: .paused, .suspend: .suspending, .stop: .stopping, .stopped: .stopped],
     .paused: [.resume: .running, .resumed: .running, .suspend: .suspending, .stop: .stopping, .stopped: .stopped],
     .suspending: [.suspended: .stopped, .stopped: .stopped, .resumed: .running],
-    .stopping: [.stopped: .stopped],
+    .stopping: [.stopped: .stopped, .stop: .stopping],
     .error: [.start: .starting, .stop: .stopped],
 ]
 
@@ -83,8 +83,10 @@ final class ScriptedBackend: VMBackend, @unchecked Sendable {
         if mode == .graceful && ignoresGracefulStop { return }
         continuation.yield(.stopped(reason: "requested"))
     }
-    func screenshot(maxEdge: Int) async throws -> Data { Data([0x89, 0x50, 0x4E, 0x47]) }
-    func send(_ input: InputEvent) async throws { lock.withLock { calls.append("input") } }
+    func screenshot(maxEdge: Int) async throws -> Screenshot {
+        Screenshot(png: Data([0x89, 0x50, 0x4E, 0x47]), width: 4, height: 3)
+    }
+    func send(_ input: InputEvent) async throws { lock.withLock { calls.append("input.\(input)") } }
 
     /// Simulates the guest powering off by itself, or any other event.
     func emit(_ event: BackendEvent) { continuation.yield(event) }

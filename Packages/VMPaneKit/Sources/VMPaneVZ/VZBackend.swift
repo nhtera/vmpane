@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import VMPaneCore
 import Virtualization
@@ -5,19 +6,22 @@ import Virtualization
 /// `VMBackend` on Virtualization.framework (Linux guests now; macOS guests follow).
 public final class VZBackend: VMBackend {
     public let kind = BackendKind.vz
-    public let capabilities: LiveCapabilities = [.pause, .suspend, .liveSnapshot]
+    public let capabilities: LiveCapabilities = [.pause, .suspend, .liveSnapshot, .screenshot, .input]
     public nonisolated let events: AsyncStream<BackendEvent>
 
     /// Saved RAM state inside the state directory (see `SavedStateRule`).
     public static let stateFileName = "suspend.vzvmsave"
 
     private let plan: VZPlan
+    private let title: String
     private let runner = VZRunner()
+    @MainActor private var display: VZDisplayHost?
     private let serialLog: FileHandle?
     private let box = BoxHolder()
 
-    public init(plan: VZPlan) {
+    public init(plan: VZPlan, title: String = "VMPane VM") {
         self.plan = plan
+        self.title = title
         events = runner.events
         serialLog = Self.openLog(plan.serialLog)
     }
@@ -26,7 +30,16 @@ public final class VZBackend: VMBackend {
     public var virtualMachineBox: VMBox? { box.value }
 
     public func start(_ options: StartOptions) async throws {
-        box.value = try await runner.create(plan, serialLog: serialLog)
+        if case .mac(let aux, let image?) = plan.platform {
+            // First start of a macOS guest: install, then boot the installed system.
+            try await runner.prepareMacInstall(restoreImage: image, aux: aux)
+            try await create()
+            try await runner.install(restoreImage: image)
+            // The installer leaves the VM running the installed system; start it only if it did not.
+            if try await runner.state != .running { try await runner.start() }
+            return
+        }
+        try await create()
         if let directory = options.stateDirectory {
             try await runner.restore(from: directory.appendingPathComponent(Self.stateFileName))
         } else {
@@ -65,16 +78,46 @@ public final class VZBackend: VMBackend {
         }
     }
 
-    public func screenshot(maxEdge: Int) async throws -> Data {
-        throw VZBackendError.notAvailableYet("screenshot")
+    /// Creates the VM and its (hidden) display, which capture and input need even headless.
+    private func create() async throws {
+        let box = try await runner.create(plan, serialLog: serialLog)
+        self.box.value = box
+        let size = NSSize(width: plan.display.widthPx, height: plan.display.heightPx)
+        let title = title
+        await MainActor.run { display = VZDisplayHost(box: box, title: title, guestSize: size) }
+    }
+
+    /// Makes the VM's window visible.
+    @MainActor public func showDisplay() {
+        display?.show()
+    }
+
+    public func screenshot(maxEdge: Int) async throws -> Screenshot {
+        let capture = await MainActor.run { display?.capture(maxEdge: maxEdge) }
+        guard let capture else { throw VZBackendError.captureUnavailable }
+        return Screenshot(png: capture.png, width: capture.width, height: capture.height)
     }
 
     public func send(_ input: InputEvent) async throws {
-        throw VZBackendError.notAvailableYet("input")
+        try await MainActor.run {
+            guard let display else { throw VZBackendError.captureUnavailable }
+            try display.send(input)
+        }
     }
 
     /// Fills in what a VZ guest needs before its first start (a persisted machine identifier).
     /// Returns nil when nothing changed.
+    /// After a macOS install: the config records the new machine identifier and drops the install source.
+    public static func installed(_ config: VMConfigV1, bundle: VMBundle) -> VMConfigV1? {
+        guard config.os == .macos, config.install != nil,
+            let identifier = try? Data(contentsOf: VZMacAux(directory: bundle.auxDirectory).machineIdentifier)
+        else { return nil }
+        var config = config
+        config.platform.machineIdentifier = identifier.base64EncodedString()
+        config.install = nil
+        return config
+    }
+
     public static func prepare(_ config: VMConfigV1) -> VMConfigV1? {
         guard config.os == .linux, config.platform.machineIdentifier == nil else { return nil }
         var config = config
@@ -99,6 +142,8 @@ public final class VZBackend: VMBackend {
 
 public enum VZBackendError: Error, Equatable, Sendable {
     case notAvailableYet(String)
+    /// The VM has no display yet, or the view's framebuffer could not be read (fallback: guest agent).
+    case captureUnavailable
 }
 
 extension VZBackend {

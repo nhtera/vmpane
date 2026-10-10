@@ -45,9 +45,9 @@ private func allExist(_ url: URL) -> Bool { true }
 
 @Test func planRejectsWhatVZCannotRun() throws {
     try withBundle { bundle in
-        var mac = linuxConfig()
-        mac.os = .macos
-        #expect(throws: VZPlanError.unsupportedGuest(.macos)) { try VZPlanBuilder.plan(mac, bundle: bundle, fileExists: allExist) }
+        var windows = linuxConfig()
+        windows.os = .windows
+        #expect(throws: VZPlanError.unsupportedGuest(.windows)) { try VZPlanBuilder.plan(windows, bundle: bundle, fileExists: allExist) }
 
         var noID = linuxConfig()
         noID.platform.machineIdentifier = nil
@@ -103,4 +103,51 @@ private func withTemp(_ body: (URL) throws -> Void) throws {
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: dir) }
     try body(dir)
+}
+
+@Test func macOSGuestNeedsInstallFilesOrARestoreImage() throws {
+    var config = VMConfigV1(VMConfigFields.new(name: "M", os: .macos, macAddress: "52:54:00:12:34:57"))
+    try withBundle(config) { bundle in
+        #expect(throws: VZPlanError.notInstalled) {
+            try VZPlanBuilder.plan(config, bundle: bundle, fileExists: { $0.lastPathComponent == "disk.img" })
+        }
+        config.install = Extensible(InstallConfig(restoreImage: "/ipsw/UniversalMac.ipsw"))
+        let installing = try VZPlanBuilder.plan(
+            config, bundle: bundle,
+            fileExists: { !["HardwareModel", "MachineIdentifier", "AuxiliaryStorage"].contains($0.lastPathComponent) })
+        #expect(
+            installing.platform
+                == .mac(aux: VZMacAux(directory: bundle.auxDirectory), installFrom: URL(fileURLWithPath: "/ipsw/UniversalMac.ipsw")))
+        #expect(installing.spiceClipboard == false)
+        #expect(installing.rosetta == false)
+        let installed = try VZPlanBuilder.plan(config, bundle: bundle, fileExists: allExist)
+        #expect(installed.platform == .mac(aux: VZMacAux(directory: bundle.auxDirectory), installFrom: nil))
+    }
+}
+
+@Test func installedRecordsTheMachineIdentifierAndDropsTheSource() throws {
+    var config = VMConfigV1(VMConfigFields.new(name: "M", os: .macos, macAddress: "52:54:00:12:34:58"))
+    config.install = Extensible(InstallConfig(restoreImage: "/ipsw/x.ipsw"))
+    try withBundle(config) { bundle in
+        #expect(VZBackend.installed(config, bundle: bundle) == nil)  // not installed yet
+        try Data([1, 2, 3]).write(to: VZMacAux(directory: bundle.auxDirectory).machineIdentifier)
+        let after = try #require(VZBackend.installed(config, bundle: bundle))
+        #expect(after.install == nil)
+        #expect(after.platform.machineIdentifier == Data([1, 2, 3]).base64EncodedString())
+    }
+}
+
+@Test func usKeymapCoversPrintableASCII() {
+    for scalar in 0x20...0x7E {
+        let character = Character(UnicodeScalar(UInt8(scalar)))
+        #expect(VZKeyMap.stroke(for: character) != nil, "no key for \(character)")
+    }
+    #expect(VZKeyMap.stroke(for: "a") == .init(keyCode: 0, shift: false))
+    #expect(VZKeyMap.stroke(for: "A") == .init(keyCode: 0, shift: true))
+    #expect(VZKeyMap.stroke(for: "!") == .init(keyCode: 18, shift: true))
+    #expect(VZKeyMap.stroke(for: "\n") == .init(keyCode: 36, shift: false))
+    #expect(VZKeyMap.stroke(for: "é") == nil)
+    #expect(VZKeyMap.keyCode(forHIDUsage: 0x04) == 0)  // A
+    #expect(VZKeyMap.keyCode(forHIDUsage: 0x28) == 36)  // Return
+    #expect(VZKeyMap.keyCode(forHIDUsage: 0xE1) == 56)  // Left Shift
 }

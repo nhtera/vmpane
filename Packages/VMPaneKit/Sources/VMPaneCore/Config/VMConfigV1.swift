@@ -31,10 +31,12 @@ public struct VMConfigFields: ExtensibleFields {
     public var mcp: Extensible<MCPConfig>
     public var ui: Extensible<UIConfig>
     public var windows: Extensible<WindowsConfig>?
+    /// Where the OS comes from on first start (macOS restore image); removed once installed.
+    public var install: Extensible<InstallConfig>?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case schemaVersion, id, name, os, backend, cpu, memory, display, disks, removable, platform, network
-        case portForwards, shares, audio, clipboard, vz, qemu, agent, mcp, ui, windows
+        case portForwards, shares, audio, clipboard, vz, qemu, agent, mcp, ui, windows, install
     }
 
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
@@ -301,6 +303,18 @@ public struct UIConfig: ExtensibleFields {
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
 
+public struct InstallConfig: ExtensibleFields {
+    /// Absolute path of a macOS restore image (`.ipsw`) to install from.
+    public var restoreImage: String
+
+    public init(restoreImage: String) {
+        self.restoreImage = restoreImage
+    }
+
+    enum CodingKeys: String, CodingKey, CaseIterable { case restoreImage }
+    public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
+}
+
 public struct WindowsConfig: ExtensibleFields {
     public var eulaAcceptedAt: Date?
 
@@ -339,6 +353,7 @@ extension VMConfigFields {
             agent: Extensible(AgentConfig(transport: .auto)),
             mcp: Extensible(MCPConfig(policy: .off, confirmExec: true, autoSnapshot: true, auditTypedText: false, tag: nil)),
             ui: Extensible(UIConfig(closeAction: .keepRunning, icon: nil)),
-            windows: os == .windows ? Extensible(WindowsConfig(eulaAcceptedAt: nil)) : nil)
+            windows: os == .windows ? Extensible(WindowsConfig(eulaAcceptedAt: nil)) : nil,
+            install: nil)
     }
 }

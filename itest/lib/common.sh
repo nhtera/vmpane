@@ -121,3 +121,31 @@ it_boot_linux_clone() {
     it_rpc "$socket" vm.start '{"headless": true}' >/dev/null || { it_fail "vm.start failed"; return 1; }
     it_wait_for 60 grep -q VMPANE-ITEST-READY "$bundle/logs/serial.log" || { it_fail "no ready marker"; return 1; }
 }
+
+# The golden macOS bundle (installed from the pinned IPSW, at Setup Assistant).
+it_golden_macos() {
+    local golden="$HOME/VMPaneItest/macos-base.vmpane"
+    if [[ -f "$golden/.ready" ]]; then echo "$golden"; return 0; fi
+    "$VMPANE_ROOT/itest/lib/build-golden-macos.sh" "$golden" >&2 || return 1
+    echo "$golden"
+}
+
+# Fraction (0–100) of non-black pixels in PNG $1, sampled.
+it_png_lit_percent() {
+    /usr/bin/python3 - "$1" <<'PY'
+import sys, zlib, struct
+data = open(sys.argv[1], "rb").read()
+pos, chunks, w = 8, [], 0
+while pos < len(data):
+    n, t = struct.unpack(">I4s", data[pos:pos+8]); body = data[pos+8:pos+8+n]; pos += 12 + n
+    if t == b"IHDR": w, h, depth, ctype = struct.unpack(">IIBB", body[:10])
+    if t == b"IDAT": chunks.append(body)
+raw = zlib.decompress(b"".join(chunks)); bpp = 4 if ctype == 6 else 3; stride = w * bpp + 1
+lit = total = 0
+for y in range(0, h, 16):
+    row = raw[y * stride + 1:(y + 1) * stride]  # filter byte skipped; sampled values are approximate
+    for x in range(0, w, 16):
+        r, g, b = row[x * bpp:x * bpp + 3]; total += 1; lit += (r + g + b) > 60
+print(round(100 * lit / max(total, 1)))
+PY
+}

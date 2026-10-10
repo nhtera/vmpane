@@ -89,6 +89,33 @@ actor VZRunner {
         try await vm.saveMachineStateTo(url: url)
     }
 
+    /// Before installing macOS: loads the restore image, checks this Mac can run it, and creates the
+    /// guest's platform files (hardware model, new machine identifier, auxiliary storage).
+    func prepareMacInstall(restoreImage url: URL, aux: VZMacAux) async throws {
+        let image = try await VZMacOSRestoreImage.image(from: url)
+        guard let requirements = image.mostFeaturefulSupportedConfiguration, requirements.hardwareModel.isSupported else {
+            throw VZRunnerError.unsupportedRestoreImage
+        }
+        let model = requirements.hardwareModel
+        try FileManager.default.createDirectory(at: aux.hardwareModel.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try DurableWrite.write(model.dataRepresentation, to: aux.hardwareModel)
+        try DurableWrite.write(VZMacMachineIdentifier().dataRepresentation, to: aux.machineIdentifier)
+        _ = try VZMacAuxiliaryStorage(creatingStorageAt: aux.auxiliaryStorage, hardwareModel: model, options: [.allowOverwrite])
+    }
+
+    /// Installs macOS from `restoreImage` into the (stopped) VM, reporting progress as events.
+    func install(restoreImage url: URL) async throws {
+        let vm = try machine()
+        let installer = VZMacOSInstaller(virtualMachine: vm, restoringFromImageAt: url)
+        let continuation = continuation
+        let observation = installer.progress.observe(\.fractionCompleted, options: [.new]) { progress, _ in
+            continuation.yield(.installProgress(fraction: progress.fractionCompleted, message: "Installing macOS"))
+        }
+        defer { observation.invalidate() }
+        try await installer.install()
+        continuation.yield(.installProgress(fraction: 1, message: "macOS installed"))
+    }
+
     var state: VZVirtualMachine.State {
         get throws { try machine().state }
     }
@@ -113,4 +140,6 @@ actor VZRunner {
 
 enum VZRunnerError: Error, Equatable {
     case notCreated
+    /// The restore image needs hardware or a host macOS this Mac does not have.
+    case unsupportedRestoreImage
 }

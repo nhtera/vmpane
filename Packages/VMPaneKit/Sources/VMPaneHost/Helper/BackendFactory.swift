@@ -8,10 +8,13 @@ public enum BackendFactory {
         public let backend: VMBackend?
         /// The config after first-start preparation (e.g. a new machine identifier), already saved.
         public let config: VMConfigV1
+        /// Config changes to save after a successful start (e.g. a macOS install finished).
+        public let afterStart: (@Sendable (VMConfigV1) -> VMConfigV1?)?
 
-        public init(backend: VMBackend?, config: VMConfigV1) {
+        public init(backend: VMBackend?, config: VMConfigV1, afterStart: (@Sendable (VMConfigV1) -> VMConfigV1?)? = nil) {
             self.backend = backend
             self.config = config
+            self.afterStart = afterStart
         }
     }
 
@@ -21,13 +24,16 @@ public enum BackendFactory {
         var config = prepared.config
         switch config.backend {
         case .vz:
-            guard config.os == .linux else { return Made(backend: nil, config: config) }  // macOS guests: next
+            guard config.os != .windows else { return Made(backend: nil, config: config) }
             if let updated = VZBackend.prepare(config) {
                 try ConfigStore.save(updated, holding: prepared.lock)
                 config = updated
             }
-            let plan = try VZPlanBuilder.plan(config, bundle: prepared.lock.bundle)
-            return Made(backend: VZBackend(plan: plan), config: config)
+            let bundle = prepared.lock.bundle
+            let plan = try VZPlanBuilder.plan(config, bundle: bundle)
+            return Made(backend: VZBackend(plan: plan, title: config.name), config: config) {
+                VZBackend.installed($0, bundle: bundle)
+            }
         case .qemu:
             return Made(backend: nil, config: config)  // Phase 05
         }

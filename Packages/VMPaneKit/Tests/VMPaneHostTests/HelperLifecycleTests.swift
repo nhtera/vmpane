@@ -219,3 +219,41 @@ private struct Harness {
     #expect(!helper.backend.recordedCalls.contains { $0.hasPrefix("start") })
     await helper.tearDown()
 }
+
+@Test func screenshotAndInputGoToTheBackendWhileRunning() async throws {
+    let helper = try await Harness.make()
+    await #expect(throws: RPCError.self) { try await helper.client.call("vm.screenshot") }  // stopped
+    _ = try await helper.client.call("vm.start")
+    let shot = try await helper.client.call("vm.screenshot", params: ["maxEdge": 800])
+    #expect(shot["width"] == 4 && shot["height"] == 3 && shot["format"] == "png")
+    #expect(shot["dataB64"]?.stringValue.flatMap { Data(base64Encoded: $0) } == Data([0x89, 0x50, 0x4E, 0x47]))
+    _ = try await helper.client.call("vm.input.text", params: ["text": "Hello, World!"])
+    _ = try await helper.client.call("vm.input.key", params: ["usage": 0x28, "down": true])
+    _ = try await helper.client.call("vm.input.pointer", params: ["x": 10, "y": 20, "buttons": 1])
+    _ = try await helper.client.call("vm.input.scroll", params: ["dy": -3])
+    #expect(helper.backend.recordedCalls.filter { $0.hasPrefix("input.") }.count == 4)
+    await #expect(throws: RPCError.self) { try await helper.client.call("vm.input.key", params: ["usage": "x"]) }  // bad params
+    await helper.tearDown()
+}
+
+@Test func forceStopEscalatesAGracefulStopTheGuestIgnores() async throws {
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.start")
+    helper.backend.ignoresGracefulStop = true
+    #expect(try await helper.client.call("vm.stop", params: ["mode": "graceful"])["state"] == "stopping")
+    _ = try await helper.client.call("vm.stop", params: ["mode": "force"])
+    #expect(try await helper.waitForState("stopped"))
+    await helper.tearDown()
+}
+
+@Test func shutdownForcesOffAVMStuckStopping() async throws {
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.start")
+    helper.backend.ignoresGracefulStop = true
+    _ = try await helper.client.call("vm.stop", params: ["mode": "graceful"])
+    await helper.controller.setGracefulStopTimeout(.milliseconds(200))
+    await helper.controller.shutdown()
+    #expect(helper.backend.recordedCalls.last == "stop.force")
+    #expect(try helper.bundle.tryLock(retryingFor: 1) != nil)
+    try? FileManager.default.removeItem(at: helper.root)
+}
