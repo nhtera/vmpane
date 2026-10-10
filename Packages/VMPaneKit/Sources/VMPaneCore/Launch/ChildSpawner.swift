@@ -15,16 +15,19 @@ public enum ChildSpawner {
         /// False for a launcher that replaces itself with another program (`sandbox-exec`): its executable
         /// path changes after start, so the record identifies it by pid and start time alone (exec keeps both).
         public var recordsExecutable: Bool
+        /// The child's working directory (the helper's when nil).
+        public var workingDirectory: URL?
 
         public init(
             arguments: [String] = [], environment: [String: String]? = nil, inheriting: [Int32] = [], logFile: URL? = nil,
-            recordsExecutable: Bool = true
+            recordsExecutable: Bool = true, workingDirectory: URL? = nil
         ) {
             self.arguments = arguments
             self.environment = environment
             self.inheriting = inheriting
             self.logFile = logFile
             self.recordsExecutable = recordsExecutable
+            self.workingDirectory = workingDirectory
         }
     }
 
@@ -64,6 +67,7 @@ public enum ChildSpawner {
         posix_spawn_file_actions_addopen(&actions, 1, output, O_WRONLY | O_CREAT | O_APPEND, 0o600)
         posix_spawn_file_actions_adddup2(&actions, 1, 2)
         for fd in options.inheriting { posix_spawn_file_actions_addinherit_np(&actions, fd) }
+        if let directory = options.workingDirectory { posix_spawn_file_actions_addchdir_np(&actions, directory.path) }
 
         let argv: [UnsafeMutablePointer<CChar>?] = ([executable.path] + options.arguments).map { strdup($0) } + [nil]
         defer { argv.forEach { free($0) } }
