@@ -11,8 +11,7 @@ IT_SCENARIO=win-install
 
 scenario_run() {
     local iso tools work bundle request password pid socket start phase last='' state
-    iso=${VMPANE_WINDOWS_ISO:-$(find "$HOME/Downloads" -maxdepth 1 -iname 'win*arm64*.iso' 2>/dev/null | sort | tail -1)}
-    [[ -f $iso ]] || { echo "win-install: no Windows 11 Arm64 ISO (set VMPANE_WINDOWS_ISO)"; return 77; }
+    iso=$(it_windows_iso) || { echo "win-install: no Windows 11 Arm64 ISO (set VMPANE_WINDOWS_ISO)"; return 77; }
     (($(df -g "$HOME" | awk 'NR == 2 {print $4}') >= 40)) || { echo "win-install: needs 40 GiB free"; return 77; }
     tools=$("$VMPANE_ROOT/guest-tools/build-iso.sh" | tail -1) || it_fail "cannot build the guest-tools ISO" || return 1
 
@@ -21,20 +20,11 @@ scenario_run() {
     mkdir -p "$VMPANE_SUPPORT_DIR/VMs"
     bundle="$VMPANE_SUPPORT_DIR/VMs/W.vmpane"
     trap 'set +e; unset VMPANE_TEST_WIN_INSTALL; [[ -n ${pid:-} ]] && kill -TERM "$pid" 2>/dev/null && it_wait_exit "$pid" 150; rm -rf "$work"; true' RETURN
-    it_create_bundle "$bundle" windows \
-        '.name = "win-install" | .backend = "qemu" | .cpu.count = 4 | .memory.mib = 4096 | .vz = null
-         | .disks[0] |= (.bus = "nvme" | .sizeGiB = 64) | .audio.output = false
-         | .qemu = {tpm: true, secureBoot: true, gpu: "ramfb", storageBus: "nvme", smbiosUUID: "'"$(uuidgen)"'"}
-         | .windows = {}'
-    mkfile -n 64g "$bundle/current/disk.img"
-    chmod 600 "$bundle/current/disk.img"
 
     # 1. The request holds the password: 0600, and the helper deletes it once read.
     password="It-$(uuidgen | cut -c1-12)"
     request="$work/request.json"
-    (umask 077 && jq -n --arg iso "$iso" --arg tools "$tools" --arg password "$password" '{
-        iso: $iso, tools: $tools, locale: "en-US", timeZone: "UTC", computerName: "VMPANE-IT",
-        userName: "vmpane", password: $password, editionName: "Windows 11 Pro"}' >"$request")
+    it_windows_install_bundle "$bundle" "$iso" "$tools" "$request" "$password"
     export VMPANE_TEST_WIN_INSTALL=$request
     pid=$(it_start_helper "$bundle") || return 1
     unset VMPANE_TEST_WIN_INSTALL
@@ -46,7 +36,7 @@ scenario_run() {
     start=$SECONDS
     it_rpc "$socket" vm.start '{"headless": true}' >/dev/null || it_fail "vm.start failed" || return 1
     while ((SECONDS - start < 80 * 60)); do
-        phase=$(jq -r .phase "$bundle/install/install.json" 2>/dev/null || echo unknown)
+        phase=$(it_install_phase "$bundle")
         [[ $phase != "$last" ]] && echo "win-install: $phase after $(((SECONDS - start) / 60)) min" && last=$phase
         case $phase in
             done) break ;;

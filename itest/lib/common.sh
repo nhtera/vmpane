@@ -213,3 +213,28 @@ for y in range(0, h, step):
 print(round(100 * lit / max(total, 1)) if sys.argv[3] == "percent" else lit)
 PY
 }
+
+# Windows install scenarios. it_windows_iso: $VMPANE_WINDOWS_ISO, else the newest ~/Downloads/Win*arm64*.iso.
+it_windows_iso() {
+    local iso=${VMPANE_WINDOWS_ISO:-$(find "$HOME/Downloads" -maxdepth 1 -iname 'win*arm64*.iso' 2>/dev/null | sort | tail -1)}
+    [[ -f $iso ]] && echo "$iso"
+}
+
+# it_windows_install_bundle <bundle> <iso> <tools iso> <request> <password>: a blank 64 GiB Windows VM, and the
+# 0600 request for the helper's VMPANE_TEST_WIN_INSTALL hook (the wizard's step).
+it_windows_install_bundle() {
+    local bundle=$1 iso=$2 tools=$3 request=$4 password=$5
+    it_create_bundle "$bundle" windows \
+        '.name = "win-install" | .backend = "qemu" | .cpu.count = 4 | .memory.mib = 4096 | .vz = null
+         | .disks[0] |= (.bus = "nvme" | .sizeGiB = 64) | .audio.output = false
+         | .qemu = {tpm: true, secureBoot: true, gpu: "ramfb", storageBus: "nvme", smbiosUUID: "'"$(uuidgen)"'"}
+         | .windows = {}'
+    mkfile -n 64g "$bundle/current/disk.img"
+    chmod 600 "$bundle/current/disk.img"
+    (umask 077 && jq -n --arg iso "$iso" --arg tools "$tools" --arg password "$password" '{
+        iso: $iso, tools: $tools, locale: "en-US", timeZone: "UTC", computerName: "VMPANE-IT",
+        userName: "vmpane", password: $password, editionName: "Windows 11 Pro"}' >"$request")
+}
+
+# it_install_phase <bundle>: the phase in install/install.json ("unknown" without one).
+it_install_phase() { jq -r .phase "$1/install/install.json" 2>/dev/null || echo unknown; }
