@@ -114,8 +114,9 @@ extension HelperController {
         guard let meta = try await Blocking.run({ try store.list() }).first(where: { $0.id == id }) else {
             throw SnapshotError.notFound(id)
         }
-        // A live snapshot's memory cannot be read on a locked Mac: refuse before stopping the running VM.
-        if meta.kind == .live, isSessionLocked() {
+        // A VZ live snapshot's memory cannot be read on a locked Mac: refuse before stopping the running VM.
+        // (QEMU's saved state is a plain file in the bundle, protected by FileVault like the disks.)
+        if meta.kind == .live, backend?.kind == .vz, isSessionLocked() {
             throw RPCError(.macLocked, "This Mac is locked. Unlock it to restore a live snapshot (its saved memory is encrypted).")
         }
         let wasActive = [.running, .paused, .starting].contains(state)

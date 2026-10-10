@@ -30,6 +30,13 @@ extension HelperController {
             transition(.stopped, reason: reason)
             if afterStop != nil, state == .stopped { Task { await self.vmStopped() } }
         case .failed(let message): transition(.failed, reason: message)
+        case .diskFull(let message):
+            // Paused with the reason; "Resume" continues once space has been freed.
+            if !transition(.paused, reason: message) || state == .paused {
+                server?.broadcast(
+                    topic: "vm", method: ControlNotification.vmStateChanged.rawValue,
+                    params: ["state": .string(state.rawValue), "reason": .string(message)])
+            }
         case .installProgress(let fraction, let message):
             server?.broadcast(
                 topic: "install", method: ControlNotification.installProgress.rawValue,
@@ -133,7 +140,7 @@ extension HelperController {
         var resumed = decision == .resume
         do {
             try await backend.start(StartOptions(headless: headless, stateDirectory: resumed ? stateDirectory : nil, config: config))
-        } catch  where resumed && (error is SavedStateLocked || isSessionLocked()) {
+        } catch  where resumed && (error is SavedStateLocked || (backend.kind == .vz && isSessionLocked())) {
             Self.log.notice("restore failed while the Mac is locked; state kept: \(String(describing: error), privacy: .public)")
             transition(.stopped)
             throw RPCError(

@@ -78,6 +78,9 @@ public enum BackendEvent: Sendable, Equatable {
     /// The guest powered off (by itself or after a stop request).
     case stopped(reason: String)
     case failed(message: String)
+    /// The backend paused the guest because the volume holding its disks is (nearly) full; it resumes once
+    /// space has been freed (writes into a full volume would fail inside the guest).
+    case diskFull(message: String)
     case consoleOutput(Data)
     /// OS installation progress (0…1) while starting a VM that is not installed yet.
     case installProgress(fraction: Double, message: String)

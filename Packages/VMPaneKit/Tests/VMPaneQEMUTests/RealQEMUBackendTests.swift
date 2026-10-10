@@ -33,7 +33,7 @@ private final class Harness: @unchecked Sendable {
     private let lock = NSLock()
     private var eventLog: [BackendEvent] = []
 
-    init(memoryMiB: Int = 1024) throws {
+    init(memoryMiB: Int = 1024, space: QEMUBackend.SpacePolicy = .standard) throws {
         // Through the /tmp symlink on purpose: the backend must hand QEMU resolved paths (sandbox rules match them).
         root = URL(fileURLWithPath: "/tmp/vp-be-\(UUID().uuidString.prefix(8))", isDirectory: true)
         let run = root.appendingPathComponent("run", isDirectory: true)
@@ -49,7 +49,7 @@ private final class Harness: @unchecked Sendable {
         let spawner = spawner
         let processes = QEMUProcesses(
             layout: layout, lockDescriptor: bundleLock.fileDescriptor, spawn: { try spawner.spawn($0, $1) }, forget: { _ in })
-        backend = QEMUBackend(config: config, processes: processes, resolveInstallation: { installation })
+        backend = QEMUBackend(config: config, processes: processes, space: space, resolveInstallation: { installation })
         let events = backend.events
         Task { [weak self] in
             for await event in events { self?.record(event) }
@@ -197,4 +197,38 @@ func suspendThenResumeFromTheSavedState() async throws {
     }
     for _ in 0..<100 where harness.anyChildAlive { try await Task.sleep(for: .milliseconds(50)) }
     #expect(!harness.anyChildAlive)
+}
+
+/// Free space the test controls.
+private final class FreeSpace: @unchecked Sendable {
+    private let lock = NSLock()
+    private var bytes: UInt64 = 100 << 30
+    var value: UInt64 {
+        get { lock.withLock { bytes } }
+        set { lock.withLock { bytes = newValue } }
+    }
+}
+
+@Test(.enabled(if: qemuBundle != nil))
+func aNearlyFullVolumePausesTheGuestUntilSpaceIsFreed() async throws {
+    let free = FreeSpace()
+    let policy = QEMUBackend.SpacePolicy(pauseBelow: 2 << 30, resumeFrom: 3 << 30, interval: .milliseconds(100)) { _ in free.value }
+    let harness = try Harness(space: policy)
+    defer { harness.cleanUp() }
+    try await harness.backend.start(StartOptions(headless: true))
+
+    free.value = 1 << 30
+    let full = await harness.waitForEvent(timeout: 5) {
+        if case .diskFull = $0 { return true }
+        return false
+    }
+    #expect(full == .diskFull(message: QEMUSession.diskFullMessage))
+    #expect(try await harness.backend.qmp?.execute("query-status")["status"] == "paused")
+
+    free.value = (5 << 29)  // 2.5 GiB: above the pause line, below the resume line
+    await #expect(throws: InsufficientSpace(requiredBytes: 3 << 30, availableBytes: 5 << 29)) { try await harness.backend.resume() }
+    free.value = 10 << 30
+    try await harness.backend.resume()
+    #expect(try await harness.backend.qmp?.execute("query-status")["status"] == "running")
+    try await harness.backend.stop(.force)
 }

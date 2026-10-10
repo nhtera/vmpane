@@ -3,6 +3,11 @@ import Foundation
 public struct InsufficientSpace: Error, Equatable, Sendable {
     public let requiredBytes: UInt64
     public let availableBytes: UInt64
+
+    public init(requiredBytes: UInt64, availableBytes: UInt64) {
+        self.requiredBytes = requiredBytes
+        self.availableBytes = availableBytes
+    }
 }
 
 /// Refuses operations that write RAM state (suspend, live snapshot) when the volume is nearly full:
@@ -19,6 +24,14 @@ public enum SpaceGuard {
         let values = try url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeAvailableCapacityKey])
         if let important = values.volumeAvailableCapacityForImportantUsage, important > 0 { return UInt64(important) }
         return UInt64(values.volumeAvailableCapacity ?? 0)
+    }
+
+    /// Bytes a write can use right now (`statfs`), without the purgeable space macOS would free on demand:
+    /// what a running VM's disk growth can rely on.
+    public static func freeBytes(at url: URL) throws -> UInt64 {
+        var info = statfs()
+        guard statfs(url.path, &info) == 0 else { throw POSIXError.current() }
+        return UInt64(info.f_bavail) * UInt64(info.f_bsize)
     }
 
     public static func check(
