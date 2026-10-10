@@ -41,3 +41,19 @@ import VMPaneCore
     }
     #expect(text.contains("out") && text.contains("err"))
 }
+
+/// A launcher that execs into another program (sandbox-exec → QEMU) is recorded by pid + start time, so it is
+/// still recognised (and reaped) after its executable path changed.
+@Test func launcherThatExecsStaysRecognisable() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("vp-exec-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let run = RunFiles(paths: VMPanePaths(root: root), sid: ShortID(UUID()))
+    let registry = ChildProcessRegistry(runFiles: run)
+    let child = try registry.spawn(
+        URL(fileURLWithPath: "/bin/sh"), .init(arguments: ["-c", "exec /bin/sleep 300"], recordsExecutable: false))
+    for _ in 0..<200 where ProcessRecord.current(pid: child.pid)?.executablePath != "/bin/sleep" { usleep(10_000) }
+    #expect(ProcessRecord.current(pid: child.pid)?.executablePath == "/bin/sleep")
+    #expect(child.executablePath.isEmpty && child.isAlive)
+    #expect(run.reapChildren(of: .this).isEmpty)
+    #expect(!child.isAlive)
+}

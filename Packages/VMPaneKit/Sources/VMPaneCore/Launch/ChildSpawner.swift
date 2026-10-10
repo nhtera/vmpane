@@ -12,12 +12,19 @@ public enum ChildSpawner {
         public var inheriting: [Int32]
         /// Where stdout and stderr go (`/dev/null` when nil).
         public var logFile: URL?
+        /// False for a launcher that replaces itself with another program (`sandbox-exec`): its executable
+        /// path changes after start, so the record identifies it by pid and start time alone (exec keeps both).
+        public var recordsExecutable: Bool
 
-        public init(arguments: [String] = [], environment: [String: String]? = nil, inheriting: [Int32] = [], logFile: URL? = nil) {
+        public init(
+            arguments: [String] = [], environment: [String: String]? = nil, inheriting: [Int32] = [], logFile: URL? = nil,
+            recordsExecutable: Bool = true
+        ) {
             self.arguments = arguments
             self.environment = environment
             self.inheriting = inheriting
             self.logFile = logFile
+            self.recordsExecutable = recordsExecutable
         }
     }
 
@@ -67,12 +74,13 @@ public enum ChildSpawner {
         var pid: pid_t = 0
         let result = posix_spawn(&pid, executable.path, &actions, &attributes, argv, envp)
         guard result == 0 else { throw POSIXError(POSIXErrorCode(rawValue: result) ?? .EIO) }
-        guard let record = ProcessRecord.current(pid: pid) else {
+        guard var record = ProcessRecord.current(pid: pid) else {
             kill(pid, SIGKILL)
             var status: Int32 = 0
             waitpid(pid, &status, 0)
             throw POSIXError(.ESRCH)
         }
+        if !options.recordsExecutable { record.executablePath = "" }
         return record
     }
 
