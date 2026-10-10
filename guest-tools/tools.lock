@@ -1,6 +1,7 @@
 {
   "comment": "Pinned inputs of the Windows guest-tools ISO (guest-tools/build-iso.sh). Drivers: the ARM64 w11 builds that passed Gate 00 S2, each verified on the host (Authenticode catalog chained to the pinned Microsoft root, signed by the Windows Hardware Compatibility Publisher; every PE file listed in its catalog). spice-vdagent: no upstream ARM64 build exists and third-party builds have no known source (GPLv2 needs it), so it is built from upstream on the Windows ARM runner (Phase 07); install.ps1 installs it when present.",
   "version": "1",
+  "sourceDateEpoch": 1791590400,
   "volumeLabel": "VMPANE_TOOLS",
   "lastVerifiedWindowsBuild": 26300,
   "trust": {

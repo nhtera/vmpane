@@ -10,10 +10,12 @@
 #   3. windows/install.ps1 and README.txt at the root (the unattend runs <VMPANE_TOOLS>:\install.ps1), the
 #      licences under LICENSES/ (from the sources themselves), and any extra installers in
 #      $VMPANE_GUEST_TOOLS_EXTRA (Phase 07: the agent MSI);
-#   4. hdiutil makehybrid → build/guest-tools/vmpane-guest-tools-windows-<version>.iso.
-# Needs jq, osslsigncode and openssl. VMPANE_GUEST_TOOLS_DOWNLOADS overrides the download cache.
+#   4. xorriso → build/guest-tools/vmpane-guest-tools-windows-<version>.iso, reproducible: every date in it is
+#      the lock's sourceDateEpoch.
+# Needs jq, osslsigncode, openssl and xorriso (Brewfile). VMPANE_GUEST_TOOLS_DOWNLOADS overrides the download cache.
 # Usage: guest-tools/build-iso.sh [output.iso]
 set -euo pipefail
+export TZ=UTC
 
 DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_DIR=$(dirname "$DIR")
@@ -30,7 +32,7 @@ die() {
     exit 1
 }
 
-for tool in jq osslsigncode openssl hdiutil; do
+for tool in jq osslsigncode openssl xorriso hdiutil; do
     command -v "$tool" >/dev/null || die "$tool is required"
 done
 
@@ -111,16 +113,20 @@ cp "$mount/$(jq -er .virtioWin.licenseFile "$LOCK")" "$STAGE/LICENSES/virtio-win
 cp "$DIR/windows/install.ps1" "$DIR/windows/README.txt" "$STAGE/"
 if [[ -n ${VMPANE_GUEST_TOOLS_EXTRA:-} ]]; then
     for extra in "$VMPANE_GUEST_TOOLS_EXTRA"/*.msi; do
-        [[ -f $extra ]] && cp "$extra" "$STAGE/"
+        if [[ -f $extra ]]; then cp "$extra" "$STAGE/"; fi
     done
 fi
 echo "$version" >"$STAGE/VERSION.txt"
 chmod -R a+rX,go-w "$STAGE"
+epoch=$(jq -er .sourceDateEpoch "$LOCK")
+find "$STAGE" -exec touch -h -t "$(date -u -r "$epoch" +%Y%m%d%H%M.%S)" {} +
 
-# 4. The ISO (hdiutil appends .iso to a name without it, so the partial keeps the extension)
+# 4. The ISO. xorriso, not hdiutil: hdiutil writes Rock Ridge timestamps (ctime) and volume dates from the build
+# time; xorriso takes SOURCE_DATE_EPOCH for all of them.
 mkdir -p "$(dirname "$output")"
-partial=${output%.iso}.partial.iso
+partial=$output.partial
 rm -f "$partial"
-hdiutil makehybrid -quiet -iso -joliet -default-volume-name "$label" -o "$partial" "$STAGE"
+SOURCE_DATE_EPOCH=$epoch xorriso -abort_on WARNING -report_about WARNING -as mkisofs \
+    -iso-level 3 -J -joliet-long -r -V "$label" -o "$partial" "$STAGE"
 mv "$partial" "$output"
 echo "$output"
