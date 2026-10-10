@@ -5,7 +5,7 @@
 #   share/       firmware (edk2-aarch64-code.fd, edk2-aarch64-vars-sb.fd; unpadded) and QEMU data in
 #                share/qemu (passed with -L)                            → VMPane.app/Contents/Resources/qemu/share
 #   frameworks/  SPICE client libraries for the helper app (CocoaSpice) → VMPaneVM.app/Contents/Frameworks
-#   MANIFEST.json  versions, and the SHA-256 of every file before signing
+#   MANIFEST.json  versions, and the SHA-256 of every file before signing (files) and as shipped (signed)
 # Load paths become relative: programs load @rpath/<lib> with an @executable_path/../lib run path, libraries
 # load each other with @loader_path/<lib>, and every library's id is @rpath/<lib>. Mach-Os are stripped of
 # local symbols, hashed, then signed ad hoc (QEMU with its entitlements) so the bundle runs as is;
@@ -121,15 +121,18 @@ for f in "${machos[@]}"; do
     codesign --remove-signature "$f"
 done
 
-# Hashes before signing: two builds of the same deps.lock must agree on every one.
-(
-    cd "$out"
-    find . -type f ! -name MANIFEST.json | sed 's|^\./||' | sort | while read -r f; do
-        printf '%s\t%s\n' "$f" "$(shasum -a 256 "$f" | cut -d' ' -f1)"
-    done
-) | jq -R -s --arg lock "$(shasum -a 256 "$LOCK" | cut -d' ' -f1)" --argjson c "$(jq -c '[.components[] | select(.role == "runtime") | {(.name): .version}] | add' "$LOCK")" \
-    '{lockSha256: $lock, components: $c, files: (split("\n") | map(select(. != "") | split("\t") | {(.[0]): .[1]}) | add)}' \
-    >"$out/MANIFEST.json"
+# file<TAB>sha256 for every file of the bundle but MANIFEST.json.
+hashes() {
+    (
+        cd "$out"
+        find . -type f ! -name MANIFEST.json | sed 's|^\./||' | sort | while read -r f; do
+            printf '%s\t%s\n' "$f" "$(shasum -a 256 "$f" | cut -d' ' -f1)"
+        done
+    ) | jq -R -s 'split("\n") | map(select(. != "") | split("\t") | {(.[0]): .[1]}) | add'
+}
+
+# Before signing: two builds of the same deps.lock must agree on every hash (the reproducibility check).
+unsigned=$(hashes)
 
 for f in "${machos[@]}"; do
     if [[ $f == "$out/bin/qemu-system-aarch64" ]]; then
@@ -138,5 +141,12 @@ for f in "${machos[@]}"; do
         codesign --force --sign - "$f"
     fi
 done 2>/dev/null
+
+# As shipped (ad hoc signatures carry no time or identity, so these are reproducible too): what
+# fetch-qemu-bundle.sh checks a downloaded bundle against.
+jq -n --arg lock "$(shasum -a 256 "$LOCK" | cut -d' ' -f1)" \
+    --argjson c "$(jq -c '[.components[] | select(.role == "runtime") | {(.name): .version}] | add' "$LOCK")" \
+    --argjson files "$unsigned" --argjson signed "$(hashes)" \
+    '{lockSha256: $lock, components: $c, files: $files, signed: $signed}' >"$out/MANIFEST.json"
 
 echo "package: $out ($(du -sh "$out" | cut -f1); QEMU side $(du -shc "$out/bin" "$out/lib" "$out/share" | tail -1 | cut -f1))"

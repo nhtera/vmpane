@@ -46,10 +46,14 @@ resolved=VMPane.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resol
     rust=$(cd agent && cargo about generate --locked --fail about.hbs)
     echo "${rust:-None.}"
     if [[ -f qemu/deps.lock ]]; then
-        echo "## QEMU and its libraries (Windows guests)"
+        echo "## QEMU, its libraries and the UEFI firmware (Windows guests)"
         echo
-        echo "Built from source by \`qemu/scripts/build-deps.sh\` (see \`qemu/BUILDING.md\`); the corresponding source"
-        echo "is published with each release."
+        echo "Built from source by the scripts in \`qemu/\` (see \`qemu/BUILDING.md\`). The complete corresponding"
+        echo "source of these components, with VMPane's patches and build scripts, is published as"
+        echo "\`vmpane-<version>-corresponding-source.tar.zst\` with each release at"
+        echo "<https://github.com/nhtera/vmpane/releases>. For at least three years after a release, anyone may also"
+        echo "request that source by opening an issue in the repository; it is provided for no more than the cost"
+        echo "of physically performing the distribution."
         echo
         echo "| Component | Version | Licence | Source |"
         echo "|---|---|---|---|"
@@ -57,6 +61,24 @@ resolved=VMPane.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resol
         jq -r '.firmware.edk2 | "| EDK2 ArmVirtQemu firmware | \(.version) (\(.commit[0:12])) | \(.license) | <\(.url)> |"' qemu/deps.lock
         jq -r '.firmware.dbx | "| Microsoft Secure Boot dbx (arm64), in the firmware variables | \(.version) | \(.license) | <\(.url)> |"' qemu/deps.lock
         echo
+        echo "### Licence texts"
+        echo
+        echo "Each distinct text once, with the files (\`qemu/LICENSES/<component>/<file>\`) that carry it. \`UTM\` covers"
+        echo "UTM's patches to spice-gtk."
+        echo
+        # Group identical texts (many components carry the same GPL/LGPL).
+        (cd qemu/LICENSES && find . -type f | sed 's|^\./||' | LC_ALL=C sort |
+            while read -r f; do printf '%s\t%s\n' "$(shasum -a 256 "$f" | cut -d' ' -f1)" "$f"; done) >"$tmp.lic"
+        for sha in $(cut -f1 "$tmp.lic" | awk '!seen[$0]++'); do
+            files=$(awk -F'\t' -v s="$sha" '$1 == s {print $2}' "$tmp.lic")
+            echo "#### $(echo "$files" | paste -sd ' ' - | sed 's/ /, /g')"
+            echo
+            echo '```'
+            cat "qemu/LICENSES/$(echo "$files" | head -1)"
+            echo '```'
+            echo
+        done
+        rm -f "$tmp.lic"
     fi
 } >"$tmp"
 

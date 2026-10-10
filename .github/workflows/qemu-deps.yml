@@ -1,0 +1,59 @@
+name: QEMU bundle
+
+# Rebuilds QEMU, its libraries and the UEFI firmware from source on the project's Mac when their inputs
+# change, checks that the result is exactly qemu/bundle-manifest.json (the build is reproducible, so any
+# difference means changed inputs or a broken build), and publishes it as the artifact
+# qemu-bundle-<inputs hash>, which scripts/fetch-qemu-bundle.sh downloads and checks. Public repositories
+# also get a build-provenance attestation (private repositories on personal accounts cannot store them).
+on:
+  push:
+    branches: [main]
+    paths:
+      - "qemu/**"
+      - ".xcode-version"
+      - "Config/Entitlements/qemu.entitlements"
+      - ".github/workflows/qemu-deps.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qemu-deps-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  bundle:
+    if: contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name)
+    runs-on: [self-hosted, macOS, ARM64, vmpane]
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-xcode
+      - id: inputs
+        run: echo "hash=$(bash -c 'source qemu/scripts/lib/env.sh && inputs_hash')" >>"$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: qemu/build/downloads
+          key: qemu-downloads-${{ hashFiles('qemu/deps.lock') }}
+      - run: qemu/scripts/build-deps.sh --clean
+      - run: qemu/scripts/build-edk2.sh
+      - run: qemu/scripts/make-vars.sh
+      - run: qemu/scripts/package.sh
+      - run: scripts/check-dylibs.sh build/qemu-bundle
+      - run: qemu/scripts/check-bundle.sh build/qemu-bundle
+      - run: tar --zstd -cf "build/qemu-bundle-${{ steps.inputs.outputs.hash }}.tar.zst" -C build qemu-bundle
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: qemu-bundle-${{ steps.inputs.outputs.hash }}
+          path: build/qemu-bundle-${{ steps.inputs.outputs.hash }}.tar.zst
+          retention-days: 90
+          if-no-files-found: error
+      - if: ${{ !github.event.repository.private }}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: build/qemu-bundle-${{ steps.inputs.outputs.hash }}.tar.zst

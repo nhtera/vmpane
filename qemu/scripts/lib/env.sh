@@ -130,3 +130,13 @@ hermetic_env() {
     JOBS=$(sysctl -n hw.ncpu)
     case ":$PATH:" in *:/opt/homebrew/* | *:/usr/local/*) die "PATH still reaches Homebrew: $PATH" ;; esac
 }
+
+# 16 hex digits naming a bundle build: every committed input of the QEMU pipeline and the pinned Xcode
+# (docs, licence texts and the expected manifest itself do not change the output).
+inputs_hash() {
+    (
+        cd "$REPO_DIR"
+        git ls-files qemu .xcode-version Config/Entitlements/qemu.entitlements |
+            grep -v -E '^qemu/(bundle-manifest\.json|LICENSES/.*|.*\.md)$' | LC_ALL=C sort | xargs shasum -a 256
+    ) | shasum -a 256 | cut -c1-16
+}

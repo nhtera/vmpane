@@ -24,7 +24,8 @@ scripts/check-dylibs.sh build/qemu-bundle
 scripts/sign.sh --qemu-only build/qemu-bundle && scripts/sign.sh --verify --qemu-only build/qemu-bundle
 ```
 
-`build-deps.sh --fetch-only` downloads and verifies every tarball. On an M4 Pro a clean `build-deps.sh` takes
+Instead of building, `scripts/fetch-qemu-bundle.sh` installs the bundle CI built for the same inputs (see
+[CI and provenance](#ci-and-provenance)). `build-deps.sh --fetch-only` downloads and verifies every tarball. On an M4 Pro a clean `build-deps.sh` takes
 about 6 minutes and `build-edk2.sh` about 15.
 
 Stages, all under `qemu/build/` (not committed):
@@ -120,12 +121,42 @@ Choices that are not obvious from the recipes (`scripts/lib/recipes.sh`):
 - **pcre2** has no JIT: QEMU's hardened runtime has no `allow-jit` entitlement.
 - **dtc** (libfdt) is built separately because QEMU's copy is a download-only subproject.
 
+## CI and provenance
+
+`.github/workflows/qemu-deps.yml` runs on the project's Mac whenever an input changes (anything in `qemu/`
+except docs and licence texts, `.xcode-version`, the QEMU entitlements). It builds everything from clean,
+then `qemu/scripts/check-bundle.sh` requires the result to be exactly
+[`bundle-manifest.json`](bundle-manifest.json): the same pre-signing hash for every file (the build is
+reproducible, so a difference means the inputs changed without the manifest, or the build broke) and the
+same as-shipped hash. The bundle is published as the artifact `qemu-bundle-<inputs hash>` (90 days) and, once
+the repository is public, with a build-provenance attestation.
+
+`scripts/fetch-qemu-bundle.sh` takes that artifact only if it comes from this workflow on `main`, its
+attestation verifies (public repository), and `check-bundle.sh` passes. A release is never built from a
+bundle that did not pass these checks.
+
+## Corresponding source
+
+```sh
+qemu/scripts/source-bundle.sh --out build/vmpane-<version>-corresponding-source.tar.zst
+qemu/scripts/source-bundle.sh --verify build/vmpane-<version>-corresponding-source.tar.zst
+```
+
+The archive holds `qemu/` (this directory: lock, patches, scripts, licences), the scripts and settings that
+sign the bundle into the app, the source tarball of every shipped component and of the tools built from
+source, and the exact EDK2 source of the firmware. `--verify` checks every file against the archive's
+`SHA256SUMS` and every component against its pinned SHA-256. It is published with each release; the
+written offer is in `THIRD_PARTY_NOTICES.md`.
+
 ## Updating a component
 
 1. Change its `version`, `url` and `sha256` in `deps.lock` (take the hash from the project's published
    checksums when it has them).
 2. Rebase its patches, if any.
 3. Rebuild, then run the QEMU itests. A QEMU or EDK2 update also needs the Windows boot itests.
+4. `qemu/scripts/extract-licenses.sh` and `scripts/gen-notices.sh` (licence texts and notices).
+5. Copy the new `build/qemu-bundle/MANIFEST.json` to `bundle-manifest.json`. Any change to the build
+   scripts that changes the output needs this step too; CI fails until the two agree.
 
 ## Replacing a library (LGPL)
 
