@@ -4,6 +4,9 @@
 set -euo pipefail
 
 app=${1:?usage: scripts/make-dmg.sh <VMPane.app> [out.dmg]}
+# A release always carries QEMU (Windows guests); a build without qemu/scripts/package.sh's bundle has none.
+[[ -x "$app/Contents/Helpers/qemu/bin/qemu-system-aarch64" && -f "$app/Contents/Resources/qemu/share/edk2-aarch64-code.fd" ]] ||
+    { echo "error: $app has no QEMU (build qemu/scripts/package.sh, then the app)" >&2; exit 1; }
 version=$(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist")
 out=${2:-build/VMPane-$version.dmg}
 

@@ -1,0 +1,15 @@
+#!/bin/bash
+# Compiler driver for the QEMU pipeline: clang (or clang++ when called as c++), minus run paths into the
+# build directory. Meson adds -Wl,-rpath,<sysroot lib> for every pkg-config dependency and deletes it at
+# install, but the space it took stays in the Mach-O header, so the length of the build directory's path
+# would shift every binary's layout. Sysroot libraries have absolute /vmpane/qemu install names, so those
+# run paths never found anything anyway.
+args=()
+for a in "$@"; do
+    case $a in
+        -Wl,-rpath,"$VMPANE_BUILD_ROOT"/*) ;;
+        *) args+=("$a") ;;
+    esac
+done
+[[ ${0##*/} == c++ ]] && exec "${VMPANE_CLANG}++" "${args[@]}"
+exec "$VMPANE_CLANG" "${args[@]}"

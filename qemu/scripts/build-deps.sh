@@ -10,7 +10,10 @@
 #   --until <c>   stop after component <c>
 set -euo pipefail
 source "$(dirname "$0")/lib/env.sh"
+plumbing=$(compgen -A function)
 source "$(dirname "$0")/lib/recipes.sh"
+# The shared helpers of the recipes (env.sh plumbing such as fetch cannot change a binary).
+recipe_helpers=$(compgen -A function | grep -v '^recipe_' | grep -vxF "$plumbing")
 
 clean=false fetch_only=false until=
 while (($#)); do
@@ -41,12 +44,13 @@ stamp_key() {
         jq -c --arg n "$name" '.components[] | select(.name == $n)' "$LOCK"
         jq -c '{prefix, sourceDateEpoch, macosDeploymentTarget}' "$LOCK"
         declare -f "recipe_${name//-/_}"
-        # The shared helpers (normalised by bash: comments and layout do not count).
-        declare -f $(compgen -A function | grep -v '^recipe_')
+        # Normalised by bash: comments and layout do not count.
+        declare -f $recipe_helpers
         [[ $name == qemu ]] && cat "$QEMU_DIR/configs/devices-vmpane.mak"
         [[ $name == python ]] && cat "$QEMU_DIR/tools-requirements.txt"
         [[ -d $QEMU_DIR/patches/$name ]] && cat "$QEMU_DIR/patches/$name"/*
-        echo "$COMMON_CFLAGS $COMMON_LDFLAGS"
+        echo "$COMMON_CFLAGS $COMMON_LDFLAGS $CC $OBJCC $GIT_CEILING_DIRECTORIES"
+        cat "$QEMU_DIR/scripts/lib/cc"
     } | shasum -a 256 | cut -d' ' -f1
 }
 

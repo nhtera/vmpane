@@ -33,12 +33,13 @@ Folder names follow the convention of the toolchain that owns them:
 | `scripts/lint.sh` | swiftlint, swift-format, rustfmt, clippy, workflow policy; fails on any finding |
 | `scripts/test.sh [--filter <regex>] [--swift-only] [--release] [--asan]` | Swift package tests (fails if zero tests ran), then Rust tests, `cargo deny`, agent builds for macOS and Linux. `VMPANE_XWIN=1` also cross-builds the Windows agent (cargo-xwin downloads the MSVC CRT and Windows SDK, accepting Microsoft's licence) |
 | `scripts/build.sh [Debug\|Release]` | builds `build/<Configuration>/VMPane.app` and signs it from the manifest (ad hoc unless `$VMPANE_SIGN_IDENTITY` is set) |
-| `scripts/sign.sh [--dry-run\|--verify] <app>` | signs inside-out from `Config/signing-manifest.json` with `$VMPANE_SIGN_IDENTITY`; `--verify` also checks runtime, timestamp and team ID for real identities |
-| `scripts/make-dmg.sh <app>` | release DMG |
+| `scripts/sign.sh [--dry-run\|--verify] [--qemu-only] <app\|bundle>` | signs inside-out from `Config/signing-manifest.json` with `$VMPANE_SIGN_IDENTITY`; `--verify` also checks runtime, timestamp and team ID for real identities; `--qemu-only` signs a QEMU bundle on its own |
+| `qemu/scripts/build-deps.sh`, `build-edk2.sh`, `make-vars.sh`, `package.sh` | QEMU, its libraries and the UEFI firmware from source into `build/qemu-bundle`, which the app build embeds (see [`qemu/BUILDING.md`](../qemu/BUILDING.md)); without it the app builds but cannot run Windows guests |
+| `scripts/make-dmg.sh <app>` | release DMG (refuses an app without QEMU) |
 | `scripts/notarize.sh <dmg>` | notarytool (keychain profile `vmpane-notary` or `$VMPANE_NOTARY_PROFILE`), staple, Gatekeeper check |
 | `scripts/check-dylibs.sh <app>` | no Mach-O links a library or carries a run path outside the system or the bundle (Release builds; Debug has DerivedData run paths) |
 | `scripts/gen-notices.sh [--check]` | regenerates `THIRD_PARTY_NOTICES.md` |
-| `scripts/itest.sh <scenario\|all> [--app <app\|dmg\|zip>] [--allow-skip]` | integration scenarios on this Mac (`smoke`, `helper-lifecycle`) |
+| `scripts/itest.sh <scenario\|all> [--app <app\|dmg\|zip>] [--allow-skip]` | integration scenarios on this Mac (`itest/scenarios/`, e.g. `smoke`, `helper-lifecycle`, `qemu-smoke`) |
 
 Xcode signs ad hoc; that signature is for development only (Xcode adds entitlements such as
 `application-identifier` to the CLI). `scripts/build.sh` re-signs every Mach-O from the manifest. To sign

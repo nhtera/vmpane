@@ -244,5 +244,31 @@
       "sha256": "731b5681e4bb18be313231579b8efd0296c5b015fa36dc533874b639ba838016",
       "patches": []
     }
-  ]
+  ],
+  "firmware": {
+    "comment": "Firmware inputs (qemu/scripts/build-edk2.sh, make-vars.sh). EDK2 stays at edk2-stable202408: newer EDK2 loses vtimer interrupts under QEMU 11 HVF; bisect and report upstream before any bump. The build runs in an Ubuntu VM (buildImage) with apt pinned to aptSnapshot. The vars template enrolls VMPane's own PK (qemu/firmware/vmpane-pk.pem; its private key was destroyed when it was made), Microsoft KEK 2011+2023 and db (Windows PCA 2011, Windows UEFI CA 2023, UEFI CA 2011/2023), and Microsoft's arm64 dbx.",
+    "edk2": {
+      "name": "edk2",
+      "version": "edk2-stable202408",
+      "commit": "b158dad150bf02879668f72ce306445250838201",
+      "url": "https://github.com/tianocore/edk2.git",
+      "license": "BSD-2-Clause-Patent"
+    },
+    "buildImage": {
+      "name": "ubuntu-cloudimg",
+      "version": "24.04-20260926",
+      "url": "https://cloud-images.ubuntu.com/releases/noble/release-20260926/ubuntu-24.04-server-cloudimg-arm64.img",
+      "sha256": "1d6bffe64b848468ac97f821d369a4846d983de1800ccf6b5ec8853e85cefc55",
+      "license": "various (Ubuntu); build-only"
+    },
+    "aptSnapshot": "20261001T000000Z",
+    "dbx": {
+      "name": "dbx-arm64",
+      "version": "f75f97f6da5c",
+      "url": "https://raw.githubusercontent.com/microsoft/secureboot_objects/f75f97f6da5ca70ac23c7daf12cac069131601aa/PostSignedObjects/DBX/arm64/DBXUpdate.bin",
+      "sha256": "ec68522271e9ac6c936c8731ce0d74417f8ed39296e85ab0e5801af195459214",
+      "license": "BSD-2-Clause-Patent"
+    },
+    "pk": "qemu/firmware/vmpane-pk.pem"
+  }
 }

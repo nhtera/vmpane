@@ -29,6 +29,29 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Config/Entitlements/VMPane.entitlements
         PRODUCT_BUNDLE_IDENTIFIER: app.vmpane.mac
         GENERATE_INFOPLIST_FILE: NO
+        # The "Embed QEMU" phase copies whole directory trees; Xcode's script sandbox only allows declared
+        # output files.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    postBuildScripts:
+      # QEMU for Windows guests, from qemu/scripts/package.sh: programs and libraries in Contents/Helpers/qemu,
+      # firmware and data in Contents/Resources/qemu/share (data under Helpers would break code signing).
+      # Without the bundle the app still builds (Linux and macOS guests only); make-dmg.sh refuses such an app.
+      - name: Embed QEMU
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+          bundle="$SRCROOT/build/qemu-bundle"
+          app="$TARGET_BUILD_DIR/$WRAPPER_NAME"
+          rm -rf "$app/Contents/Helpers/qemu" "$app/Contents/Resources/qemu"
+          if [[ ! -x "$bundle/bin/qemu-system-aarch64" ]]; then
+            echo "warning: no QEMU bundle at $bundle (qemu/scripts/package.sh); Windows guests will not run"
+            exit 0
+          fi
+          mkdir -p "$app/Contents/Helpers/qemu" "$app/Contents/Resources/qemu"
+          ditto "$bundle/bin" "$app/Contents/Helpers/qemu/bin"
+          ditto "$bundle/lib" "$app/Contents/Helpers/qemu/lib"
+          ditto "$bundle/share" "$app/Contents/Resources/qemu/share"
+          cp "$bundle/MANIFEST.json" "$app/Contents/Resources/qemu/MANIFEST.json"
     dependencies:
       - package: VMPaneKit
         product: VMPaneCore

@@ -36,14 +36,16 @@ lock_names() {  # lock_names [role]
     jq -r --arg r "${1:-}" '.components[] | select($r == "" or .role == $r) | .name' "$LOCK"
 }
 
-# The tarball of <component> in $DOWNLOADS, downloaded if missing; a SHA-256 mismatch is fatal.
-# VMPANE_QEMU_MIRROR (a base URL holding the same file names) is tried before upstream.
-fetch() {
-    local name=$1 url sha file ext
-    url=$(lock_get "$name" url)
-    sha=$(lock_get "$name" sha256)
-    ext=$(basename "$url" | grep -oE '\.tar\.(gz|xz|bz2)$') || die "$name: unknown archive type: $url"
-    file=$DOWNLOADS/$name-$(lock_get "$name" version)$ext
+# fetch_entry <json with name, version, url, sha256>: the file in $DOWNLOADS, downloaded if missing; a
+# SHA-256 mismatch is fatal. VMPANE_QEMU_MIRROR (a base URL holding the same file names) is tried first.
+fetch_entry() {
+    local name version url sha ext file
+    name=$(jq -r .name <<<"$1")
+    version=$(jq -r .version <<<"$1")
+    url=$(jq -r .url <<<"$1")
+    sha=$(jq -r .sha256 <<<"$1")
+    ext=$(basename "$url" | grep -oE '\.tar\.(gz|xz|bz2)$|\.[a-z0-9]+$') || die "$name: no file extension: $url"
+    file=$DOWNLOADS/$name-$version$ext
     mkdir -p "$DOWNLOADS"
     if [[ ! -f $file ]]; then
         local partial=$file.partial
@@ -57,6 +59,16 @@ fetch() {
         die "$name: SHA-256 mismatch (file removed): $url"
     fi
     echo "$file"
+}
+
+# fetch <component>: its tarball (see fetch_entry).
+fetch() {
+    fetch_entry "$(jq -c --arg n "$1" '.components[] | select(.name == $n)' "$LOCK")"
+}
+
+# fetch_firmware <key>: a downloadable firmware input (buildImage, dbx).
+fetch_firmware() {
+    fetch_entry "$(jq -c --arg k "$1" '.firmware[$k]' "$LOCK")"
 }
 
 # Fresh source tree of <component> in $SRC/<component>, with its patches applied.
@@ -101,7 +113,13 @@ hermetic_env() {
     export SOURCE_DATE_EPOCH
     SOURCE_DATE_EPOCH=$(jq -r .sourceDateEpoch "$LOCK")
     export ZERO_AR_DATE=1
-    export CC=$cc CXX=${cc}++ OBJC=$cc
+    # clang through lib/cc, which drops run paths into the build directory.
+    export VMPANE_CLANG=$cc VMPANE_BUILD_ROOT=$BUILD
+    # (meson reads OBJC; QEMU takes OBJCC through --objcc.)
+    export CC=$QEMU_DIR/scripts/lib/cc CXX=$QEMU_DIR/scripts/lib/c++ OBJC=$QEMU_DIR/scripts/lib/cc OBJCC=$QEMU_DIR/scripts/lib/cc
+    # Version scripts (spice-gtk's git-version-gen) must not find the VMPane checkout around the sources and
+    # report "-dirty".
+    export GIT_CEILING_DIRECTORIES=$BUILD
     # pkg-config (a --define-prefix wrapper) sees only the sysroot.
     export PKG_CONFIG=$TOOLS/bin/pkg-config
     export PKG_CONFIG_LIBDIR=$SYSROOT/lib/pkgconfig:$SYSROOT/share/pkgconfig

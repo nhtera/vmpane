@@ -16,11 +16,16 @@ Nothing from Homebrew or `/usr/local` is used: the build installs its own tools.
 ## Build
 
 ```sh
-qemu/scripts/build-deps.sh            # incremental; --clean starts over (downloads are kept)
-qemu/scripts/build-deps.sh --fetch-only   # download and verify every tarball
+qemu/scripts/build-deps.sh            # libraries, QEMU, swtpm; incremental (--clean starts over, keeping downloads)
+qemu/scripts/build-edk2.sh            # UEFI firmware, in an Ubuntu VM (needs build-deps first)
+qemu/scripts/make-vars.sh             # Secure Boot variable template
+qemu/scripts/package.sh               # build/qemu-bundle
+scripts/check-dylibs.sh build/qemu-bundle
+scripts/sign.sh --qemu-only build/qemu-bundle && scripts/sign.sh --verify --qemu-only build/qemu-bundle
 ```
 
-A clean build takes about 6 minutes on an M4 Pro.
+`build-deps.sh --fetch-only` downloads and verifies every tarball. On an M4 Pro a clean `build-deps.sh` takes
+about 6 minutes and `build-edk2.sh` about 15.
 
 Stages, all under `qemu/build/` (not committed):
 
@@ -47,6 +52,55 @@ and so is everything after it in the lock (the lock order is the build order).
 - **Deterministic tools:** `SOURCE_DATE_EPOCH` from `deps.lock`, `ZERO_AR_DATE=1`, `-Wl,-reproducible` (ld
   otherwise mixes object timestamps into the UUID), `-ffile-prefix-map` for build paths, `-Wdate-time`,
   no debug info, `LC_ALL=C`, `TZ=UTC`.
+- **No build paths in the layout:** the compiler is `scripts/lib/cc`, a wrapper that drops
+  `-Wl,-rpath,<build dir>` (meson adds one per pkg-config dependency and deletes it at install, but the room
+  it took stays in the Mach-O header, so the path's length would shift every binary). `GIT_CEILING_DIRECTORIES`
+  stops version scripts from finding the surrounding checkout (spice-gtk would report `-dirty`).
+
+Checked: two clean builds in different directories give the same SHA-256 for all 43 files of the bundle
+(before signing). `package.sh` records these hashes in `MANIFEST.json`.
+
+## Package
+
+`package.sh` lays out `build/qemu-bundle`:
+
+| Path | Contents | Goes to |
+|---|---|---|
+| `bin/` | qemu-system-aarch64, qemu-img, swtpm, swtpm_setup | `VMPane.app/Contents/Helpers/qemu/bin` |
+| `lib/` | the libraries they load | `VMPane.app/Contents/Helpers/qemu/lib` |
+| `share/` | `edk2-aarch64-code.fd`, `edk2-aarch64-vars-sb.fd` (unpadded), `qemu/efi-virtio.rom` | `VMPane.app/Contents/Resources/qemu/share` |
+| `frameworks/` | SPICE client libraries (spice-client-glib and what it loads) | `VMPaneVM.app/Contents/Frameworks` |
+| `MANIFEST.json` | component versions, `deps.lock` hash, SHA-256 of every file before signing | |
+
+Load paths are relative: programs load `@rpath/<lib>` with the run path `@executable_path/../lib`, libraries
+load each other with `@loader_path/<lib>`, and every library's id is `@rpath/<lib>`. Run paths from the build
+are deleted, local symbols stripped. The bundle is then signed ad hoc so it runs as is; `scripts/sign.sh
+--qemu-only` signs it for release from `Config/signing-manifest.json` (hardened runtime; library validation
+passes because every library carries the same team ID).
+
+QEMU's pflash devices are exactly 64 MiB, so whoever uses the firmware pads a copy (`truncate -s 64m`);
+shipping the files unpadded keeps the app small.
+
+## Firmware
+
+`build-edk2.sh` builds EDK2 ArmVirtQemu for AARCH64 at the commit pinned in `deps.lock` (`firmware.edk2`),
+with QEMU's own recipe (`roms/edk2-build.config`, aa64) plus `SECURE_BOOT_ENABLE` and TPM 2.0. EDK2 needs
+GCC on Linux, so the script boots an Ubuntu VM with this pipeline's QEMU: the cloud image is pinned by
+SHA-256, apt by a snapshot date (`firmware.aptSnapshot`), and the checkout is verified against the pinned
+commit. It also writes the exact source it built (`edk2-src.tar.gz`, with submodules).
+
+EDK2 stays at `edk2-stable202408`: newer releases lose virtual-timer interrupts under QEMU 11 with HVF
+(boot hangs). Bisect that and report it upstream before moving.
+
+`make-vars.sh` writes the variable store each new VM starts from, with `virt-fw-vars`:
+
+- PK: VMPane's certificate [`firmware/vmpane-pk.pem`](firmware/vmpane-pk.pem). Its private key was
+  deleted right after the certificate was made, so nothing can be signed with it and the store cannot be
+  changed through PK-signed updates.
+- KEK: Microsoft KEK CA 2011 and 2023 (and the VMPane certificate).
+- db: Microsoft Windows Production PCA 2011, Windows UEFI CA 2023, UEFI CA 2011 and 2023, Option ROM UEFI CA 2023.
+- dbx: Microsoft's arm64 revocation list (`firmware.dbx`).
+- Secure Boot on.
 
 ## Components
 

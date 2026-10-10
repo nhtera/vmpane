@@ -54,6 +54,8 @@ resolved=VMPane.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resol
         echo "| Component | Version | Licence | Source |"
         echo "|---|---|---|---|"
         jq -r '.components[] | select(.role == "runtime") | "| \(.name) | \(.version) | \(.license) | <\(.url)> |"' qemu/deps.lock
+        jq -r '.firmware.edk2 | "| EDK2 ArmVirtQemu firmware | \(.version) (\(.commit[0:12])) | \(.license) | <\(.url)> |"' qemu/deps.lock
+        jq -r '.firmware.dbx | "| Microsoft Secure Boot dbx (arm64), in the firmware variables | \(.version) | \(.license) | <\(.url)> |"' qemu/deps.lock
         echo
     fi
 } >"$tmp"

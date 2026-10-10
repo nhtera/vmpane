@@ -1,7 +1,7 @@
 import Foundation
 
-/// Versioned copies of the helper app under `runtime/<version>/`. Helpers run from a copy, so an app
-/// update (Sparkle replacing VMPane.app) never pulls the binary out from under a running VM.
+/// Versioned copies of the helper app (and the QEMU it runs) under `runtime/<version>/`. Helpers run from a
+/// copy, so an app update (Sparkle replacing VMPane.app) never pulls a binary out from under a running VM.
 public struct RuntimeStore: Sendable {
     public let paths: VMPanePaths
 
@@ -13,32 +13,75 @@ public struct RuntimeStore: Sendable {
     /// it has written its pid file.
     public static let minimumAge: TimeInterval = 10 * 60
 
+    /// Something copied into `runtime/<version>/`: `source` lands at `path` (relative, e.g. `qemu/bin`).
+    public struct Item: Sendable, Equatable {
+        public var source: URL
+        public var path: String
+
+        public init(source: URL, path: String) {
+            self.source = source
+            self.path = path
+        }
+    }
+
+    /// What a helper runs, from the app bundle: the helper app, and QEMU (`qemu/bin`, `qemu/lib` from
+    /// `Contents/Helpers/qemu`, `qemu/share` from `Contents/Resources/qemu/share`) when the app has it.
+    public static func helperItems(app: URL) -> [Item] {
+        let contents = app.appendingPathComponent("Contents", isDirectory: true)
+        let qemu = contents.appendingPathComponent("Helpers/qemu", isDirectory: true)
+        let candidates = [
+            Item(source: contents.appendingPathComponent("Helpers/VMPaneVM.app", isDirectory: true), path: "VMPaneVM.app"),
+            Item(source: qemu.appendingPathComponent("bin", isDirectory: true), path: "qemu/bin"),
+            Item(source: qemu.appendingPathComponent("lib", isDirectory: true), path: "qemu/lib"),
+            Item(source: contents.appendingPathComponent("Resources/qemu/share", isDirectory: true), path: "qemu/share"),
+        ]
+        return candidates.enumerated().filter { index, item in
+            index == 0 || FileManager.default.fileExists(atPath: item.source.path)
+        }.map(\.element)
+    }
+
     /// Returns `runtime/<version>/<helper app name>`, creating it as an APFS clone (or a synced copy) of
     /// `source`. Serialised per version across processes.
     public func ensure(version: String, helperApp source: URL) throws -> URL {
+        try ensure(version: version, items: [Item(source: source, path: source.lastPathComponent)])
+            .appendingPathComponent(source.lastPathComponent, isDirectory: true)
+    }
+
+    /// Returns `runtime/<version>`, with each item cloned (or copied and synced) into it if it is not
+    /// there yet. Each item appears atomically; all of them are serialised per version across processes.
+    @discardableResult
+    public func ensure(version: String, items: [Item]) throws -> URL {
         let fm = FileManager.default
         let directory = paths.runtime(version: version)
-        let target = directory.appendingPathComponent(source.lastPathComponent, isDirectory: true)
         try fm.createDirectory(at: paths.runtimeDirectory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let lock = try FileLock.acquire(paths.runtimeDirectory.appendingPathComponent(".\(version).lock"))
         defer { lock.release() }
-        if fm.fileExists(atPath: target.path) { return target }
-        try fm.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        let partial = directory.appendingPathComponent(".\(source.lastPathComponent).partial-\(UUID().uuidString)", isDirectory: true)
+        for item in items {
+            try install(item, in: directory)
+        }
+        return directory
+    }
+
+    private func install(_ item: Item, in directory: URL) throws {
+        let fm = FileManager.default
+        let target = directory.appendingPathComponent(item.path)
+        if fm.fileExists(atPath: target.path) { return }
+        let parent = target.deletingLastPathComponent()
+        try fm.createDirectory(at: parent, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        let partial = parent.appendingPathComponent(".\(target.lastPathComponent).partial-\(UUID().uuidString)", isDirectory: true)
         do {
             do {
-                try CloneFile.clone(source, to: partial)
+                try CloneFile.clone(item.source, to: partial)
             } catch CloneError.unsupported {
-                try fm.copyItem(at: source, to: partial)
+                try fm.copyItem(at: item.source, to: partial)
             }
             try DurableWrite.syncTree(partial)
             try fm.moveItem(at: partial, to: target)
-            try DurableWrite.syncDirectory(directory)
+            try DurableWrite.syncDirectory(parent)
         } catch {
             try? fm.removeItem(at: partial)
             throw error
         }
-        return target
     }
 
     /// Removes runtime versions that are not `keep`, not used by a live helper, and older than `minimumAge`.

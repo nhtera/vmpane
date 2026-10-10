@@ -198,7 +198,7 @@ recipe_qemu() {
     (
         cd "$dir/_build"
         ../configure --prefix="$PREFIX" --target-list=aarch64-softmmu --without-default-devices \
-            --with-devices-aarch64=vmpane \
+            --with-devices-aarch64=vmpane --objcc="$OBJCC" \
             --enable-hvf --disable-tcg --enable-fdt=system --enable-spice --enable-slirp --enable-libusb --enable-usb-redir --enable-tpm \
             --audio-drv-list=coreaudio --enable-tools --disable-download --disable-rust --disable-debug-info \
             --disable-docs --disable-sdl --disable-gtk --disable-cocoa --disable-vnc --disable-curses \

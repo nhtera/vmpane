@@ -151,6 +151,37 @@ private func makePrepared(_ dir: URL) throws -> (VMBundle, VMPanePaths) {
     }
 }
 
+@Test func runtimeStoreCopiesTheHelperAndQEMU() throws {
+    try withTempDirectory { dir in
+        let paths = VMPanePaths(root: dir.appendingPathComponent("support"))
+        let app = dir.appendingPathComponent("VMPane.app", isDirectory: true)
+        let files = [
+            "Contents/Helpers/VMPaneVM.app/Contents/MacOS/VMPaneVM", "Contents/Helpers/qemu/bin/qemu-system-aarch64",
+            "Contents/Helpers/qemu/lib/libglib-2.0.0.dylib", "Contents/Resources/qemu/share/edk2-aarch64-code.fd",
+        ]
+        for file in files {
+            let url = app.appendingPathComponent(file)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data(file.utf8).write(to: url)
+        }
+        let store = RuntimeStore(paths: paths)
+        let runtime = try store.ensure(version: "1", items: RuntimeStore.helperItems(app: app))
+        for (copy, original) in [
+            ("VMPaneVM.app/Contents/MacOS/VMPaneVM", files[0]), ("qemu/bin/qemu-system-aarch64", files[1]),
+            ("qemu/lib/libglib-2.0.0.dylib", files[2]), ("qemu/share/edk2-aarch64-code.fd", files[3]),
+        ] {
+            #expect(try String(contentsOf: runtime.appendingPathComponent(copy), encoding: .utf8) == original)
+        }
+        // An app without QEMU (a Debug build without the QEMU bundle) still gets its helper copied.
+        try FileManager.default.removeItem(at: app.appendingPathComponent("Contents/Helpers/qemu"))
+        try FileManager.default.removeItem(at: app.appendingPathComponent("Contents/Resources"))
+        #expect(RuntimeStore.helperItems(app: app).map(\.path) == ["VMPaneVM.app"])
+        let second = try store.ensure(version: "2", items: RuntimeStore.helperItems(app: app))
+        #expect(FileManager.default.fileExists(atPath: second.appendingPathComponent("VMPaneVM.app").path))
+        #expect(!FileManager.default.fileExists(atPath: second.appendingPathComponent("qemu").path))
+    }
+}
+
 @Test func childrenStopOnSIGTERMEvenIfTheParentIgnoresIt() throws {
     let previous = signal(SIGTERM, SIG_IGN)
     defer { signal(SIGTERM, previous) }

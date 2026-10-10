@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Sign VMPane.app inside-out from Config/signing-manifest.json (never --deep).
-# Usage: scripts/sign.sh [--dry-run|--verify] <VMPane.app>
+# Usage: scripts/sign.sh [--dry-run|--verify] [--qemu-only] <VMPane.app | QEMU bundle>
 #   (default)  sign with $VMPANE_SIGN_IDENTITY (default "-", ad hoc); the hardened runtime is on for real identities
 #   --dry-run  print the plan
 #   --verify   check identifiers and entitlements against the manifest, then `codesign --verify --strict`.
 #              For non-ad hoc signatures also: hardened runtime, secure timestamp, one team ID throughout,
 #              no get-task-allow (what notarization requires).
+#   --qemu-only  the target is a QEMU bundle (qemu/scripts/package.sh): only the manifest items under
+#              Contents/Helpers/qemu/ (mapped to the bundle root) and the helper's Frameworks/ (mapped to
+#              frameworks/) apply.
 # All modes fail when the bundle holds a Mach-O the manifest does not cover.
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -13,8 +16,10 @@ manifest="$root/Config/signing-manifest.json"
 
 mode=sign
 case "${1:-}" in --dry-run) mode=dry; shift ;; --verify) mode=verify; shift ;; esac
+qemu_only=false
+[[ "${1:-}" == --qemu-only ]] && { qemu_only=true; shift; }
 if (($# != 1)); then
-    echo "usage: scripts/sign.sh [--dry-run|--verify] <VMPane.app>" >&2
+    echo "usage: scripts/sign.sh [--dry-run|--verify] [--qemu-only] <VMPane.app | QEMU bundle>" >&2
     exit 2
 fi
 app=$1
@@ -54,6 +59,13 @@ for ((i = 0; i < count; i++)); do
     id=$(jq -r .identifier <<<"$item")
     ent=$(jq -r .entitlements <<<"$item")
     optional=$(jq -r '.optional // false' <<<"$item")
+    if $qemu_only; then
+        case "$pattern" in
+            Contents/Helpers/qemu/*) pattern=${pattern#Contents/Helpers/qemu/} ;;
+            Contents/Helpers/VMPaneVM.app/Contents/Frameworks/*) pattern=frameworks/${pattern##*/} ;;
+            *) continue ;;
+        esac
+    fi
 
     if [[ "$pattern" == "." ]]; then
         targets=("$app")
@@ -141,7 +153,14 @@ done < <(find "$app" -type f -print0)
 if [[ "$mode" == verify ]]; then
     unique_teams=$(tr ' ' '\n' <<<"$teams" | sed '/^$/d' | sort -u | wc -l | tr -d ' ')
     ((unique_teams <= 1)) || fail "more than one team ID in the bundle:$teams"
-    codesign --verify --strict --deep "$app" || fail "codesign --verify --strict --deep"
+    if $qemu_only; then
+        # A plain directory, not a bundle: check each signed file.
+        while IFS= read -r f; do
+            codesign --verify --strict "$f" || fail "codesign --verify --strict ${f#"$app"/}"
+        done <"$covered"
+    else
+        codesign --verify --strict --deep "$app" || fail "codesign --verify --strict --deep"
+    fi
 fi
 
 if ((failures)); then

@@ -252,4 +252,6 @@ is published with each release.
 | swtpm | 0.10.2 | BSD-3-Clause | <https://github.com/stefanberger/swtpm/archive/refs/tags/v0.10.2.tar.gz> |
 | dtc | 1.8.1 | BSD-2-Clause OR GPL-2.0-or-later | <https://mirrors.edge.kernel.org/pub/software/utils/dtc/dtc-1.8.1.tar.xz> |
 | qemu | 11.1.2 | GPL-2.0-only | <https://download.qemu.org/qemu-11.1.2.tar.xz> |
+| EDK2 ArmVirtQemu firmware | edk2-stable202408 (b158dad150bf) | BSD-2-Clause-Patent | <https://github.com/tianocore/edk2.git> |
+| Microsoft Secure Boot dbx (arm64), in the firmware variables | f75f97f6da5c | BSD-2-Clause-Patent | <https://raw.githubusercontent.com/microsoft/secureboot_objects/f75f97f6da5ca70ac23c7daf12cac069131601aa/PostSignedObjects/DBX/arm64/DBXUpdate.bin> |
 
