@@ -91,7 +91,14 @@ extension HelperController {
                 try await backend.resume()
                 transition(.resumed)
             case .suspend:
+                let discarded = pendingRestart
                 try await suspendVM(backend)
+                if discarded {
+                    return .success([
+                        "state": .string(state.rawValue),
+                        "message": "Saved settings change this VM's hardware, so the next start boots fresh instead of resuming.",
+                    ])
+                }
             default:
                 let mode = try RPCParams.decode(StopParams.self, from: params).get().mode ?? .graceful
                 transition(.stop)
@@ -126,7 +133,7 @@ extension HelperController {
         var resumed = decision == .resume
         do {
             try await backend.start(StartOptions(headless: headless, stateDirectory: resumed ? stateDirectory : nil, config: config))
-        } catch  where resumed && isSessionLocked() {
+        } catch  where resumed && (error is SavedStateLocked || isSessionLocked()) {
             Self.log.notice("restore failed while the Mac is locked; state kept: \(String(describing: error), privacy: .public)")
             transition(.stopped)
             throw RPCError(

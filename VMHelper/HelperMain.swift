@@ -2,6 +2,7 @@ import AppKit
 import VMPaneCore
 import VMPaneHost
 import VMPaneVZ
+import os
 
 /// Per-VM helper app: one process per running VM, with its own Dock tile and window.
 /// Usage: VMPaneVM --vm <bundle> [--headless]
@@ -90,13 +91,36 @@ extension HelperDelegate {
     fileprivate func observeDisplay(_ controller: HelperController, backend: VZBackend, config: VMConfigV1) {
         let headless = arguments.headless
         Task { @MainActor in
-            for await state in controller.stateChanges where state == .running && !headless {
-                backend.showDisplay()
+            var selfTested = false
+            for await state in controller.stateChanges where state == .running {
+                if !headless { backend.showDisplay() }
+                if !selfTested {
+                    selfTested = true
+                    Task { await Self.captureSelfTest(backend) }
+                }
             }
         }
         Task { @MainActor in
             for await _ in controller.displayRequests { backend.showDisplay() }
         }
+    }
+}
+
+extension HelperDelegate {
+    private static let log = Logger(subsystem: "app.vmpane.mac.vm", category: "display")
+
+    /// C2 capture reads undocumented view internals: once per helper launch, check that a running guest's
+    /// frame can be read. A booting guest may show black for a while, so it retries for about a minute;
+    /// a failure is logged (fallback: capture through the guest agent, Phase 07).
+    @MainActor static func captureSelfTest(_ backend: VZBackend) async {
+        for _ in 0..<12 {
+            try? await Task.sleep(for: .seconds(5))
+            if backend.captureSelfTest() {
+                log.info("capture self-test passed")
+                return
+            }
+        }
+        log.notice("capture self-test failed: no readable non-black frame within 60 s")
     }
 }
 

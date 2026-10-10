@@ -59,6 +59,9 @@ extension HelperController {
         var rejected: [String: String] = [:]
         for path in SettingsPatch.changedPaths(old, merged) {
             switch SettingsPatch.kind(of: path) {
+            // Removing `install` ejects the installer by hand (e.g. a distro whose boot entry is not detected).
+            case .immutable where path == "install" && SettingsPatch.value(at: path, in: merged) == nil:
+                saved = SettingsPatch.copy(path, from: merged, into: saved)
             case .immutable: rejected[path] = "cannot be changed"
             case .unknown: rejected[path] = "unknown setting"
             case .host, .live, .nextBoot: saved = SettingsPatch.copy(path, from: merged, into: saved)

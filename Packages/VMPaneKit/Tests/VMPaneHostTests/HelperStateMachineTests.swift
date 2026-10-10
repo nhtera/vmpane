@@ -46,7 +46,7 @@ final class ScriptedBackend: VMBackend, @unchecked Sendable {
     private let continuation: AsyncStream<BackendEvent>.Continuation
     private let lock = NSLock()
     private var calls: [String] = []
-    private var failures: Set<String> = []
+    private var failures: [String: any Error] = [:]
     /// Graceful stops are ignored (a guest that does not shut down), forcing the force path.
     var ignoresGracefulStop = false
     /// Live settings this backend applies (`applyLive`); the config of the last start.
@@ -58,12 +58,12 @@ final class ScriptedBackend: VMBackend, @unchecked Sendable {
     }
 
     var recordedCalls: [String] { lock.withLock { calls } }
-    func failOnce(_ call: String) { lock.withLock { _ = failures.insert(call) } }
+    func failOnce(_ call: String, with error: any Error = POSIXError(.EIO)) { lock.withLock { failures[call] = error } }
 
     private func record(_ call: String) throws {
         try lock.withLock {
             calls.append(call)
-            if failures.remove(call) != nil { throw POSIXError(.EIO) }
+            if let error = failures.removeValue(forKey: call) { throw error }
         }
     }
 

@@ -4,6 +4,7 @@ import Testing
 @testable import VMPaneCore
 
 /// A fresh temp directory per test, removed afterwards.
+@discardableResult
 func withTempDirectory<T>(_ body: (URL) throws -> T) throws -> T {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent("vmpane-test-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import VMPaneCore
+import Virtualization
 
 @testable import VMPaneVZ
 
@@ -150,4 +151,17 @@ private func withTemp(_ body: (URL) throws -> Void) throws {
     #expect(VZKeyMap.keyCode(forHIDUsage: 0x04) == 0)  // A
     #expect(VZKeyMap.keyCode(forHIDUsage: 0x28) == 36)  // Return
     #expect(VZKeyMap.keyCode(forHIDUsage: 0xE1) == 56)  // Left Shift
+}
+
+@Test func lockedRestoreErrorsAreRecognised() {
+    // As observed on a locked Mac (macOS 15.7): no underlying error, only the failure reason.
+    let observed = NSError(
+        domain: VZErrorDomain, code: 12,
+        userInfo: [NSLocalizedFailureReasonErrorKey: "The virtual machine failed to restore with error “permission denied”."])
+    #expect(VZBackend.isLockedRestore(observed))
+    let keychain = NSError(domain: NSOSStatusErrorDomain, code: Int(errSecInteractionNotAllowed))
+    #expect(VZBackend.isLockedRestore(NSError(domain: VZErrorDomain, code: 12, userInfo: [NSUnderlyingErrorKey: keychain])))
+    let other = NSError(domain: VZErrorDomain, code: 12, userInfo: [NSLocalizedFailureReasonErrorKey: "invalid argument"])
+    #expect(!VZBackend.isLockedRestore(other))
+    #expect(!VZBackend.isLockedRestore(POSIXError(.EIO)))
 }

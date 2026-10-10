@@ -211,19 +211,45 @@ public final class VZDisplayHost {
         let guestWidth = Double(IOSurfaceGetWidth(surface)), guestHeight = Double(IOSurfaceGetHeight(surface))
         let point = NSPoint(x: x / guestWidth * bounds.width, y: bounds.height - y / guestHeight * bounds.height)
         let location = view.convert(point, to: nil)
-        let wasDown = pressedButtons & 1 != 0, isDown = buttons & 1 != 0
-        let type: NSEvent.EventType =
-            wasDown == isDown ? (isDown ? .leftMouseDragged : .mouseMoved) : (isDown ? .leftMouseDown : .leftMouseUp)
+        // Bit 0 left, bit 1 right, bit 2 middle (other). A move first, then each button that changed.
+        let previous = pressedButtons
+        let move: (NSEvent.EventType, Int) =
+            previous & 1 != 0
+            ? (.leftMouseDragged, 0)
+            : previous & 2 != 0 ? (.rightMouseDragged, 1) : previous & 4 != 0 ? (.otherMouseDragged, 2) : (.mouseMoved, 0)
+        send(move.0, at: location, button: move.1, down: previous != 0)
+        for bit in 0..<3 where (previous ^ buttons) & (1 << bit) != 0 {
+            let down = buttons & (1 << bit) != 0
+            let type: NSEvent.EventType =
+                switch bit {
+                case 0: down ? .leftMouseDown : .leftMouseUp
+                case 1: down ? .rightMouseDown : .rightMouseUp
+                default: down ? .otherMouseDown : .otherMouseUp
+                }
+            send(type, at: location, button: bit, down: down)
+        }
         pressedButtons = buttons
+    }
+
+    private func send(_ type: NSEvent.EventType, at location: NSPoint, button: Int, down: Bool) {
         guard
-            let event = NSEvent.mouseEvent(
+            let cgEvent = NSEvent.mouseEvent(
                 with: type, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
-                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: isDown ? 1 : 0)
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: down ? 1 : 0)?
+                .cgEvent
         else { return }
+        cgEvent.setIntegerValueField(.mouseEventButtonNumber, value: Int64(button))
+        guard let event = NSEvent(cgEvent: cgEvent) else { return }
         switch type {
         case .leftMouseDown: view.mouseDown(with: event)
         case .leftMouseUp: view.mouseUp(with: event)
+        case .rightMouseDown: view.rightMouseDown(with: event)
+        case .rightMouseUp: view.rightMouseUp(with: event)
+        case .otherMouseDown: view.otherMouseDown(with: event)
+        case .otherMouseUp: view.otherMouseUp(with: event)
         case .leftMouseDragged: view.mouseDragged(with: event)
+        case .rightMouseDragged: view.rightMouseDragged(with: event)
+        case .otherMouseDragged: view.otherMouseDragged(with: event)
         default: view.mouseMoved(with: event)
         }
     }

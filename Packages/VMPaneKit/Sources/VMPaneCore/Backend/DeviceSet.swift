@@ -29,8 +29,16 @@ public struct DeviceSet: Codable, Equatable, Sendable {
     public var gpu: String?
     public var storageBus: StorageBus?
     public var smbiosUUID: UUID?
+    /// The backend's device layout for a given config (see `layoutVersions`).
+    public var layout: Int
+
+    /// Bump a backend's version when it changes the devices it builds for the same config (VZ 2: an XHCI
+    /// controller on every VM), so saved states from the old layout are discarded instead of failing to
+    /// restore.
+    public static let layoutVersions: [BackendKind: Int] = [.vz: 2, .qemu: 1]
 
     public init(_ config: VMConfigV1) {
+        layout = Self.layoutVersions[config.backend] ?? 1
         backend = config.backend
         os = config.os
         cpuCount = config.cpu.count

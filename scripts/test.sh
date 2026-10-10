@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Unit tests: the Swift package (fails when zero tests ran), then the Rust agent.
+# Unit tests: the Swift package (fails on any compiler warning or when zero tests ran), then the Rust agent.
 # Usage: scripts/test.sh [--filter <regex>] [--swift-only] [--release] [--asan]
 #   --release  Swift tests in the release configuration (optimizer-only bugs)
 #   --asan     Swift tests with the address sanitizer
@@ -10,7 +10,8 @@ cd "$(dirname "$0")/.."
 source scripts/lib/env.sh
 
 filter=()
-swift_flags=()
+# Any compiler warning fails the run, strict-concurrency diagnostics included (Swift 6 language mode).
+swift_flags=(-Xswiftc -warnings-as-errors)
 swift_only=0
 while (($#)); do
     case "$1" in

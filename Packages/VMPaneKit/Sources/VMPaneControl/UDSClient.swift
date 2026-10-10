@@ -61,7 +61,16 @@ public final class UDSClient: @unchecked Sendable {
         let data = try RPCCodec.encode(.request(RPCRequest(id: nil, method: method, params: params)))
         try queue.sync {
             guard !closed else { throw ControlClientError.connectionClosed }
+            try Self.write(fd, data)
+        }
+    }
+
+    /// A server that went away (before the reader noticed) shows up as EPIPE or ECONNRESET on write.
+    private static func write(_ fd: Int32, _ data: Data) throws {
+        do {
             try UnixSocket.writeAll(fd, data)
+        } catch let error as NSError where error.domain == NSPOSIXErrorDomain && [Int(EPIPE), Int(ECONNRESET)].contains(error.code) {
+            throw ControlClientError.connectionClosed
         }
     }
 
@@ -82,7 +91,7 @@ public final class UDSClient: @unchecked Sendable {
                         return
                     }
                     do {
-                        try UnixSocket.writeAll(self.fd, RPCCodec.encode(.request(RPCRequest(id: id, method: method, params: params))))
+                        try Self.write(self.fd, RPCCodec.encode(.request(RPCRequest(id: id, method: method, params: params))))
                     } catch {
                         continuation.resume(throwing: error)
                         return

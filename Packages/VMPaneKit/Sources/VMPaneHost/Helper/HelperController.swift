@@ -146,7 +146,15 @@ public actor HelperController {
             "backend": .string(config.backend.rawValue), "state": .string(state.rawValue),
             "allowedRequests": .array(backend == nil ? [] : HelperStateMachine.allowedRequests(in: state).map { .string($0.rawValue) }),
             "capabilities": .array(capabilities.map { .string($0) }),
+            "pendingRestart": .bool(pendingRestart),
         ])
+    }
+
+    /// Saved settings change hardware the running VM does not have yet: they need a restart, and a suspend
+    /// now would be discarded at the next start (its state would not match the new hardware).
+    var pendingRestart: Bool {
+        guard [.running, .paused].contains(state), let runningConfig else { return false }
+        return DeviceSet(runningConfig).hash != DeviceSet(config).hash
     }
 
     private static func names(_ capabilities: LiveCapabilities) -> [String] {

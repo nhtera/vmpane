@@ -36,6 +36,15 @@ public enum LinuxInstall {
         return config
     }
 
+    /// Before installing into a VM that already has a system: forgets the firmware's boot entries, so the
+    /// installer ISO boots instead of the old system (and `finished` does not see the old entry).
+    public static func forgetBootEntries(holding lock: BundleLock) throws {
+        let store = lock.bundle.auxDirectory.appendingPathComponent("efi_vars.fd")
+        guard FileManager.default.fileExists(atPath: store.path) else { return }
+        try FileManager.default.removeItem(at: store)
+        try DurableWrite.syncDirectory(lock.bundle.auxDirectory)
+    }
+
     /// After the VM stopped: if it was installing and the install finished (the system disk has a partition
     /// table and the firmware has an OS boot entry, written when the boot loader is installed), the config
     /// without the installer media; else nil. Virtualization reboots Linux guests in place, so the installed

@@ -6,7 +6,7 @@ import VMPaneCore
 @testable import VMPaneHost
 
 /// A helper with a scripted backend on a real socket, in a short temp root.
-private struct Harness {
+struct Harness {
     let root: URL
     let paths: VMPanePaths
     let bundle: VMBundle
@@ -130,46 +130,6 @@ private struct Harness {
     await helper.tearDown()
 }
 
-@Test func settingsApplyWhileStoppedSavesEverythingChangeable() async throws {
-    let helper = try await Harness.make()
-    let result = try await helper.client.call(
-        "vm.settings.apply", params: ["patch": ["cpu": ["count": 3], "name": "Renamed", "id": "nope", "bogus": 1]])
-    #expect(result["fields"] == ["cpu.count": "applied", "name": "applied", "id": "rejected", "bogus": "rejected"])
-    #expect(result["reasons"]?["id"] == "cannot be changed")
-    let saved = try ConfigStore.load(helper.bundle)
-    #expect(saved.cpu.count == 3 && saved.name == "Renamed")
-    _ = try await helper.client.call("vm.start")
-    #expect(helper.backend.lastStartConfig?.cpu.count == 3)  // the next boot uses the saved settings
-    await helper.tearDown()
-}
-
-@Test func settingsApplyWhileRunningSplitsLiveAndNextBoot() async throws {
-    let helper = try await Harness.make()
-    helper.backend.livePaths = ["shares"]
-    _ = try await helper.client.call("vm.start")
-    let share: JSONValue = ["id": "s1", "name": "data", "hostPath": "/tmp", "readOnly": true]
-    let result = try await helper.client.call(
-        "vm.settings.apply",
-        params: ["patch": ["cpu": ["count": 3], "shares": [share], "display": ["widthPx": 1024], "ui": ["closeAction": "stop"]]])
-    #expect(
-        result["fields"] == [
-            "cpu.count": "nextBoot", "shares": "applied", "display.widthPx": "nextBoot", "ui.closeAction": "applied",
-        ])
-    #expect(helper.backend.recordedCalls.last == "applyLive.display.widthPx,shares")
-    #expect(try ConfigStore.load(helper.bundle).cpu.count == 3)
-    await helper.tearDown()
-}
-
-@Test func settingsApplyRefusesInvalidPatches() async throws {
-    let helper = try await Harness.make()
-    await #expect(throws: RPCError.self) {
-        try await helper.client.call("vm.settings.apply", params: ["patch": ["cpu": ["count": "many"]]])
-    }
-    await #expect(throws: RPCError.self) { try await helper.client.call("vm.settings.apply", params: ["patch": 3]) }
-    #expect(try ConfigStore.load(helper.bundle).cpu.count >= 1)
-    await helper.tearDown()
-}
-
 /// Detaches install media like `LinuxInstall.finished` would, once the install is done.
 private let detachMedia: @Sendable (VMConfigV1) -> VMConfigV1? = { config in
     guard config.install != nil else { return nil }
@@ -179,7 +139,7 @@ private let detachMedia: @Sendable (VMConfigV1) -> VMConfigV1? = { config in
     return config
 }
 
-private func installing(_ config: inout VMConfigV1) {
+func installing(_ config: inout VMConfigV1) {
     config.removable = [Extensible(RemovableConfig(id: "install", path: "/tmp/x.iso", bus: .usb))]
     config.install = Extensible(InstallConfig(media: "install"))
 }
@@ -207,6 +167,35 @@ private func installing(_ config: inout VMConfigV1) {
     try await Task.sleep(for: .milliseconds(100))
     #expect(try ConfigStore.load(helper.bundle).install != nil)  // detaching would discard the suspend state
     #expect(helper.stateFiles() == ["suspend.json", "suspend.scripted"])
+    await helper.tearDown()
+}
+
+@Test func backendReportedLockedStateIsKeptEvenWhenTheSessionLooksUnlocked() async throws {
+    // A helper started outside the GUI session cannot see the screen lock; the backend's error decides.
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.start")
+    _ = try await helper.client.call("vm.suspend")
+    helper.backend.failOnce("start.resume", with: SavedStateLocked())
+    do {
+        _ = try await helper.client.call("vm.start")
+        Issue.record("start succeeded")
+    } catch let error as RPCError {
+        #expect(error.code == ControlErrorCode.macLocked.rawValue)
+    }
+    #expect(helper.stateFiles() == ["suspend.json", "suspend.scripted"])
+    await helper.tearDown()
+}
+
+@Test func liveSnapshotRestoreOnALockedMacIsRefusedBeforeStopping() async throws {
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.start")
+    let meta = try await helper.client.call("vm.snapshot.create", params: ["name": "s", "kind": "live"])
+    await helper.controller.setSessionLockCheck { true }
+    await #expect(throws: RPCError.self) {
+        try await helper.client.call("vm.snapshot.restore", params: ["id": meta["id"] ?? .null])
+    }
+    #expect(try await helper.state() == "running")
+    #expect(!helper.backend.recordedCalls.contains("stop.force"))
     await helper.tearDown()
 }
 

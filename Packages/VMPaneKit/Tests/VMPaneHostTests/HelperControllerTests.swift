@@ -84,7 +84,14 @@ private func withHelper(_ body: (HelperController, VMPanePaths, UUID) async thro
     #expect(!child.isAlive)
     #expect(!FileManager.default.fileExists(atPath: prepared.runFiles.socketURL.path))
     #expect(!FileManager.default.fileExists(atPath: prepared.runFiles.pidURL.path))
-    #expect(try bundle.tryLock() != nil)
+    // The killed child's copy of the lock descriptor is released as it exits, slightly after the signal
+    // (user-facing lock checks retry for the same reason).
+    var lock = try bundle.tryLock()
+    for _ in 0..<20 where lock == nil {
+        try await Task.sleep(for: .milliseconds(50))
+        lock = try bundle.tryLock()
+    }
+    #expect(lock != nil)
 }
 
 private final class Flag: @unchecked Sendable {

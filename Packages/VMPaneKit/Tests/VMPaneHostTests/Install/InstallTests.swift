@@ -194,3 +194,18 @@ private func temporaryDirectory() throws -> URL {
 private func utf16(_ text: String, at offset: Int) -> Data {
     Data(repeating: 0, count: offset) + text.utf16.reduce(into: Data()) { $0.append(contentsOf: [UInt8($1 & 0xFF), UInt8($1 >> 8)]) }
 }
+
+@Test func reinstallingForgetsTheOldBootEntries() throws {
+    let dir = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let config = VMConfigV1(VMConfigFields.new(name: "L", os: .linux, macAddress: MachineIdentity.randomMACAddress()))
+    let bundle = try VMBundle.create(at: dir.appendingPathComponent("L.vmpane"), config: config)
+    let store = bundle.auxDirectory.appendingPathComponent("efi_vars.fd")
+    try FileManager.default.createDirectory(at: bundle.auxDirectory, withIntermediateDirectories: true)
+    try utf16(#"\EFI\debian\shimaa64.efi"#, at: 0).write(to: store)
+    let lock = try #require(try bundle.tryLock())
+    defer { lock.release() }
+    try LinuxInstall.forgetBootEntries(holding: lock)
+    #expect(!FileManager.default.fileExists(atPath: store.path))
+    try LinuxInstall.forgetBootEntries(holding: lock)  // nothing to forget: fine
+}

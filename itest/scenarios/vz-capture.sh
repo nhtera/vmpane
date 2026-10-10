@@ -56,7 +56,15 @@ scenario_run() {
         awk "BEGIN {exit !(($gx / $max_x - $fx) ^ 2 < 0.0004 && ($gy / $max_y - $fy) ^ 2 < 0.0004)}" \
             || it_fail "click at ($px, $py) of ${width}x$height arrived at ($gx, $gy) of ($max_x, $max_y)" || return 1
     done
-    echo "vz-capture: absolute pointer clicks land where sent (${width}x$height, guest range ${max_x}x$max_y)"
+    # Right (bit 1) and middle (bit 2) buttons arrive as BTN_RIGHT and BTN_MIDDLE.
+    for mask in 2 4; do
+        offset=$(it_log_size "$bundle")
+        it_rpc "$socket" vm.input.pointer "{\"x\": $px, \"y\": $py, \"buttons\": $mask}" >/dev/null
+        it_rpc "$socket" vm.input.pointer "{\"x\": $px, \"y\": $py, \"buttons\": 0}" >/dev/null
+        it_wait_for 10 bash -c "tail -c +$((offset + 1)) '$bundle/logs/serial.log' | grep -aq 'VMPANE-POINTER button=$((mask / 2)) down=1'" \
+            || it_fail "button mask $mask did not reach the guest" || return 1
+    done
+    echo "vz-capture: absolute pointer clicks land where sent (${width}x$height, guest range ${max_x}x$max_y); right and middle buttons too"
 
     it_rpc "$socket" vm.stop '{"mode": "force"}' >/dev/null
     it_rpc "$socket" helper.shutdown >/dev/null

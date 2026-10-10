@@ -51,7 +51,11 @@ public final class VZBackend: VMBackend {
         }
         try await create(plan)
         if let directory = options.stateDirectory {
-            try await runner.restore(from: directory.appendingPathComponent(Self.stateFileName))
+            do {
+                try await runner.restore(from: directory.appendingPathComponent(Self.stateFileName))
+            } catch  where Self.isLockedRestore(error) {
+                throw SavedStateLocked()
+            }
         } else {
             try await runner.start()
         }
@@ -141,6 +145,11 @@ public final class VZBackend: VMBackend {
         await runner.probeLiveChanges(scratch: scratch)
     }
 
+    /// The C2 capture self-test (`VZDisplayHost.selfTest`): false when there is no display or the frame is black.
+    @MainActor public func captureSelfTest() -> Bool {
+        display?.selfTest() ?? false
+    }
+
     /// Makes the VM's window visible.
     @MainActor public func showDisplay() {
         display?.show()
@@ -177,6 +186,22 @@ public final class VZBackend: VMBackend {
         var config = config
         config.platform.machineIdentifier = VZMaterializer.newMachineIdentifier()
         return config
+    }
+
+    /// Saved state is encrypted with a Secure Enclave key that works only while the Mac is unlocked: the
+    /// restore then fails with VZErrorDomain 12 "permission denied" (underlying: errSecInteractionNotAllowed).
+    static func isLockedRestore(_ error: Error) -> Bool {
+        var pending: [NSError] = [error as NSError]
+        while let next = pending.popLast() {
+            if next.domain == NSOSStatusErrorDomain && next.code == Int(errSecInteractionNotAllowed) { return true }
+            if next.domain == VZErrorDomain && next.code == 12,
+                (next.localizedFailureReason ?? next.localizedDescription).localizedCaseInsensitiveContains("permission denied")
+            {
+                return true
+            }
+            pending += next.underlyingErrors.map { $0 as NSError }
+        }
+        return false
     }
 
     private static func openLog(_ url: URL) -> FileHandle? {

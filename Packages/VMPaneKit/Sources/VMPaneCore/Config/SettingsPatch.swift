@@ -87,7 +87,7 @@ public enum SettingsPatch {
         set(path.split(separator: ".").map(String.init)[...], value(at: path, in: source), in: target)
     }
 
-    static func value(at path: String, in json: JSONValue) -> JSONValue? {
+    public static func value(at path: String, in json: JSONValue) -> JSONValue? {
         var current: JSONValue? = json
         for part in path.split(separator: ".").map(String.init) {
             switch current {

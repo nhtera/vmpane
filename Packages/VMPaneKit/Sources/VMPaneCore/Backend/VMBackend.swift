@@ -27,6 +27,11 @@ public struct StartOptions: Sendable, Equatable {
     }
 }
 
+/// Saved RAM state exists but cannot be read now (VZ: the Mac is locked); it must be kept, not discarded.
+public struct SavedStateLocked: Error, Sendable, Equatable {
+    public init() {}
+}
+
 /// What a backend can do while the VM runs.
 public struct LiveCapabilities: OptionSet, Sendable, Hashable {
     public let rawValue: Int

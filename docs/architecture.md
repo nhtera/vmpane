@@ -20,6 +20,29 @@ This page describes the intended shape; parts not built yet are marked *planned*
 - **QEMU + Hypervisor.framework** for Windows 11 ARM (`VMPaneQEMU`): our own EDK2 build with Secure
   Boot and Microsoft keys, `swtpm` for TPM 2.0, display over SPICE ([ADR 0001](adr/0001-display-path.md)).
 
+### Backend contract (`VMBackend`, VMPaneCore)
+
+The helper drives every backend the same way; a new backend implements exactly this:
+
+- **State comes from events.** `events` (one consumer) reports `started`, `paused`, `resumed`,
+  `suspended`, `stopped(reason)`, `failed`, `installProgress`, `consoleOutput`. Requests only start work;
+  the helper's state machine moves on events. A guest that powers off by itself sends `stopped`.
+- **`start(StartOptions)`** rebuilds the devices from `options.config` (the saved config: next-boot
+  settings take effect) and either cold boots or, with `stateDirectory`, resumes saved RAM state. A
+  restore that cannot read the state *now* throws `SavedStateLocked` (the helper keeps the state);
+  any other restore error makes the helper cold boot and delete it.
+- **`suspend(to:)`** saves RAM state (`*.partial`, renamed when complete) and stops; on failure the VM
+  is running again. **`saveState(to:)`** saves the paused VM's state for a live snapshot.
+- **`applyLive(config, paths)`** applies settings of kind `live` (`SettingsPatch.kind`) to the running
+  VM and returns those now in effect; the rest wait for the next start. Default: none.
+- **`screenshot` / `send(InputEvent)`** in guest display pixels (pointer `buttons`: bit 0 left, 1 right,
+  2 middle).
+- **`capabilities`** (`LiveCapabilities`) gate requests in `vm.info`.
+- **Config hooks** (`BackendFactory.Made`): `afterStart` and `afterStop` return config changes the
+  helper saves (macOS install recorded; Linux install media detached).
+- **Saved-state validity** is `DeviceSet`: the config's guest-visible hardware plus the backend's
+  `layoutVersions` entry, bumped whenever a backend builds different devices for the same config.
+
 ## Swift packages
 
 All logic that can be unit-tested lives in `Packages/VMPaneKit`; the Xcode targets keep only entry

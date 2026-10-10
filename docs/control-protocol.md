@@ -36,11 +36,11 @@ denied.
 |---|---|---|---|
 | `helper.hello` | `{proto, minProto, client: {name, version, kind: ui\|cli\|mcp, sessionId?}}` | `{proto, helperVersion, runtimeVersion}` | any |
 | `helper.shutdown` | — | `{}` | admin |
-| `vm.info` | — | `{id, name, os, backend, state, allowedRequests, capabilities}` | observe |
+| `vm.info` | — | `{id, name, os, backend, state, allowedRequests, capabilities, pendingRestart}` | observe |
 | `vm.start` | `{headless}` | `{state}` | control |
 | `vm.pause` | — | `{state}` | control |
 | `vm.resume` | — | `{state}` | control |
-| `vm.suspend` | — | `{state}` | control |
+| `vm.suspend` | — | `{state, message?}` (`message`: pending hardware settings will discard the state) | control |
 | `vm.stop` | `{mode: graceful\|force}` | `{state}` | admin |
 | `vm.snapshot.list` | — | `[SnapshotMeta]` | observe |
 | `vm.snapshot.create` | `{name, kind: live\|disk, origin}` (disk: VM stopped; live: VM running, paused briefly) | `SnapshotMeta` | control |
