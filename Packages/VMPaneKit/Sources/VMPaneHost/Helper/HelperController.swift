@@ -23,6 +23,8 @@ public actor HelperController {
     var runningConfig: VMConfigV1?
     /// Whether the Mac is locked (replaced in tests).
     var isSessionLocked: @Sendable () -> Bool = SessionLock.isLocked
+    /// Refuses RAM-state saves without room for them (replaced in tests, which must not depend on this Mac's disk).
+    var checkSpace: @Sendable (_ memoryBytes: UInt64, _ at: URL) throws -> Void = { try SpaceGuard.check(memoryBytes: $0, at: $1) }
     let afterStart: (@Sendable (VMConfigV1) -> VMConfigV1?)?
     /// Config changes once the VM has stopped (e.g. detaching a finished Linux install's media).
     let afterStop: (@Sendable (VMConfigV1) -> VMConfigV1?)?
@@ -35,6 +37,7 @@ public actor HelperController {
 
     public func setGracefulStopTimeout(_ timeout: Duration) { gracefulStopTimeout = timeout }
     func setSessionLockCheck(_ check: @escaping @Sendable () -> Bool) { isSessionLocked = check }
+    func setSpaceCheck(_ check: @escaping @Sendable (UInt64, URL) throws -> Void) { checkSpace = check }
 
     public init(
         prepared: PreparedBundle, runtimeVersion: String, backend: VMBackend?, config: VMConfigV1? = nil,

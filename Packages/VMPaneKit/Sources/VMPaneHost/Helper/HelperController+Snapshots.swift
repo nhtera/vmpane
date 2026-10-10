@@ -77,7 +77,8 @@ extension HelperController {
         let store = SnapshotStore(lock: prepared.lock)
         let (bundle, directory) = (prepared.lock.bundle, stateDirectory)
         let memory = UInt64(config.memory.mib) << 20
-        try await Blocking.run { try SpaceGuard.check(memoryBytes: memory, at: bundle.url) }
+        let checkSpace = checkSpace
+        try await Blocking.run { try checkSpace(memory, bundle.url) }
         let wasRunning = state == .running
         if wasRunning {
             try await backend.pause()
@@ -89,7 +90,10 @@ extension HelperController {
             try await writeStateMeta()
             let meta = try await Blocking.run {
                 let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-                return try store.create(name: name, kind: .live, origin: origin, context: context, stateFiles: files, memoryBytes: memory)
+                // Space was checked before the state was written (checkSpace); the state now takes some of it.
+                return try store.create(
+                    name: name, kind: .live, origin: origin, context: context, stateFiles: files, memoryBytes: memory,
+                    availableSpace: { _ in .max })
             }
             await clearSavedState()  // the state now belongs to the snapshot
             if wasRunning {

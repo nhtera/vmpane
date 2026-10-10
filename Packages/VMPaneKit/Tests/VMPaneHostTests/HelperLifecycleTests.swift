@@ -32,6 +32,7 @@ struct Harness {
             prepared: prepared, runtimeVersion: "t", backend: backend, afterStop: afterStop
         ) {}
         await controller.setSessionLockCheck { false }  // independent of this Mac's real lock state
+        await controller.setSpaceCheck { _, _ in }  // and of its free disk space
         try await controller.start()
         let client = try UDSClient.connect(to: prepared.runFiles.socketURL)
         return Harness(root: root, paths: paths, bundle: bundle, controller: controller, backend: backend, client: client)
@@ -210,7 +211,8 @@ func installing(_ config: inout VMConfigV1) {
 }
 
 @Test func suspendIsRefusedWithoutSpaceForTheRAMState() async throws {
-    let helper = try await Harness.make(memoryMiB: 64 << 20)  // 64 TiB of "RAM"
+    let helper = try await Harness.make()
+    await helper.controller.setSpaceCheck { memory, _ in throw InsufficientSpace(requiredBytes: memory, availableBytes: 0) }
     _ = try await helper.client.call("vm.start")
     do {
         _ = try await helper.client.call("vm.suspend")

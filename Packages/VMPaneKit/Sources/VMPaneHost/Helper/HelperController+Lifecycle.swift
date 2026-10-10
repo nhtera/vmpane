@@ -206,7 +206,8 @@ extension HelperController {
     func suspendVM(_ backend: VMBackend) async throws {
         let bundle = prepared.lock.bundle
         let memory = UInt64(config.memory.mib) << 20
-        try await Blocking.run { try SpaceGuard.check(memoryBytes: memory, at: bundle.url) }
+        let checkSpace = checkSpace
+        try await Blocking.run { try checkSpace(memory, bundle.url) }
         transition(.suspend)
         await clearSavedState()
         do {
