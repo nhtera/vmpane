@@ -33,6 +33,8 @@ public actor HelperController {
     let afterStart: (@Sendable (VMConfigV1) -> VMConfigV1?)?
     /// Config changes once the VM has stopped (e.g. detaching a finished Linux install's media).
     let afterStop: (@Sendable (VMConfigV1) -> VMConfigV1?)?
+    /// The VM's configuration as the helper uses it now.
+    public var currentConfig: VMConfigV1 { config }
     /// Every state the VM enters (the helper's window follows it). Single consumer.
     public nonisolated let stateChanges: AsyncStream<VMRunState>
     let stateContinuation: AsyncStream<VMRunState>.Continuation

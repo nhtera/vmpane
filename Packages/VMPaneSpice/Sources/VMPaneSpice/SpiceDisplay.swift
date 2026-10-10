@@ -2,11 +2,15 @@ import AppKit
 @preconcurrency import CocoaSpice
 @preconcurrency import CocoaSpiceRenderer
 import MetalKit
+import VMPaneCore
+import VMPaneQEMU
 import os
 
 /// The window of a Windows VM: a SPICE client on QEMU's `spice.sock` rendering the guest display with Metal,
 /// sending keyboard and mouse input. QEMU is restarted by resume and snapshot restores, so the session
-/// reconnects whenever the helper says the VM is running.
+/// reconnects whenever the helper says the VM is running. With spice-vdagent in the guest, the guest resolution
+/// follows the window (`display.autoResize`) and text is shared through the clipboard (`clipboard.mode`, only while
+/// the window is key).
 /// Only create one when `SpiceLibraries.available`.
 @MainActor
 public final class SpiceDisplay: NSObject {
@@ -21,6 +25,12 @@ public final class SpiceDisplay: NSObject {
     /// Whether the session should be connected (the VM runs); a dropped connection is retried meanwhile.
     private var wanted = false
     private static var started = false
+    /// The guest agent's features while it is connected.
+    private var agent: CSConnectionAgentFeature?
+    private var settings: (display: DisplayConfig, clipboard: ClipboardConfig.Mode)?
+    private let pasteboard = SpicePasteboard()
+    private var resizeTask: Task<Void, Never>?
+    private var clipboardTimer: Timer?
 
     public init(socket: URL, title: String, size: CGSize) {
         self.socket = socket
@@ -33,7 +43,46 @@ public final class SpiceDisplay: NSObject {
         window.contentView = view
         window.isReleasedWhenClosed = false
         super.init()
-        view.onResize = { [weak self] in self?.layoutDisplay() }
+        view.onResize = { [weak self] in
+            self?.layoutDisplay()
+            self?.resizeGuestSoon()
+        }
+        let center = NotificationCenter.default
+        center.addObserver(self, selector: #selector(focusChanged), name: NSWindow.didBecomeKeyNotification, object: window)
+        center.addObserver(self, selector: #selector(focusChanged), name: NSWindow.didResignKeyNotification, object: window)
+    }
+
+    /// The VM's display and clipboard settings (read at each start: neither changes while QEMU runs).
+    public func configure(display: DisplayConfig, clipboard: ClipboardConfig.Mode) {
+        settings = (display, clipboard)
+        focusChanged()
+    }
+
+    @objc private func focusChanged() {
+        let focused = window.isKeyWindow
+        pasteboard.update(mode: settings?.clipboard ?? .off, focused: focused)
+        clipboardTimer?.invalidate()
+        clipboardTimer = nil
+        guard focused, settings?.clipboard.sendsToGuest == true else { return }
+        pasteboard.offerIfChanged()
+        // NSPasteboard has no change notification: poll while the guest has focus.
+        clipboardTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.pasteboard.offerIfChanged() }
+        }
+    }
+
+    /// Asks the guest agent for the window's resolution once the window has kept its size for a moment.
+    private func resizeGuestSoon() {
+        resizeTask?.cancel()
+        guard let settings, settings.display.autoResize, agent?.contains(.monitorsConfig) == true else { return }
+        resizeTask = Task { [weak self] in
+            try? await Task.sleep(for: SpiceGuestDisplay.resizeDebounce)
+            guard !Task.isCancelled, let self, let display = self.display else { return }
+            let size = SpiceGuestDisplay.resolution(
+                forContent: self.view.bounds.size, backingScale: self.window.backingScaleFactor, scaling: settings.display.scaling)
+            guard size != display.displaySize else { return }
+            display.requestResolution(CGRect(origin: .zero, size: size))
+        }
     }
 
     /// Shows the window and focuses the guest.
@@ -59,6 +108,7 @@ public final class SpiceDisplay: NSObject {
         }
         let connection = CSConnection(unixSocketFile: socket)
         connection.delegate = self
+        connection.session.pasteboardDelegate = pasteboard
         self.connection = connection
         if !connection.connect() { retryLater() }
     }
@@ -97,6 +147,8 @@ public final class SpiceDisplay: NSObject {
     /// Drops the session; with `waiting`, the connection stays the delegate's until it reports the disconnect.
     private func teardown(waiting: Bool = false) {
         view.input = nil
+        agent = nil
+        resizeTask?.cancel()
         if let display { display.removeRenderer(renderer) }
         display = nil
         if waiting {
@@ -143,6 +195,7 @@ public final class SpiceDisplay: NSObject {
         self.display = display
         display.addRenderer(renderer)
         layoutDisplay()
+        resizeGuestSoon()
         Self.log.info("SPICE display \(Int(display.displaySize.width))x\(Int(display.displaySize.height))")
     }
 
@@ -154,6 +207,13 @@ public final class SpiceDisplay: NSObject {
     fileprivate func inputAvailable(_ input: CSInput, on source: CSConnection) {
         guard source === connection else { return }
         view.input = input
+    }
+
+    fileprivate func agentChanged(_ features: CSConnectionAgentFeature?, on source: CSConnection) {
+        guard source === connection else { return }
+        agent = features
+        Self.log.info("SPICE guest agent \(features == nil ? "disconnected" : "connected", privacy: .public)")
+        resizeGuestSoon()
     }
 
     /// Callbacks name their connection: an old session's late callbacks must not touch the current one.
@@ -201,8 +261,15 @@ extension SpiceDisplay: CSConnectionDelegate {
     }
 
     nonisolated public func spiceDisplayDestroyed(_ connection: CSConnection, display: CSDisplay) {}
-    nonisolated public func spiceAgentConnected(_ connection: CSConnection, supportingFeatures features: CSConnectionAgentFeature) {}
-    nonisolated public func spiceAgentDisconnected(_ connection: CSConnection) {}
+    nonisolated public func spiceAgentConnected(_ connection: CSConnection, supportingFeatures features: CSConnectionAgentFeature) {
+        nonisolated(unsafe) let source = connection
+        DispatchQueue.main.async { MainActor.assumeIsolated { self.agentChanged(features, on: source) } }
+    }
+
+    nonisolated public func spiceAgentDisconnected(_ connection: CSConnection) {
+        nonisolated(unsafe) let source = connection
+        DispatchQueue.main.async { MainActor.assumeIsolated { self.agentChanged(nil, on: source) } }
+    }
     nonisolated public func spiceForwardedPortOpened(_ connection: CSConnection, port: CSPort) {}
     nonisolated public func spiceForwardedPortClosed(_ connection: CSConnection, port: CSPort) {}
 }

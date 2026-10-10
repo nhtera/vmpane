@@ -230,6 +230,10 @@ extension HelperDelegate {
             for await state in controller.stateChanges {
                 switch state {
                 case .running, .paused:
+                    if state == .running {
+                        let current = await controller.currentConfig
+                        display.configure(display: current.display.fields, clipboard: current.clipboard.fields.mode)
+                    }
                     display.connect(afterStart: state == .running)
                     if !headless, !shown {
                         shown = true
