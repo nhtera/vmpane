@@ -31,6 +31,19 @@ public struct QEMULayout: Sendable, Equatable {
         return bundleDirectory.appendingPathComponent(String(path.dropFirst(base.count + 1)), isDirectory: url.hasDirectoryPath)
     }
 
+    /// A removable medium (an absolute path) as QEMU must open it: inside the bundle (mapped to its real path) or
+    /// the QEMU runtime copy (read-only firmware, guest tools). The sandbox would deny anything else.
+    public func mediaFile(_ path: String) throws -> URL {
+        // Standardized on both sides (`..` resolved; Foundation shows /private/tmp as /tmp either way).
+        let file = URL(fileURLWithPath: path).standardizedFileURL.path
+        for base in [bundleDirectory, bundle.url] {
+            let prefix = base.standardizedFileURL.path + "/"
+            if file.hasPrefix(prefix) { return bundleDirectory.appendingPathComponent(String(file.dropFirst(prefix.count))) }
+        }
+        if file.hasPrefix(installation.root.standardizedFileURL.path + "/") { return URL(fileURLWithPath: path) }
+        throw QEMUConfigError.mediaOutsideBundle(path)
+    }
+
     private var aux: URL { bundleDirectory.appendingPathComponent("current/aux", isDirectory: true) }
     private var logs: URL { bundleDirectory.appendingPathComponent("logs", isDirectory: true) }
 

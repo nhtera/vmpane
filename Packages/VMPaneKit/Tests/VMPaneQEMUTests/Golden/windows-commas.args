@@ -41,10 +41,10 @@ usb-tablet,bus=xhci.0
 node-name=disk0,driver=raw,discard=unmap,file.driver=file,file.filename=<bundle>/current/disk.img
 -device
 nvme,drive=disk0,serial=vmpane-0,bootindex=0
--blockdev
-node-name=media0,driver=raw,read-only=on,file.driver=file,file.filename=/isos/a,,readonly=off.iso
+-drive
+if=none,id=media0,media=cdrom,readonly=on,format=raw,file=<bundle>/install/a,,readonly=off.iso
 -device
-usb-storage,bus=xhci.0,drive=media0,removable=on
+usb-storage,bus=xhci.0,drive=media0,removable=on,id=media0-dev
 -device
 ramfb
 -netdev

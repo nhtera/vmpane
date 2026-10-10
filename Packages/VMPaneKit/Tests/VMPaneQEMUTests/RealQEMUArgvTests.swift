@@ -41,8 +41,7 @@ private func variantConfig(_ variant: String, media: URL) throws -> VMConfigV1 {
             Extensible(RemovableConfig(id: "win", path: media.path, bus: .usb)),
             Extensible(RemovableConfig(id: "unattend", path: media.path, bus: .usb)),
         ]
-        config.install = Extensible(InstallConfig(media: "win"))
-        config.network = []
+        config.install = Extensible(InstallConfig(media: "win"))  // the builder leaves the NIC out
     case "tools":
         config.qemu?.gpu = .virtio
         config.disks.append(Extensible(DiskConfig(id: "data", file: "current/data.img", format: .raw, sizeGiB: 1, bus: .virtio)))
@@ -82,11 +81,13 @@ func realQEMUAcceptsTheArgv(variant: String) async throws {
     let run = root.appendingPathComponent("r", isDirectory: true)
     try FileManager.default.createDirectory(at: run, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: root) }
-    let media = root.appendingPathComponent("media.iso")
-    try Data(count: 1 << 20).write(to: media)
-
+    // Media live in the bundle's install/ (the sandbox reads only the bundle and the runtime).
+    let bundleURL = root.appendingPathComponent("W.vmpane")
+    let media = bundleURL.appendingPathComponent("install/media.iso")
     let config = try variantConfig(variant, media: media)
-    let bundle = try VMBundle.create(at: root.appendingPathComponent("W.vmpane"), config: config)
+    let bundle = try VMBundle.create(at: bundleURL, config: config)
+    try FileManager.default.createDirectory(at: bundle.installDirectory, withIntermediateDirectories: true)
+    try Data(count: 1 << 20).write(to: media)
     for disk in config.disks { try DiskImage.createRaw(at: try bundle.fileURL(relativePath: disk.file), sizeBytes: 1 << 30) }
     let layout = QEMULayout(bundle: bundle, runDirectory: run, installation: installation)
     try QEMUFirmware.ensureVariables(layout)
@@ -111,6 +112,16 @@ func realQEMUAcceptsTheArgv(variant: String) async throws {
     let qmp = try await QMPClient.connect(to: layout.qmpSocket)
     let status = try await qmp.execute("query-status")["status"]
     #expect(status == (variant == "minimal" ? "inmigrate" : "running"))
+    if variant == "install" {
+        // After Setup's first reboot the install medium is ejected: a CD-ROM under its usb-storage device.
+        guard case .array(let blocks) = try await qmp.execute("query-block") else { Issue.record("query-block"); return }
+        let entry = try #require(blocks.first { $0["qdev"]?.stringValue?.contains("media0-dev") == true })
+        #expect(entry["removable"] == true && entry["inserted"]?["ro"] == true)
+        let medium = try #require(entry["qdev"]?.stringValue)
+        try await qmp.execute("eject", ["id": .string(medium), "force": true])
+        guard case .array(let after) = try await qmp.execute("query-block") else { return }
+        #expect(after.first { $0["qdev"]?.stringValue == medium }?["inserted"] == nil)
+    }
     if variant == "default" {
         // Every key name in the shared table is a QKeyCode this QEMU knows (an unknown one is an error).
         for name in Set(KeyNames.names.values) {

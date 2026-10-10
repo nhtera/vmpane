@@ -54,17 +54,35 @@ private func expectGolden(_ name: String, _ args: [String], layout: QEMULayout, 
     }
 }
 
-/// Phase 06 install: Windows ISO boots first from USB, unattend + tools ISOs, no NIC.
+/// Install: the Windows ISO (copied into install/) boots first from USB, the unattend ISO next to it, the
+/// guest tools from the runtime; no NIC even though the config has one (an argv-builder invariant).
 @Test func installFromISOWithoutNetwork() throws {
     var config = try windowsConfig()
-    config.removable = [
-        Extensible(RemovableConfig(id: "win-iso", path: "/Users/me/Downloads/Win11_ARM64.iso", bus: .usb)),
-        Extensible(RemovableConfig(id: "unattend", path: "/tmp/unattend.iso", bus: .usb)),
-    ]
     config.install = Extensible(InstallConfig(media: "win-iso"))
-    config.network = []
+    #expect(!config.network.isEmpty)
     try withBundle(config) { layout in
-        try expectGolden("windows-install", try QEMUArgvBuilder.arguments(config, layout: layout, fileExists: allExist), layout: layout)
+        let install = layout.bundle.installDirectory
+        config.removable = [
+            Extensible(RemovableConfig(id: "win-iso", path: install.appendingPathComponent("windows.iso").path, bus: .usb)),
+            Extensible(RemovableConfig(id: "unattend", path: install.appendingPathComponent("unattend.iso").path, bus: .usb)),
+            Extensible(RemovableConfig(id: "tools", path: "/runtime/1.0-q12345678/qemu/share/guest-tools.iso", bus: .usb)),
+        ]
+        let args = try QEMUArgvBuilder.arguments(config, layout: layout, fileExists: allExist)
+        #expect(!args.contains("-netdev") && !args.contains { $0.hasPrefix("virtio-net") })
+        try expectGolden("windows-install", args, layout: layout)
+    }
+}
+
+/// The QEMU sandbox reads only the bundle and the runtime: other media are refused before QEMU starts.
+@Test func mediaOutsideTheBundleAreRefused() throws {
+    var config = try windowsConfig()
+    config.removable = [Extensible(RemovableConfig(id: "iso", path: "/Users/me/Downloads/Win11.iso", bus: .usb))]
+    try withBundle(config) { layout in
+        #expect(throws: QEMUConfigError.mediaOutsideBundle("/Users/me/Downloads/Win11.iso")) {
+            try QEMUArgvBuilder.arguments(config, layout: layout, fileExists: allExist)
+        }
+        config.removable[0].path = layout.bundle.url.path + "/install/../../escape.iso"
+        #expect(throws: QEMUConfigError.self) { try QEMUArgvBuilder.arguments(config, layout: layout, fileExists: allExist) }
     }
 }
 
@@ -100,11 +118,13 @@ private func expectGolden(_ name: String, _ args: [String], layout: QEMULayout, 
 @Test func commasInNamesAndPathsAreEscaped() throws {
     var config = try windowsConfig()
     config.name = "Win, file=/etc/passwd"
-    config.removable = [Extensible(RemovableConfig(id: "iso", path: "/isos/a,readonly=off.iso", bus: .usb))]
     try withBundle(named: "Win, Test.vmpane", config) { layout in
+        config.removable = [
+            Extensible(RemovableConfig(id: "iso", path: layout.bundle.url.path + "/install/a,readonly=off.iso", bus: .usb))
+        ]
         let args = try QEMUArgvBuilder.arguments(config, layout: layout, fileExists: allExist)
         #expect(!args.contains { $0.contains("passwd") })  // the VM name never reaches QEMU
-        #expect(args.contains { $0.hasSuffix("file.filename=/isos/a,,readonly=off.iso") })
+        #expect(args.contains { $0.hasSuffix("/install/a,,readonly=off.iso") })
         try expectGolden("windows-commas", args, layout: layout)
     }
 }
@@ -139,9 +159,10 @@ private func expectGolden(_ name: String, _ args: [String], layout: QEMULayout, 
             }
         }
         var missing = base
-        missing.removable = [Extensible(RemovableConfig(id: "iso", path: "/nonexistent.iso", bus: .usb))]
+        let absent = layout.bundle.url.path + "/install/nonexistent.iso"
+        missing.removable = [Extensible(RemovableConfig(id: "iso", path: absent, bus: .usb))]
         #expect(throws: QEMUConfigError.missingFile("current/disk.img")) { try QEMUArgvBuilder.arguments(missing, layout: layout) }
-        #expect(throws: QEMUConfigError.missingFile("/nonexistent.iso")) {
+        #expect(throws: QEMUConfigError.missingFile(absent)) {
             try QEMUArgvBuilder.arguments(missing, layout: layout, fileExists: { $0.lastPathComponent == "disk.img" })
         }
         var escaping = base

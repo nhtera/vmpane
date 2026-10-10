@@ -13,6 +13,8 @@ public enum QEMUConfigError: Error, Equatable, Sendable, CustomStringConvertible
     /// A Unix socket path longer than `sun_path` allows.
     case socketPathTooLong(String)
     case missingFile(String)
+    /// The QEMU sandbox reads only the VM's bundle and the QEMU runtime: media elsewhere must be copied in first.
+    case mediaOutsideBundle(String)
     /// Secure Boot off needs a variable template without keys, which this build does not ship.
     case secureBootRequired
 
@@ -25,6 +27,7 @@ public enum QEMUConfigError: Error, Equatable, Sendable, CustomStringConvertible
         case .invalidPortForward(let id): "port forward \(id) needs a literal IPv4 host address and ports 1–65535"
         case .socketPathTooLong(let path): "socket path too long: \(path)"
         case .missingFile(let path): "missing file \(path)"
+        case .mediaOutsideBundle(let path): "\(path) is outside the VM: Windows VMs use media inside their bundle"
         case .secureBootRequired: "Windows VMs run with Secure Boot on"
         }
     }
@@ -121,12 +124,18 @@ public enum QEMUArgvBuilder {
             bootIndex += 1
         }
         for (index, media) in config.removable.enumerated() {
-            let url = URL(fileURLWithPath: media.path)
+            let url = try layout.mediaFile(media.path)
             guard fileExists(url) else { throw QEMUConfigError.missingFile(media.path) }
+            // Device ids let QMP find and eject the medium (the install ISO after Setup's first reboot). USB media
+            // are ISOs: a CD-ROM (scsi-cd under usb-storage, as in S1), which needs the legacy -drive syntax.
             let node = "media\(index)"
-            args += ["-blockdev", "node-name=\(node),driver=raw,read-only=on,file.driver=file,file.filename=\(path(url))"]
+            if media.bus == .usb {
+                args += ["-drive", "if=none,id=\(node),media=cdrom,readonly=on,format=raw,file=\(path(url))"]
+            } else {
+                args += ["-blockdev", "node-name=\(node),driver=raw,read-only=on,file.driver=file,file.filename=\(path(url))"]
+            }
             let boot = media.id == installMedia ? 0 : nil
-            args += ["-device", device(for: media.bus, node: node, serial: nil, bootIndex: boot, removable: true)]
+            args += ["-device", device(for: media.bus, node: node, serial: nil, bootIndex: boot, removable: true) + ",id=\(node)-dev"]
         }
         return args
     }
@@ -143,8 +152,10 @@ public enum QEMUArgvBuilder {
         return options.joined(separator: ",")
     }
 
-    /// slirp NAT per NIC (`hostfwd` rules on the first one). No vmnet: bridged is unavailable.
+    /// slirp NAT per NIC (`hostfwd` rules on the first one). No vmnet: bridged is unavailable. An install gets no
+    /// NIC at all, whatever the config says: without network Windows Setup offers the local account (S1).
     private static func network(_ config: VMConfigV1) throws -> [String] {
+        guard config.install == nil else { return [] }
         var args: [String] = []
         let nics = try config.network.filter { nic in
             switch nic.mode {
