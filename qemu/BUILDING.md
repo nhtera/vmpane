@@ -71,7 +71,7 @@ file of the bundle; `package.sh` records these hashes in `MANIFEST.json`.
 
 | Path | Contents | Goes to |
 |---|---|---|
-| `bin/` | qemu-system-aarch64, qemu-img, swtpm, swtpm_setup | `VMPane.app/Contents/Helpers/qemu/bin` |
+| `bin/` | qemu-system-aarch64, qemu-img, swtpm | `VMPane.app/Contents/Helpers/qemu/bin` |
 | `lib/` | the libraries they load | `VMPane.app/Contents/Helpers/qemu/lib` |
 | `share/` | `edk2-aarch64-code.fd`, `edk2-aarch64-vars-sb.fd` (unpadded), `qemu/efi-virtio.rom` | `VMPane.app/Contents/Resources/qemu/share` |
 | `frameworks/` | SPICE client libraries (spice-client-glib and what it loads) | `VMPaneVM.app/Contents/Frameworks` |
@@ -118,7 +118,8 @@ Choices that are not obvious from the recipes (`scripts/lib/recipes.sh`):
 - **QEMU** is built for HVF only (`--disable-tcg`) with the device allowlist in
   [`configs/devices-vmpane.mak`](configs/devices-vmpane.mak) (see [SECURITY-DEVICES.md](SECURITY-DEVICES.md)).
   `qemu-system-aarch64 -accel help` lists only `hvf`.
-- **swtpm:** only `swtpm` and `swtpm_setup` are built; the certificate tools need GnuTLS and GMP.
+- **swtpm:** only `swtpm` is built. It creates a fresh TPM state on first start; Windows 11 needs no EK
+  certificate, so `swtpm_setup` and the certificate tools (which need GnuTLS and GMP) are not shipped.
 - **GStreamer:** core and base libraries only, no plugins and no pipeline-string parser. spice-gtk cannot
   link without them; VMPane plays guest audio through QEMU's CoreAudio backend, not SPICE.
 - **spice-gtk** carries UTM's patch set (Apache-2.0, see `LICENSES/UTM`), which CocoaSpice needs.
@@ -133,9 +134,8 @@ Choices that are not obvious from the recipes (`scripts/lib/recipes.sh`):
   only its VM's bundle and run directory; QEMU may also open HVF and use slirp networking. The
   `qemu-sandbox` itest boots the firmware with both sandboxed, checks that each is denied a file outside its
   VM, and with `VMPANE_SIGN_IDENTITY` set does so with release-signed (hardened runtime) binaries.
-- **swtpm_setup** looks for its configuration under the build prefix (`/vmpane/qemu/etc`), which does not
-  exist: pass `--config <file>`, and point `HOME`/`XDG_CONFIG_HOME` at the VM's directory so it never writes
-  into the user's `~/.config`. swtpm alone creates a fresh TPM state on first start.
+- **Sound** is QEMU's CoreAudio backend, which only plays: guest microphone input has to come through SPICE
+  in the helper. QEMU therefore has no `audio-input` entitlement.
 
 ## CI and provenance
 

@@ -182,6 +182,26 @@ private func makePrepared(_ dir: URL) throws -> (VMBundle, VMPanePaths) {
     }
 }
 
+@Test func runtimeVersionFollowsTheQEMUBundle() throws {
+    try withTempDirectory { dir in
+        let app = dir.appendingPathComponent("VMPane.app", isDirectory: true)
+        #expect(RuntimeStore.version(app: app, appVersion: "1.2") == "1.2")
+        let manifest = app.appendingPathComponent("Contents/Resources/qemu/MANIFEST.json")
+        try FileManager.default.createDirectory(at: manifest.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("{\"a\":1}".utf8).write(to: manifest)
+        let first = RuntimeStore.version(app: app, appVersion: "1.2")
+        #expect(first.hasPrefix("1.2-q") && first.count == "1.2-q".count + 8)
+        try Data("{\"a\":2}".utf8).write(to: manifest)
+        #expect(RuntimeStore.version(app: app, appVersion: "1.2") != first)
+
+        let paths = VMPanePaths(root: dir.appendingPathComponent("support"))
+        let store = RuntimeStore(paths: paths)
+        let helper = paths.runtime(version: first).appendingPathComponent("VMPaneVM.app", isDirectory: true)
+        #expect(store.version(ofHelperAt: helper) == first)
+        #expect(store.version(ofHelperAt: app.appendingPathComponent("Contents/Helpers/VMPaneVM.app")) == nil)
+    }
+}
+
 @Test func childrenStopOnSIGTERMEvenIfTheParentIgnoresIt() throws {
     let previous = signal(SIGTERM, SIG_IGN)
     defer { signal(SIGTERM, previous) }

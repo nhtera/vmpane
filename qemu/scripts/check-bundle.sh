@@ -14,7 +14,7 @@ expected=$QEMU_DIR/bundle-manifest.json
 if ! diff <(jq -S . "$expected") <(jq -S . "$bundle/MANIFEST.json") >&2; then
     die "$bundle/MANIFEST.json differs from qemu/bundle-manifest.json (different inputs, or the build is not reproducible)"
 fi
-actual=$(cd "$bundle" && find . -type f ! -name MANIFEST.json | sed 's|^\./||' | LC_ALL=C sort |
+actual=$(cd "$bundle" && find . ! -type d ! -name MANIFEST.json | sed 's|^\./||' | LC_ALL=C sort |
     while read -r f; do printf '%s %s\n' "$f" "$(shasum -a 256 "$f" | cut -d' ' -f1)"; done)
 if ! diff <(jq -r '.signed | to_entries[] | "\(.key) \(.value)"' "$expected" | LC_ALL=C sort) <(echo "$actual") >&2; then
     die "files in $bundle differ from qemu/bundle-manifest.json"

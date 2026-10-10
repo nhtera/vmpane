@@ -31,6 +31,10 @@ Left out on purpose: VNC (the display is SPICE; screenshots use QMP), every netw
 (no vmnet, vde), remote block drivers (curl, iSCSI, NFS, RBD, ssh), and the guest agent, user-mode
 emulation and plugins.
 
+libcrypto records `OPENSSLDIR=/vmpane/qemu/ssl` (the build prefix), which it would read configuration
+from. The directory does not exist on users' Macs, and OpenSSL is built with `no-module`, so nothing can be
+loaded from there; creating `/vmpane` needs administrator rights.
+
 ## Review each release
 
 1. Check the QEMU security advisories (<https://www.qemu.org/contribute/security-process/>) and the CVEs

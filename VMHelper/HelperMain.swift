@@ -60,7 +60,7 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
         do {
             let bundle = try VMBundle.open(arguments.bundle)
             prepared = try LaunchCoordinator.prepareBundle(
-                bundle, paths: paths, runtimeVersion: VMPane.version,
+                bundle, paths: paths, runtimeVersion: runtimeVersion(paths),
                 library: VMLibrary(paths: paths))
         } catch LaunchError.alreadyRunning {
             exit(LaunchCoordinator.alreadyRunningExitCode)
@@ -143,6 +143,12 @@ extension HelperDelegate {
     }
 }
 
+/// The runtime copy this helper runs from (`runtime/<version>/VMPaneVM.app`): the app keeps that directory
+/// while the helper lives. A helper started from the app bundle itself reports the app version.
+private func runtimeVersion(_ paths: VMPanePaths) -> String {
+    RuntimeStore(paths: paths).version(ofHelperAt: Bundle.main.bundleURL) ?? VMPane.version
+}
+
 extension HelperDelegate {
     /// Chooses the backend (saving first-start config changes) and builds the controller.
     fileprivate func makeController(_ prepared: PreparedBundle) -> HelperController {
@@ -154,7 +160,7 @@ extension HelperDelegate {
             made = BackendFactory.Made(backend: nil, config: prepared.config)
         }
         let controller = HelperController(
-            prepared: prepared, runtimeVersion: VMPane.version, backend: made.backend, config: made.config,
+            prepared: prepared, runtimeVersion: runtimeVersion(.standard()), backend: made.backend, config: made.config,
             afterStart: made.afterStart, afterStop: made.afterStop
         ) {
             DispatchQueue.main.async { exit(0) }

@@ -169,17 +169,15 @@ recipe_spice_gtk() {
 
 recipe_libtpms() { autotools_component libtpms --with-openssl --with-tpm2; }
 
-# Only the two programs VMPane runs: swtpm and swtpm_setup (swtpm_localca/swtpm_cert make certificates
-# and need GMP and GnuTLS).
+# Only swtpm itself: it creates a fresh TPM state on first start. swtpm_setup (manufacturing, EK
+# certificates) is not needed for Windows 11, and swtpm_localca/swtpm_cert need GMP and GnuTLS.
 recipe_swtpm() {
     autotools_configure swtpm --with-openssl --without-gnutls --without-cuse --without-seccomp --disable-tests
     local dir
-    for dir in src/utils src/swtpm src/swtpm_setup; do
+    for dir in src/utils src/swtpm; do
         make -C "$COMPONENT_DIR/$dir" -j"$JOBS"
     done
-    for dir in src/swtpm src/swtpm_setup; do
-        make -C "$COMPONENT_DIR/$dir" install DESTDIR="$STAGE"
-    done
+    make -C "$COMPONENT_DIR/src/swtpm" install DESTDIR="$STAGE"
     drop_la_files
 }
 

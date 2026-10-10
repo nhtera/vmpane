@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// Versioned copies of the helper app (and the QEMU it runs) under `runtime/<version>/`. Helpers run from a
@@ -22,6 +23,22 @@ public struct RuntimeStore: Sendable {
             self.source = source
             self.path = path
         }
+    }
+
+    /// The `runtime/` directory name for `app`: its version, plus the identity of its QEMU bundle when it has
+    /// one, so a rebuilt QEMU under the same app version (every Debug build) gets a fresh copy.
+    public static func version(app: URL, appVersion: String) -> String {
+        let manifest = app.appendingPathComponent("Contents/Resources/qemu/MANIFEST.json")
+        guard let data = try? Data(contentsOf: manifest) else { return appVersion }
+        return "\(appVersion)-q" + SHA256.hash(data: data).prefix(4).map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// The runtime version a helper runs from (`runtime/<version>/VMPaneVM.app`), or nil when it does not run
+    /// from a runtime copy (started from the app bundle during development).
+    public func version(ofHelperAt helper: URL) -> String? {
+        let parent = helper.standardizedFileURL.deletingLastPathComponent()
+        guard parent.deletingLastPathComponent().path == paths.runtimeDirectory.standardizedFileURL.path else { return nil }
+        return parent.lastPathComponent
     }
 
     /// What a helper runs, from the app bundle: the helper app, and QEMU (`qemu/bin`, `qemu/lib` from

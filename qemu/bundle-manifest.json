@@ -26,7 +26,6 @@
     "bin/qemu-img": "c857280551ffd9f49493a91d641a4ca32caffd3cd0f5f5ff50b904997baa49e5",
     "bin/qemu-system-aarch64": "01a05a51778b303bbb3660fce600b6411501fe9ecce0f67f5a589803dcce0918",
     "bin/swtpm": "822d86e3764cd9a4e5a7c5bcb98982ae35a16589e168af5db7c5c1cdd8427302",
-    "bin/swtpm_setup": "cf96fd317e6b184f3e600c6bc1e322379a410af41e679b89e88cafc1fe614b36",
     "frameworks/libcrypto.3.dylib": "e0f64fb803cad87494f081f8e936d9c412cdeedb3c8356efa86bce56bde90ed3",
     "frameworks/libffi.8.dylib": "c10f1f4729b6dba4a36e15590d800f8f56854abb95f7a826407d0b3d3b765f18",
     "frameworks/libgio-2.0.0.dylib": "8435a0b248f1a326d377c2e585b17e7d8048f1a6e0586fd23fd6aefe831bbde1",
@@ -71,9 +70,8 @@
   },
   "signed": {
     "bin/qemu-img": "825fa403b5acbc62045649ca7f508a932165373bdc08b591d049ae06298f0369",
-    "bin/qemu-system-aarch64": "2b0358dc3eea4d2e1a5e9b44511b341832ca1c502077a9ccb99622ad25bd2e5a",
+    "bin/qemu-system-aarch64": "5d123302e040855fb920626090cf03879a1bfb0488c83b232710114644d2b3c9",
     "bin/swtpm": "eca1b75c367abd3287d0aed4aa647785abb5afba94868c90827c9138e9addfc4",
-    "bin/swtpm_setup": "902846798eb28ff1b154335540eb80c8c8227e6956e60726515fa0b483ffe767",
     "frameworks/libcrypto.3.dylib": "96f037b87ae42a8262b38c2056e21e5364de2e4d0ab0993227f5b73a5f436a89",
     "frameworks/libffi.8.dylib": "eb2aab057d339bdc41494fe79c7d36c8226756ac04d9dc0b3bc45ffa96a2b51a",
     "frameworks/libgio-2.0.0.dylib": "c70ed2e69be8e7fca43168f36c99330c8b8d2ec9b34504ff1c949262f48f0fe3",

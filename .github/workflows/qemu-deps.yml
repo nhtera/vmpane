@@ -18,8 +18,9 @@ on:
 permissions:
   contents: read
 
+# One bundle build at a time (the runner builds in a fixed place); queued pushes still run in turn.
 concurrency:
-  group: qemu-deps-${{ github.run_id }}
+  group: qemu-deps
   cancel-in-progress: false
 
 jobs:

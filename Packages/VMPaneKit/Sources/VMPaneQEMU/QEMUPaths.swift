@@ -1,7 +1,7 @@
 import Foundation
 import VMPaneCore
 
-/// A QEMU tool set: `bin/` (qemu-system-aarch64, qemu-img, swtpm, swtpm_setup), `lib/` and `share/`
+/// A QEMU tool set: `bin/` (qemu-system-aarch64, qemu-img, swtpm), `lib/` and `share/`
 /// (firmware, keymaps, ROMs; passed to QEMU with `-L`).
 public struct QEMUInstallation: Sendable, Equatable {
     public enum Source: Sendable, Equatable {
@@ -24,7 +24,6 @@ public struct QEMUInstallation: Sendable, Equatable {
     public var qemuSystem: URL { tool("qemu-system-aarch64") }
     public var qemuImg: URL { tool("qemu-img") }
     public var swtpm: URL { tool("swtpm") }
-    public var swtpmSetup: URL { tool("swtpm_setup") }
     public var share: URL { root.appendingPathComponent("share", isDirectory: true) }
 
     private func tool(_ name: String) -> URL {

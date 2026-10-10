@@ -5,7 +5,6 @@
     { "path": "Contents/Helpers/qemu/bin/qemu-system-aarch64", "identifier": "app.vmpane.mac.qemu-system-aarch64", "entitlements": "Config/Entitlements/qemu.entitlements", "optional": true },
     { "path": "Contents/Helpers/qemu/bin/qemu-img", "identifier": "app.vmpane.mac.qemu-img", "entitlements": null, "optional": true },
     { "path": "Contents/Helpers/qemu/bin/swtpm", "identifier": "app.vmpane.mac.swtpm", "entitlements": null, "optional": true },
-    { "path": "Contents/Helpers/qemu/bin/swtpm_setup", "identifier": "app.vmpane.mac.swtpm_setup", "entitlements": null, "optional": true },
     { "path": "Contents/Helpers/vmpane", "identifier": "app.vmpane.mac.cli", "entitlements": null },
     { "path": "Contents/Helpers/VMPaneVM.app/Contents/MacOS/*.dylib", "identifier": null, "entitlements": null, "optional": true },
     { "path": "Contents/Helpers/VMPaneVM.app/Contents/Frameworks/*.dylib", "identifier": null, "entitlements": null, "optional": true },

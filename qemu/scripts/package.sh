@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Lays out the QEMU bundle from the sysroot (qemu/scripts/build-deps.sh):
-#   bin/         qemu-system-aarch64, qemu-img, swtpm, swtpm_setup      → VMPane.app/Contents/Helpers/qemu/bin
+#   bin/         qemu-system-aarch64, qemu-img, swtpm                   → VMPane.app/Contents/Helpers/qemu/bin
 #   lib/         the libraries they load                                → VMPane.app/Contents/Helpers/qemu/lib
 #   share/       firmware (edk2-aarch64-code.fd, edk2-aarch64-vars-sb.fd; unpadded) and QEMU data in
 #                share/qemu (passed with -L)                            → VMPane.app/Contents/Resources/qemu/share
@@ -34,7 +34,7 @@ if $firmware; then
 fi
 export LC_ALL=C
 
-programs=(qemu-system-aarch64 qemu-img swtpm swtpm_setup)
+programs=(qemu-system-aarch64 qemu-img swtpm)
 client_roots=(libspice-client-glib-2.0.8.dylib)
 # QEMU data the virt board uses: the virtio-net option ROM (QEMU installs ROMs for every architecture).
 qemu_data=(efi-virtio.rom)
@@ -82,6 +82,10 @@ relink() {
     ((${#args[@]} == 0)) || install_name_tool "${args[@]}" "$f" 2>/dev/null
 }
 
+# Never wipe a directory that is not an earlier bundle.
+if [[ -e $out && ! -f $out/MANIFEST.json && -n $(ls -A "$out" 2>/dev/null) ]]; then
+    die "$out exists and is not a QEMU bundle; choose another --out"
+fi
 rm -rf "$out"
 mkdir -p "$out/bin" "$out/lib" "$out/share/qemu" "$out/frameworks"
 

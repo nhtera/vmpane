@@ -35,7 +35,8 @@ final class HelperSupervisor {
         Task {
             await Blocking.run {
                 RunDirectoryReconciler.reconcile(paths: paths)
-                try? RuntimeStore(paths: paths).garbageCollect(keep: [VMPane.version])
+                try? RuntimeStore(paths: paths).garbageCollect(
+                    keep: [RuntimeStore.version(app: Bundle.main.bundleURL, appVersion: VMPane.version)])
             }
             reconciling = false
         }
@@ -44,7 +45,10 @@ final class HelperSupervisor {
     /// Starts the helper for `bundle` (its own process, Dock tile and window).
     func launch(_ bundle: VMBundle, headless: Bool) throws {
         let runtime = try RuntimeStore(paths: paths)
-            .ensure(version: VMPane.version, items: RuntimeStore.helperItems(app: Bundle.main.bundleURL))
+            .ensure(
+                version: RuntimeStore.version(app: Bundle.main.bundleURL, appVersion: VMPane.version),
+                items: RuntimeStore.helperItems(app: Bundle.main.bundleURL)
+            )
             .appendingPathComponent("VMPaneVM.app", isDirectory: true)
         let config = try ConfigStore.load(bundle)
         try LaunchCoordinator.checkMacOSGuestLimit(starting: config.os, paths: paths) { record in
