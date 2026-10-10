@@ -19,6 +19,11 @@ public actor HelperController {
     var gracefulStopTimeout: Duration
     /// Whether the VM was last started without a window (restarts after a restore keep it).
     var lastStartHeadless = true
+    /// The unattended Windows install this VM is going through, if any (`HelperController+WindowsInstall`).
+    var windowsInstall: InstallState?
+    var installReader: GuestLineReader?
+    var installWatch: Task<Void, Never>?
+    var installTiming = InstallTiming()
     /// The config the running VM was started with, plus settings applied live since (nil before a start).
     var runningConfig: VMConfigV1?
     /// Whether the Mac is locked (replaced in tests).

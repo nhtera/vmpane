@@ -91,6 +91,7 @@ final class ScriptedBackend: VMBackend, @unchecked Sendable {
         Screenshot(png: Data([0x89, 0x50, 0x4E, 0x47]), width: 4, height: 3)
     }
     func send(_ input: InputEvent) async throws { lock.withLock { calls.append("input.\(input)") } }
+    func ejectMedia(_ id: String) async throws { try record("eject.\(id)") }
     func applyLive(_ config: VMConfigV1, paths: [String]) async -> Set<String> {
         lock.withLock {
             calls.append("applyLive.\(paths.joined(separator: ","))")

@@ -29,6 +29,7 @@ extension HelperController {
         case .stopped(let reason):
             transition(.stopped, reason: reason)
             if afterStop != nil, state == .stopped { Task { await self.vmStopped() } }
+            if windowsInstall != nil, state == .stopped { Task { await self.installStopped() } }
         case .failed(let message): transition(.failed, reason: message)
         case .diskFull(let message):
             // Paused with the reason; "Resume" continues once space has been freed. Already paused: the
@@ -42,6 +43,7 @@ extension HelperController {
             }
         case .guestReset:
             Self.log.info("the guest restarted")
+            if windowsInstall != nil { Task { await self.installGuestReset() } }
         case .installProgress(let fraction, let message):
             server?.broadcast(
                 topic: "install", method: ControlNotification.installProgress.rawValue,
@@ -140,6 +142,7 @@ extension HelperController {
     func startVM(_ backend: VMBackend, headless: Bool) async throws -> Bool {
         lastStartHeadless = headless
         transition(.start)
+        await installWillStart()
         let decision = await savedStateDecision()
         if decision == .discard { await clearSavedState() }
         var resumed = decision == .resume
@@ -159,6 +162,7 @@ extension HelperController {
         }
         runningConfig = config
         transition(.started)
+        installDidStart(backend)
         if resumed { await clearSavedState() }  // the running VM has moved on from it
         if let updated = afterStart?(config) {
             let lock = prepared.lock
