@@ -68,6 +68,16 @@ it_start_helper() {
     echo "$pid"
 }
 
+# Saved VM memory can only be restored while this Mac is unlocked (Virtualization's Secure Enclave key):
+# scenarios that restore skip (77) on a locked screen.
+it_require_unlocked() {
+    if ioreg -n Root -d1 -a | plutil -extract IOConsoleUsers xml1 -o - - 2>/dev/null \
+        | grep -A1 CGSSessionScreenIsLocked | grep -q '<true/>'; then
+        echo "$IT_SCENARIO: skipped: this Mac is locked (restoring saved VM memory needs it unlocked)" >&2
+        return 77
+    fi
+}
+
 it_socket() { echo "$VMPANE_SUPPORT_DIR/run/$(it_sid "$1").sock"; }
 
 # The golden Linux bundle (Ubuntu cloud image, cloud-init done, prints markers on the serial console).

@@ -31,9 +31,8 @@ public enum BackendFactory {
             }
             let bundle = prepared.lock.bundle
             let plan = try VZPlanBuilder.plan(config, bundle: bundle)
-            return Made(backend: VZBackend(plan: plan, title: config.name), config: config) {
-                VZBackend.installed($0, bundle: bundle)
-            }
+            let backend = VZBackend(plan: plan, title: config.name, replan: { try VZPlanBuilder.plan($0, bundle: bundle) })
+            return Made(backend: backend, config: config) { VZBackend.installed($0, bundle: bundle) }
         case .qemu:
             return Made(backend: nil, config: config)  // Phase 05
         }

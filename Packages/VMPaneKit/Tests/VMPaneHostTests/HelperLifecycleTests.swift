@@ -25,6 +25,7 @@ private struct Harness {
         let prepared = try LaunchCoordinator.prepareBundle(bundle, paths: paths, runtimeVersion: "t")
         let backend = ScriptedBackend()
         let controller = HelperController(prepared: prepared, runtimeVersion: "t", backend: backend) {}
+        await controller.setSessionLockCheck { false }  // independent of this Mac's real lock state
         try await controller.start()
         let client = try UDSClient.connect(to: prepared.runFiles.socketURL)
         return Harness(root: root, paths: paths, bundle: bundle, controller: controller, backend: backend, client: client)
@@ -97,6 +98,69 @@ private struct Harness {
     #expect(try await helper.client.call("vm.start")["state"] == "running")
     #expect(Array(helper.backend.recordedCalls.suffix(2)) == ["start.resume", "start"])
     #expect(helper.stateFiles().isEmpty)
+    await helper.tearDown()
+}
+
+@Test func restoreFailingWhileTheMacIsLockedKeepsTheState() async throws {
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.start")
+    _ = try await helper.client.call("vm.suspend")
+    await helper.controller.setSessionLockCheck { true }
+    helper.backend.failOnce("start.resume")
+    do {
+        _ = try await helper.client.call("vm.start")
+        Issue.record("start succeeded while locked")
+    } catch let error as RPCError {
+        #expect(error.code == ControlErrorCode.macLocked.rawValue)
+    }
+    #expect(try await helper.state() == "stopped")
+    #expect(helper.backend.recordedCalls.last == "start.resume")  // no cold boot
+    #expect(helper.stateFiles() == ["suspend.json", "suspend.scripted"])
+    // Unlocked: the kept state resumes.
+    await helper.controller.setSessionLockCheck { false }
+    _ = try await helper.client.call("vm.start")
+    #expect(helper.backend.recordedCalls.last == "start.resume")
+    #expect(helper.stateFiles().isEmpty)
+    await helper.tearDown()
+}
+
+@Test func settingsApplyWhileStoppedSavesEverythingChangeable() async throws {
+    let helper = try await Harness.make()
+    let result = try await helper.client.call(
+        "vm.settings.apply", params: ["patch": ["cpu": ["count": 3], "name": "Renamed", "id": "nope", "bogus": 1]])
+    #expect(result["fields"] == ["cpu.count": "applied", "name": "applied", "id": "rejected", "bogus": "rejected"])
+    #expect(result["reasons"]?["id"] == "cannot be changed")
+    let saved = try ConfigStore.load(helper.bundle)
+    #expect(saved.cpu.count == 3 && saved.name == "Renamed")
+    _ = try await helper.client.call("vm.start")
+    #expect(helper.backend.lastStartConfig?.cpu.count == 3)  // the next boot uses the saved settings
+    await helper.tearDown()
+}
+
+@Test func settingsApplyWhileRunningSplitsLiveAndNextBoot() async throws {
+    let helper = try await Harness.make()
+    helper.backend.livePaths = ["shares"]
+    _ = try await helper.client.call("vm.start")
+    let share: JSONValue = ["id": "s1", "name": "data", "hostPath": "/tmp", "readOnly": true]
+    let result = try await helper.client.call(
+        "vm.settings.apply",
+        params: ["patch": ["cpu": ["count": 3], "shares": [share], "display": ["widthPx": 1024], "ui": ["closeAction": "stop"]]])
+    #expect(
+        result["fields"] == [
+            "cpu.count": "nextBoot", "shares": "applied", "display.widthPx": "nextBoot", "ui.closeAction": "applied",
+        ])
+    #expect(helper.backend.recordedCalls.last == "applyLive.display.widthPx,shares")
+    #expect(try ConfigStore.load(helper.bundle).cpu.count == 3)
+    await helper.tearDown()
+}
+
+@Test func settingsApplyRefusesInvalidPatches() async throws {
+    let helper = try await Harness.make()
+    await #expect(throws: RPCError.self) {
+        try await helper.client.call("vm.settings.apply", params: ["patch": ["cpu": ["count": "many"]]])
+    }
+    await #expect(throws: RPCError.self) { try await helper.client.call("vm.settings.apply", params: ["patch": 3]) }
+    #expect(try ConfigStore.load(helper.bundle).cpu.count >= 1)
     await helper.tearDown()
 }
 

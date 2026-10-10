@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import VMPaneCore
 import Virtualization
+import os
 
 /// `VMBackend` on Virtualization.framework (Linux guests now; macOS guests follow).
 public final class VZBackend: VMBackend {
@@ -12,15 +13,19 @@ public final class VZBackend: VMBackend {
     /// Saved RAM state inside the state directory (see `SavedStateRule`).
     public static let stateFileName = "suspend.vzvmsave"
 
-    private let plan: VZPlan
+    /// The plan for the next start, and the one the current VM was created from.
+    private let plans: OSAllocatedUnfairLock<(next: VZPlan, running: VZPlan?)>
+    private let replan: (@Sendable (VMConfigV1) throws -> VZPlan)?
     private let title: String
     private let runner = VZRunner()
     @MainActor private var display: VZDisplayHost?
     private let serialLog: FileHandle?
     private let box = BoxHolder()
 
-    public init(plan: VZPlan, title: String = "VMPane VM") {
-        self.plan = plan
+    /// `replan` rebuilds the plan from a saved config at each start (see `StartOptions.config`).
+    public init(plan: VZPlan, title: String = "VMPane VM", replan: (@Sendable (VMConfigV1) throws -> VZPlan)? = nil) {
+        plans = OSAllocatedUnfairLock(initialState: (plan, nil))
+        self.replan = replan
         self.title = title
         events = runner.events
         serialLog = Self.openLog(plan.serialLog)
@@ -30,16 +35,21 @@ public final class VZBackend: VMBackend {
     public var virtualMachineBox: VMBox? { box.value }
 
     public func start(_ options: StartOptions) async throws {
+        if let config = options.config, let replan {
+            let plan = try replan(config)
+            plans.withLock { $0.next = plan }
+        }
+        let plan = plans.withLock { $0.next }
         if case .mac(let aux, let image?) = plan.platform {
             // First start of a macOS guest: install, then boot the installed system.
             try await runner.prepareMacInstall(restoreImage: image, aux: aux)
-            try await create()
+            try await create(plan)
             try await runner.install(restoreImage: image)
             // The installer leaves the VM running the installed system; start it only if it did not.
             if try await runner.state != .running { try await runner.start() }
             return
         }
-        try await create()
+        try await create(plan)
         if let directory = options.stateDirectory {
             try await runner.restore(from: directory.appendingPathComponent(Self.stateFileName))
         } else {
@@ -79,12 +89,56 @@ public final class VZBackend: VMBackend {
     }
 
     /// Creates the VM and its (hidden) display, which capture and input need even headless.
-    private func create() async throws {
+    private func create(_ plan: VZPlan) async throws {
+        await MainActor.run {
+            display?.close()
+            display = nil
+        }
         let box = try await runner.create(plan, serialLog: serialLog)
         self.box.value = box
+        plans.withLock { $0.running = plan }
         let size = NSSize(width: plan.display.widthPx, height: plan.display.heightPx)
         let title = title
         await MainActor.run { display = VZDisplayHost(box: box, title: title, guestSize: size) }
+    }
+
+    /// Live settings per the S11 matrix (`docs/live-capabilities.md`): shares, NIC attach/detach, display size.
+    public func applyLive(_ config: VMConfigV1, paths: [String]) async -> Set<String> {
+        guard let running = plans.withLock({ $0.running }) else { return [] }
+        var applied: Set<String> = []
+        for path in paths {
+            let parts = path.split(separator: ".").map(String.init)
+            switch parts.first {
+            case "shares":
+                let shares = config.shares.map {
+                    VZPlan.Share(name: $0.name, url: URL(fileURLWithPath: $0.hostPath), readOnly: $0.readOnly)
+                }
+                if await runner.replaceShares(shares) { applied.insert(path) }
+            case "display" where parts.last == "autoResize":
+                let value = config.display.autoResize
+                if await MainActor.run(body: { display?.setAutoResize(value) ?? false }) { applied.insert(path) }
+            case "display":
+                if await runner.reconfigureDisplay(widthPx: config.display.widthPx, heightPx: config.display.heightPx) {
+                    applied.insert(path)
+                }
+            case "network":
+                // Only NICs the VM was created with can be (un)plugged; their order is the plan's.
+                guard parts.count == 3, let index = Int(parts[1]), config.network.indices.contains(index) else { continue }
+                let nic = config.network[index]
+                guard nic.mode != .bridged,
+                    let device = running.networks.firstIndex(where: { $0.macAddress == nic.macAddress.lowercased() })
+                else { continue }
+                if await runner.setNetworkAttached(device: device, nic.mode == .nat) { applied.insert(path) }
+            default:
+                continue
+            }
+        }
+        return applied
+    }
+
+    /// The S11 live-change matrix measured on this running VM (see `VZRunner.probeLiveChanges`).
+    public func probeLiveChanges(scratch: URL) async -> [String: String] {
+        await runner.probeLiveChanges(scratch: scratch)
     }
 
     /// Makes the VM's window visible.

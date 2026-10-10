@@ -116,6 +116,99 @@ actor VZRunner {
         continuation.yield(.installProgress(fraction: 1, message: "macOS installed"))
     }
 
+    // MARK: - Live settings (S11)
+
+    /// Replaces the shares of the VMPane share device; false if the VM was created without one.
+    func replaceShares(_ shares: [VZPlan.Share]) -> Bool {
+        guard let device = shareDevice() else { return false }
+        var directories: [String: VZSharedDirectory] = [:]
+        for share in shares { directories[share.name] = VZSharedDirectory(url: share.url, readOnly: share.readOnly) }
+        device.share = VZMultipleDirectoryShare(directories: directories)
+        return true
+    }
+
+    /// Plugs NIC `device` into NAT or unplugs it.
+    func setNetworkAttached(device: Int, _ attached: Bool) -> Bool {
+        guard let vm, vm.networkDevices.indices.contains(device) else { return false }
+        vm.networkDevices[device].attachment = attached ? VZNATNetworkDeviceAttachment() : nil
+        return true
+    }
+
+    func reconfigureDisplay(widthPx: Int, heightPx: Int) -> Bool {
+        guard let display = vm?.graphicsDevices.first?.displays.first else { return false }
+        do {
+            try display.reconfigure(sizeInPixels: CGSize(width: widthPx, height: heightPx))
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func shareDevice() -> VZVirtioFileSystemDevice? {
+        let tags = [VZPlan.sharesTag, VZVirtioFileSystemDeviceConfiguration.macOSGuestAutomountTag]
+        return vm?.directorySharingDevices.compactMap { $0 as? VZVirtioFileSystemDevice }.first { tags.contains($0.tag) }
+    }
+
+    /// Tries each runtime change on the running VM and reports `live` or the error (the S11 matrix).
+    /// Only for the `--probe-live` measurement; it changes the VM's devices.
+    func probeLiveChanges(scratch: URL) async -> [String: String] {
+        guard let vm else { return [:] }
+        var results: [String: String] = [:]
+        func outcome(_ error: Error?) -> String { error.map { "error: \($0.localizedDescription)" } ?? "live" }
+        if let balloon = vm.memoryBalloonDevices.first as? VZVirtioTraditionalMemoryBalloonDevice {
+            balloon.targetVirtualMachineMemorySize = (configuration?.memorySize ?? 0) / 2
+            results["balloon.target"] = "live"
+        } else {
+            results["balloon.target"] = "error: no balloon device"
+        }
+        if let nic = vm.networkDevices.first {
+            nic.attachment = nil
+            nic.attachment = VZNATNetworkDeviceAttachment()
+            results["network.detach+reattach"] = "live"
+        } else {
+            results["network.detach+reattach"] = "error: no network device"
+        }
+        if let display = vm.graphicsDevices.first?.displays.first {
+            var failure: Error?
+            do { try display.reconfigure(sizeInPixels: CGSize(width: 1024, height: 768)) } catch { failure = error }
+            results["display.reconfigure"] = outcome(failure)
+        } else {
+            results["display.reconfigure"] = "error: no display"
+        }
+        if let share = shareDevice() {
+            share.share = VZMultipleDirectoryShare(directories: ["probe": VZSharedDirectory(url: scratch, readOnly: true)])
+            results["virtiofs.share.replace"] = "live"
+        } else {
+            results["virtiofs.share.replace"] = "error: no share device"
+        }
+        results["usb.massStorage.attach+detach"] = await probeUSBHotPlug(scratch: scratch)
+        results["audio.mute"] = "impossible: no API to change sound streams while running"
+        results["cpu.count"] = "restart: fixed at VM creation"
+        results["memory.size"] = "restart: fixed at VM creation (balloon lowers the target only)"
+        return results
+    }
+
+    /// USB mass storage hot-plug (macOS 15): attach, then detach, a small image.
+    private func probeUSBHotPlug(scratch: URL) async -> String {
+        guard let controller = vm?.usbControllers.first else { return "error: no USB controller" }
+        let image = scratch.appendingPathComponent("hotplug.img")
+        FileManager.default.createFile(atPath: image.path, contents: Data(count: 1 << 20))
+        do {
+            let attachment = try VZDiskImageStorageDeviceAttachment(url: image, readOnly: true)
+            let device = VZUSBMassStorageDevice(configuration: VZUSBMassStorageDeviceConfiguration(attachment: attachment))
+            // The completion-handler forms keep `controller` on this actor (the async forms send it).
+            try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, Error>) in
+                controller.attach(device: device) { error in error.map { done.resume(throwing: $0) } ?? done.resume() }
+            }
+            try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, Error>) in
+                controller.detach(device: device) { error in error.map { done.resume(throwing: $0) } ?? done.resume() }
+            }
+            return "live"
+        } catch {
+            return "error: \(error.localizedDescription)"
+        }
+    }
+
     var state: VZVirtualMachine.State {
         get throws { try machine().state }
     }

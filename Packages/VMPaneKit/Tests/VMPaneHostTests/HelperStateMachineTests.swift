@@ -49,6 +49,9 @@ final class ScriptedBackend: VMBackend, @unchecked Sendable {
     private var failures: Set<String> = []
     /// Graceful stops are ignored (a guest that does not shut down), forcing the force path.
     var ignoresGracefulStop = false
+    /// Live settings this backend applies (`applyLive`); the config of the last start.
+    var livePaths: Set<String> = []
+    private(set) var lastStartConfig: VMConfigV1?
 
     init() {
         (events, continuation) = AsyncStream.makeStream(of: BackendEvent.self)
@@ -66,6 +69,7 @@ final class ScriptedBackend: VMBackend, @unchecked Sendable {
 
     func start(_ options: StartOptions) async throws {
         try record(options.stateDirectory == nil ? "start" : "start.resume")
+        lock.withLock { lastStartConfig = options.config }
         continuation.yield(.started)
     }
     func pause() async throws { try record("pause"); continuation.yield(.paused) }
@@ -87,6 +91,12 @@ final class ScriptedBackend: VMBackend, @unchecked Sendable {
         Screenshot(png: Data([0x89, 0x50, 0x4E, 0x47]), width: 4, height: 3)
     }
     func send(_ input: InputEvent) async throws { lock.withLock { calls.append("input.\(input)") } }
+    func applyLive(_ config: VMConfigV1, paths: [String]) async -> Set<String> {
+        lock.withLock {
+            calls.append("applyLive.\(paths.joined(separator: ","))")
+            return livePaths.intersection(paths)
+        }
+    }
 
     /// Simulates the guest powering off by itself, or any other event.
     func emit(_ event: BackendEvent) { continuation.yield(event) }

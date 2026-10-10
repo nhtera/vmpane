@@ -101,6 +101,25 @@ extension HelperDelegate {
 }
 
 extension HelperDelegate {
+    /// Integration-test hook (S11 matrix): once the VM runs and `<output>.go` exists, tries each runtime
+    /// change and writes the results to `<output>` as JSON.
+    fileprivate func probeLiveChanges(_ controller: HelperController, backend: VZBackend, output: URL) {
+        Task { @MainActor in
+            for await state in controller.stateChanges where state == .running {
+                let trigger = output.appendingPathExtension("go")
+                while !FileManager.default.fileExists(atPath: trigger.path) {
+                    try? await Task.sleep(for: .milliseconds(500))
+                }
+                let results = await backend.probeLiveChanges(scratch: output.deletingLastPathComponent())
+                let data = try? JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys])
+                try? data?.write(to: output, options: .atomic)
+                return
+            }
+        }
+    }
+}
+
+extension HelperDelegate {
     /// Chooses the backend (saving first-start config changes) and builds the controller.
     fileprivate func makeController(_ prepared: PreparedBundle) -> HelperController {
         let made: BackendFactory.Made
@@ -119,6 +138,9 @@ extension HelperDelegate {
         self.controller = controller
         if let vz = made.backend as? VZBackend {
             observeDisplay(controller, backend: vz, config: made.config)
+            if let output = ProcessInfo.processInfo.environment["VMPANE_TEST_PROBE_LIVE"] {
+                probeLiveChanges(controller, backend: vz, output: URL(fileURLWithPath: output))
+            }
         }
         return controller
     }

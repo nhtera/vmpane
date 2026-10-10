@@ -44,8 +44,10 @@ extension HelperController {
         }
     }
 
+    /// Tagged with the hardware the VM runs with; a stopped VM's disks follow the saved config.
     private var snapshotContext: SnapshotContext {
-        SnapshotContext(deviceSetHash: DeviceSet(config).hash, hostBuild: Self.hostBuild, backendVersion: VMPane.version)
+        let hardware = state == .stopped || state == .error ? config : runningConfig ?? config
+        return SnapshotContext(deviceSetHash: DeviceSet(hardware).hash, hostBuild: Self.hostBuild, backendVersion: VMPane.version)
     }
 
     func createSnapshot(_ name: String, kind: SnapshotMeta.Kind, origin: SnapshotMeta.Origin) async throws -> SnapshotMeta {
@@ -129,7 +131,8 @@ extension HelperController {
             let resumed = try await startVM(backend, headless: lastStartHeadless)
             result["resumed"] = .bool(resumed)
             if meta.kind == .live && !resumed {
-                result["message"] = "The snapshot's memory state no longer matches this VM's hardware, so it started fresh."
+                result["message"] =
+                    "The snapshot's memory state could not be restored on this VM (its hardware changed), so it started fresh."
             }
         }
         result["state"] = .string(state.rawValue)

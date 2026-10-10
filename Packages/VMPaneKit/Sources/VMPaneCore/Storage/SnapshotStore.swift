@@ -75,6 +75,9 @@ public struct SnapshotStore: Sendable {
 
         var size: UInt64 = 0
         for entry in try liveEntries() {
+            // A running VM's disk can have writes still in the page cache: clonefile copies only what is on
+            // disk, so flush first or the snapshot's disk lags the RAM state saved with it.
+            Self.flush(entry)
             let target = partial.appendingPathComponent(entry.lastPathComponent)
             try CloneFile.clone(entry, to: target)
             size += Self.allocatedBytes(target)
@@ -225,6 +228,18 @@ public struct SnapshotStore: Sendable {
         try fm.contentsOfDirectory(at: bundle.currentDirectory, includingPropertiesForKeys: nil)
             .filter { !["state", "generation.json"].contains($0.lastPathComponent) }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    /// `fsync`s a file, or every file under a directory.
+    private static func flush(_ url: URL) {
+        let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: nil)
+        let urls = enumerator.map { Array($0.compactMap { $0 as? URL }) } ?? []
+        for item in [url] + urls {
+            let fd = open(item.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+            guard fd >= 0 else { continue }
+            fsync(fd)
+            close(fd)
+        }
     }
 
     private static func allocatedBytes(_ url: URL) -> UInt64 {

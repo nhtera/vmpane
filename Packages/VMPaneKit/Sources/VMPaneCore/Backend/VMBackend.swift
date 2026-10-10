@@ -16,10 +16,14 @@ public struct StartOptions: Sendable, Equatable {
     public var headless: Bool
     /// Saved RAM state to resume from (already checked by `SavedStateRule`), or nil for a cold boot.
     public var stateDirectory: URL?
+    /// The saved config to start with: backends rebuild their devices from it, so settings saved for the
+    /// next boot take effect. Nil keeps the backend's last config.
+    public var config: VMConfigV1?
 
-    public init(headless: Bool, stateDirectory: URL? = nil) {
+    public init(headless: Bool, stateDirectory: URL? = nil, config: VMConfigV1? = nil) {
         self.headless = headless
         self.stateDirectory = stateDirectory
+        self.config = config
     }
 }
 
@@ -92,4 +96,11 @@ public protocol VMBackend: AnyObject, Sendable {
     /// PNG of the guest display, longest edge at most `maxEdge`.
     func screenshot(maxEdge: Int) async throws -> Screenshot
     func send(_ input: InputEvent) async throws
+    /// Applies the settings at `paths` (`SettingKind.live`) of the saved `config` to the running VM.
+    /// Returns the paths now in effect; the others take effect at the next start.
+    func applyLive(_ config: VMConfigV1, paths: [String]) async -> Set<String>
+}
+
+extension VMBackend {
+    public func applyLive(_ config: VMConfigV1, paths: [String]) async -> Set<String> { [] }
 }

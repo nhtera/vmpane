@@ -1,4 +1,4 @@
-/// Error codes of the control protocol: JSON-RPC's standard codes plus VMPane's (-32010…-32017).
+/// Error codes of the control protocol: JSON-RPC's standard codes plus VMPane's (-32010…-32018).
 public enum ControlErrorCode: Int, Codable, Sendable, CaseIterable {
     case parseError = -32700
     case invalidRequest = -32600
@@ -13,4 +13,5 @@ public enum ControlErrorCode: Int, Codable, Sendable, CaseIterable {
     case unsupportedLive = -32015
     case insufficientSpace = -32016
     case protoUnsupported = -32017
+    case macLocked = -32018
 }

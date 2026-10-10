@@ -54,7 +54,7 @@ denied.
 | `vm.display.show` | — | `{}` | control |
 | `vm.display.resize` | `{widthPx, heightPx}` | `{}` | control |
 | `vm.settings.get` | — | `config` | observe |
-| `vm.settings.apply` | `{patch}` | per field `applied\|nextBoot\|rejected` | admin; sensitive patch: uiOnly |
+| `vm.settings.apply` | `{patch}` (JSON merge patch over the config) | `{fields: {path: applied\|nextBoot\|rejected}, reasons?}` | admin; sensitive patch: uiOnly |
 | `vm.ports.list` | — | rules with resolved guest IP and bind status | observe |
 | `vm.clipboard.read` | `{types}` | `{items}` | control + clipboard.allowWithAgents |
 | `vm.clipboard.write` | `{items}` | `{}` | control + clipboard.allowWithAgents |
@@ -75,6 +75,11 @@ denied.
 | `vm.delete` | `{id}` | `{}` | uiOnly |
 | `vm.import` | `{path}` | `{id}` | uiOnly |
 <!-- contract:methods:end -->
+
+`vm.settings.apply` reports each changed setting by path (`cpu.count`, `network.0.mode`, `shares`): `applied`
+(in effect now: host-side settings, live changes, anything while the VM is stopped), `nextBoot` (saved, used at
+the next start) or `rejected` (identity, disks, install source, unknown keys; not saved, see `reasons`). Which
+settings change live is `docs/live-capabilities.md`.
 
 `vm.settings.apply` is uiOnly when its patch touches `mcp`, `clipboard`, `shares`, `agent` or `windows`, or
 contains a port rule whose host address is not loopback (`127.0.0.1`, `::1`, `localhost`): any other address
@@ -112,3 +117,4 @@ JSON-RPC's standard codes (-32700 parse error, -32600 invalid request, -32601 me
 | -32015 | unsupportedLive | needs the VM stopped |
 | -32016 | insufficientSpace | not enough free disk space for RAM state |
 | -32017 | protoUnsupported | no shared protocol version |
+| -32018 | macLocked | saved VM memory cannot be restored while this Mac is locked; the state is kept, start again after unlocking |

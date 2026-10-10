@@ -20,6 +20,8 @@ public enum VZMaterializer {
             min(plan.cpuCount, VZVirtualMachineConfiguration.maximumAllowedCPUCount))
         configuration.memorySize = plan.memoryBytes
         configuration.storageDevices = try storageDevices(plan)
+        // An XHCI controller allows USB mass-storage devices to be attached and detached while running.
+        configuration.usbControllers = [VZXHCIControllerConfiguration()]
         configuration.networkDevices = networkDevices(plan)
         applyDisplayAndInput(plan, to: configuration)
         configuration.audioDevices = audioDevices(plan)

@@ -4,6 +4,7 @@ source "$VMPANE_ROOT/itest/lib/common.sh"
 IT_SCENARIO=vz-suspend
 
 scenario_run() {
+    it_require_unlocked || return
     local work bundle pid socket
     trap 'set +e; [[ -n ${pid:-} ]] && kill -9 "$pid" 2>/dev/null; rm -rf "${work:-/nonexistent}"; true' RETURN
     it_boot_linux_clone || return 1

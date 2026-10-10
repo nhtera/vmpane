@@ -25,7 +25,9 @@ let package = Package(
         // QEMU child-process backend.
         .target(name: "VMPaneQEMU", dependencies: ["VMPaneCore"]),
         // Helper-process logic: agent connection, install, networking, import, integrations.
-        .target(name: "VMPaneHost", dependencies: ["VMPaneCore", "VMPaneControl", "VMPaneVZ", "VMPaneQEMU"]),
+        .target(
+            name: "VMPaneHost", dependencies: ["VMPaneCore", "VMPaneControl", "VMPaneVZ", "VMPaneQEMU"],
+            resources: [.copy("Install/Resources")]),
         // MCP server: tool registry, stdio transport, client config.
         .target(name: "VMPaneMCP", dependencies: ["VMPaneCore", "VMPaneControl"]),
         // Shared SwiftUI views and app/helper view models.

@@ -112,22 +112,33 @@ extension HelperController {
     var stateDirectory: URL { prepared.lock.bundle.stateDirectory }
 
     /// Starts the VM, resuming saved RAM state when the generation rule allows; otherwise (or if the
-    /// restore fails) a cold boot, and the state is deleted: one rule, no retry.
+    /// restore fails) a cold boot, and the state is deleted: one rule, no retry. The exception is a locked
+    /// Mac: the state cannot be decrypted until it is unlocked, so it is kept and the start fails (`macLocked`).
+    /// Returns whether the saved state was resumed.
     @discardableResult
     func startVM(_ backend: VMBackend, headless: Bool) async throws -> Bool {
         lastStartHeadless = headless
         transition(.start)
         let decision = await savedStateDecision()
         if decision == .discard { await clearSavedState() }
+        var resumed = decision == .resume
         do {
-            try await backend.start(StartOptions(headless: headless, stateDirectory: decision == .resume ? stateDirectory : nil))
-        } catch  where decision == .resume {
+            try await backend.start(StartOptions(headless: headless, stateDirectory: resumed ? stateDirectory : nil, config: config))
+        } catch  where resumed && isSessionLocked() {
+            Self.log.notice("restore failed while the Mac is locked; state kept: \(String(describing: error), privacy: .public)")
+            transition(.stopped)
+            throw RPCError(
+                .macLocked,
+                "This Mac is locked. macOS keeps the VM's saved memory encrypted until you unlock it; unlock, then start the VM again.")
+        } catch  where resumed {
             Self.log.notice("restoring saved state failed, cold boot: \(String(describing: error), privacy: .public)")
+            resumed = false
             await clearSavedState()
-            try await backend.start(StartOptions(headless: headless))
+            try await backend.start(StartOptions(headless: headless, config: config))
         }
+        runningConfig = config
         transition(.started)
-        if decision == .resume { await clearSavedState() }  // the running VM has moved on from it
+        if resumed { await clearSavedState() }  // the running VM has moved on from it
         if let updated = afterStart?(config) {
             let lock = prepared.lock
             do {
@@ -137,11 +148,11 @@ extension HelperController {
                 Self.log.error("cannot save the config after start: \(String(describing: error), privacy: .public)")
             }
         }
-        return decision == .resume
+        return resumed
     }
 
     func writeStateMeta() async throws {
-        let (bundle, directory, hash) = (prepared.lock.bundle, stateDirectory, DeviceSet(config).hash)
+        let (bundle, directory, hash) = (prepared.lock.bundle, stateDirectory, DeviceSet(runningConfig ?? config).hash)
         try await Blocking.run {
             let meta = StateMeta(
                 generationId: try Generation.read(from: bundle.generationURL).generationId,
@@ -161,7 +172,7 @@ extension HelperController {
             try await backend.suspend(to: stateDirectory)
             let meta = StateMeta(
                 generationId: try Generation.read(from: bundle.generationURL).generationId,
-                deviceSetHash: DeviceSet(config).hash, hostBuild: Self.hostBuild, backendVersion: VMPane.version)
+                deviceSetHash: DeviceSet(runningConfig ?? config).hash, hostBuild: Self.hostBuild, backendVersion: VMPane.version)
             try DurableWrite.write(CanonicalJSON.encode(meta), to: stateDirectory.appendingPathComponent(StateMeta.fileName))
         } catch {
             await clearSavedState()

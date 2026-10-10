@@ -52,6 +52,20 @@ public final class VZDisplayHost {
         window.isExcludedFromWindowsMenu = true
     }
 
+    /// Releases the VM: AppKit keeps every unclosed window, and a window's view keeps its VM (and the VM's
+    /// files) alive, so a later restore in this process would fail with "permission denied".
+    public func close() {
+        view.virtualMachine = nil
+        window.orderOut(nil)
+        window.close()
+    }
+
+    /// Whether the guest display follows the window size; true when applied.
+    public func setAutoResize(_ value: Bool) -> Bool {
+        view.automaticallyReconfiguresDisplay = value
+        return true
+    }
+
     // MARK: - Capture (C2)
 
     public struct Capture: Sendable {

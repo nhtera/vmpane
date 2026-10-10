@@ -62,14 +62,7 @@ private func withFATVolume(_ body: (URL) throws -> Void) throws {
     }
 }
 
-private func run(_ tool: String, _ arguments: [String]) throws {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: tool)
-    process.arguments = arguments
-    try process.run()
-    process.waitUntilExit()
-    guard process.terminationStatus == 0 else { throw POSIXError(.EIO) }
-}
+private func run(_ tool: String, _ arguments: [String]) throws { try shell(tool, arguments) }
 
 @Test func cloneOntoANonAPFSVolumeIsUnsupported() throws {
     try withTempDirectory { dir in

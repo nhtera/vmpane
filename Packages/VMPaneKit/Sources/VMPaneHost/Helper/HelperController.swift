@@ -18,6 +18,10 @@ public actor HelperController {
     var gracefulStopTimeout: Duration = .seconds(30)
     /// Whether the VM was last started without a window (restarts after a restore keep it).
     var lastStartHeadless = true
+    /// The config the running VM was started with, plus settings applied live since (nil before a start).
+    var runningConfig: VMConfigV1?
+    /// Whether the Mac is locked (replaced in tests).
+    var isSessionLocked: @Sendable () -> Bool = SessionLock.isLocked
     let afterStart: (@Sendable (VMConfigV1) -> VMConfigV1?)?
     /// Every state the VM enters (the helper's window follows it). Single consumer.
     public nonisolated let stateChanges: AsyncStream<VMRunState>
@@ -27,6 +31,7 @@ public actor HelperController {
     let displayContinuation: AsyncStream<Void>.Continuation
 
     public func setGracefulStopTimeout(_ timeout: Duration) { gracefulStopTimeout = timeout }
+    func setSessionLockCheck(_ check: @escaping @Sendable () -> Bool) { isSessionLocked = check }
 
     public init(
         prepared: PreparedBundle, runtimeVersion: String, backend: VMBackend?, config: VMConfigV1? = nil,
@@ -90,6 +95,7 @@ public actor HelperController {
             return .success(.object([:]))
         case .eventsSubscribe?: return subscribe(request.params, connection)
         case .vmSettingsGet?: return RPCParams.encode(config)
+        case .vmSettingsApply?: return await applySettings(request.params)
         case .vmStart?, .vmPause?, .vmResume?, .vmSuspend?, .vmStop?:
             return await lifecycle(request.method, request.params)
         case .vmSnapshotList?, .vmSnapshotCreate?, .vmSnapshotDelete?, .vmSnapshotRestore?:

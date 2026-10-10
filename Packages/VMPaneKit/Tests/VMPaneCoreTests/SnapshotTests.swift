@@ -179,13 +179,13 @@ func snapshotRestoreCrashLeavesOldOrNewSet(at crashStep: SnapshotStep) throws {
     }
 }
 
+/// Runs a tool to completion. Not Foundation `Process`: it forks and briefly copies every open descriptor,
+/// so a parallel test would see another test's bundle lock as held.
 func shell(_ tool: String, _ arguments: [String]) throws {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: tool)
-    process.arguments = arguments
-    try process.run()
-    process.waitUntilExit()
-    guard process.terminationStatus == 0 else { throw POSIXError(.EIO) }
+    let child = try ChildSpawner.spawn(URL(fileURLWithPath: tool), .init(arguments: arguments))
+    var status: Int32 = 0
+    while waitpid(child.pid, &status, 0) == -1 && errno == EINTR {}
+    guard status == 0 else { throw POSIXError(.EIO) }
 }
 
 @Test func fullCloneIsANewMachineWithoutState() throws {
