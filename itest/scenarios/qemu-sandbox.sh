@@ -1,4 +1,4 @@
-# QEMU and swtpm under their sandbox profiles (Config/Sandbox/*.sb, applied with sandbox-exec), from a
+# QEMU and swtpm under their sandbox profiles (the helper's VMPaneQEMU resources, applied with sandbox-exec), from a
 # runtime copy laid out like runtime/<version>/qemu: swtpm keeps its TPM state in the VM bundle and listens
 # in the run directory; QEMU boots the shipped firmware to the UEFI shell with HVF, the TPM, CoreAudio sound
 # and a SPICE socket, and reports no device it could not start; each is
@@ -11,7 +11,10 @@ IT_SCENARIO=qemu-sandbox
 qmp() { /usr/bin/python3 -I "$VMPANE_ROOT/itest/lib/qmp.py" "$@"; }
 
 scenario_run() {
-    local bin share work runtime bundle run outside swtpm_pid qemu_pid tpm
+    local bin share work runtime bundle run outside swtpm_pid qemu_pid tpm profiles
+    # The profiles the helper ships, or the sources when testing a bundle without an app.
+    profiles=$APP/Contents/Helpers/VMPaneVM.app/Contents/Resources/VMPaneKit_VMPaneQEMU.bundle/Contents/Resources/Sandbox
+    [[ -f $profiles/qemu.sb ]] || profiles=$VMPANE_ROOT/Packages/VMPaneKit/Sources/VMPaneQEMU/Sandbox
     if [[ -x $APP/Contents/Helpers/qemu/bin/qemu-system-aarch64 ]]; then
         bin=$APP/Contents/Helpers/qemu share=$APP/Contents/Resources/qemu/share
     else
@@ -41,7 +44,7 @@ scenario_run() {
     sb() {  # sb <profile> <command…>
         local profile=$1
         shift
-        TMPDIR=$run sandbox-exec -f "$VMPANE_ROOT/Config/Sandbox/$profile.sb" \
+        TMPDIR=$run sandbox-exec -f "$profiles/$profile.sb" \
             -D BUNDLE="$bundle" -D RUNDIR="$run" -D RUNTIME="$runtime" "$@"
     }
 

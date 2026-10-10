@@ -1,4 +1,4 @@
-;; Deny-by-default sandbox for qemu-system-aarch64 (applied by the helper with sandbox-exec).
+;; Deny-by-default sandbox for qemu-system-aarch64 (applied by the helper with sandbox-exec, QEMUSandbox.swift).
 ;; Parameters (-D):
 ;;   BUNDLE   the VM bundle (read-write: disks, firmware variables, saved state)
 ;;   RUNDIR   the VM's run directory (read-write: QMP/agent/swtpm sockets, logs; also TMPDIR, because

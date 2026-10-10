@@ -23,7 +23,7 @@ let package = Package(
         // Virtualization.framework backend.
         .target(name: "VMPaneVZ", dependencies: ["VMPaneCore"]),
         // QEMU child-process backend.
-        .target(name: "VMPaneQEMU", dependencies: ["VMPaneCore"]),
+        .target(name: "VMPaneQEMU", dependencies: ["VMPaneCore"], resources: [.copy("Sandbox")]),
         // Helper-process logic: agent connection, install, networking, import, integrations.
         .target(
             name: "VMPaneHost", dependencies: ["VMPaneCore", "VMPaneControl", "VMPaneVZ", "VMPaneQEMU"],

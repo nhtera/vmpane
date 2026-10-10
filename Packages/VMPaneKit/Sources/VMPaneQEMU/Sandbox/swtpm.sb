@@ -1,4 +1,4 @@
-;; Deny-by-default sandbox for swtpm (applied by the helper with sandbox-exec).
+;; Deny-by-default sandbox for swtpm (applied by the helper with sandbox-exec, QEMUSandbox.swift).
 ;; Parameters (-D):
 ;;   BUNDLE   the VM bundle (read-write: the TPM state directory lives in it)
 ;;   RUNDIR   the VM's run directory (read-write: the control socket QEMU connects to, the log)

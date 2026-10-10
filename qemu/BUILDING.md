@@ -129,7 +129,8 @@ Choices that are not obvious from the recipes (`scripts/lib/recipes.sh`):
 ## Running the tools
 
 - **Sandbox:** the helper runs QEMU and swtpm under the deny-by-default profiles in
-  [`../Config/Sandbox`](../Config/Sandbox) (`sandbox-exec -D BUNDLE=… -D RUNDIR=… -D RUNTIME=…`, with
+  [`../Packages/VMPaneKit/Sources/VMPaneQEMU/Sandbox`](../Packages/VMPaneKit/Sources/VMPaneQEMU/Sandbox), shipped as
+  resources of the helper (`sandbox-exec -D BUNDLE=… -D RUNDIR=… -D RUNTIME=…`, with
   `TMPDIR` set to the run directory). Each may read the runtime copy and system libraries, and read and write
   only its VM's bundle and run directory; QEMU may also open HVF and use slirp networking. The
   `qemu-sandbox` itest boots the firmware with both sandboxed, checks that each is denied a file outside its
