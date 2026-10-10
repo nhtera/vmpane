@@ -84,6 +84,8 @@ public enum BackendEvent: Sendable, Equatable {
     case consoleOutput(Data)
     /// OS installation progress (0…1) while starting a VM that is not installed yet.
     case installProgress(fraction: Double, message: String)
+    /// The guest restarted itself (a reboot inside the guest; the VM keeps running).
+    case guestReset
 }
 
 /// A hypervisor backend driving one VM (Virtualization.framework or QEMU).
@@ -107,8 +109,18 @@ public protocol VMBackend: AnyObject, Sendable {
     /// Applies the settings at `paths` (`SettingKind.live`) of the saved `config` to the running VM.
     /// Returns the paths now in effect; the others take effect at the next start.
     func applyLive(_ config: VMConfigV1, paths: [String]) async -> Set<String>
+    /// Removes the medium of the `removable` entry `id` from the running VM (the drive stays, empty).
+    func ejectMedia(_ id: String) async throws
 }
 
 extension VMBackend {
     public func applyLive(_ config: VMConfigV1, paths: [String]) async -> Set<String> { [] }
+    public func ejectMedia(_ id: String) async throws { throw BackendUnsupported(feature: "ejecting media") }
+}
+
+/// A capability a backend does not have (yet).
+public struct BackendUnsupported: Error, Equatable, Sendable, CustomStringConvertible {
+    public let feature: String
+    public var description: String { "\(feature) is not available for this VM" }
+
 }

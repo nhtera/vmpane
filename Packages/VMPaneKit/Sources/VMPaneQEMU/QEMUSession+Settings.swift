@@ -40,4 +40,16 @@ extension QEMUSession {
         }
         return true
     }
+
+    /// Ejects the CD-ROM of the `removable` entry `id`: the argv builder named its usb-storage device
+    /// `media<N>-dev` (N = position in `removable`); the medium sits on that device's SCSI child, found by its QOM
+    /// path in `query-block`.
+    func ejectMedia(_ id: String) async throws {
+        guard let current = running else { throw QEMUBackendError.notRunning }
+        guard let index = config.removable.firstIndex(where: { $0.id == id }) else { throw QEMUConfigError.missingFile(id) }
+        guard case .array(let blocks) = try await current.qmp.execute("query-block"),
+            let qdev = blocks.compactMap({ $0["qdev"]?.stringValue }).first(where: { $0.contains("/media\(index)-dev/") })
+        else { throw QEMUConfigError.missingFile(id) }
+        try await current.qmp.execute("eject", ["id": .string(qdev), "force": true])
+    }
 }

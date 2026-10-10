@@ -73,16 +73,12 @@ public final class QEMUBackend: VMBackend {
     public func applyLive(_ config: VMConfigV1, paths: [String]) async -> Set<String> {
         await session.applyLive(config, paths: paths)
     }
+
+    public func ejectMedia(_ id: String) async throws { try await session.ejectMedia(id) }
     public func send(_ input: InputEvent) async throws { try await session.send(input) }
 
     /// QMP for integration hooks and later features (snapshots, live settings).
     var qmp: QMPClient? { get async { await session.qmp } }
-}
-
-/// A capability this backend does not have (yet).
-public struct BackendUnsupported: Error, Equatable, Sendable, CustomStringConvertible {
-    public let feature: String
-    public var description: String { "\(feature) is not available for this VM" }
 }
 
 extension QEMUProcesses {

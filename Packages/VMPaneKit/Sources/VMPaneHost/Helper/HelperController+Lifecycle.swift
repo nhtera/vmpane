@@ -40,6 +40,8 @@ extension HelperController {
                     topic: "vm", method: ControlNotification.vmStateChanged.rawValue,
                     params: ["state": .string(state.rawValue), "reason": .string(message)])
             }
+        case .guestReset:
+            Self.log.info("the guest restarted")
         case .installProgress(let fraction, let message):
             server?.broadcast(
                 topic: "install", method: ControlNotification.installProgress.rawValue,

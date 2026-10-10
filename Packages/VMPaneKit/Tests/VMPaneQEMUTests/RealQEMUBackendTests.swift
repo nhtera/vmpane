@@ -34,7 +34,11 @@ private final class Harness: @unchecked Sendable {
     private let lock = NSLock()
     private var eventLog: [BackendEvent] = []
 
-    init(memoryMiB: Int = 1024, space: QEMUBackend.SpacePolicy = .standard, change: (inout VMConfigV1) -> Void = { _ in }) throws {
+    /// `media`: ISO files (1 MiB of zeros) made in the bundle's install/ and attached as USB CD-ROMs, ids = names.
+    init(
+        memoryMiB: Int = 1024, space: QEMUBackend.SpacePolicy = .standard, media: [String] = [],
+        change: (inout VMConfigV1) -> Void = { _ in }
+    ) throws {
         // Through the /tmp symlink on purpose: the backend must hand QEMU resolved paths (sandbox rules match them).
         root = URL(fileURLWithPath: "/tmp/vp-be-\(UUID().uuidString.prefix(8))", isDirectory: true)
         let run = root.appendingPathComponent("run", isDirectory: true)
@@ -42,9 +46,16 @@ private final class Harness: @unchecked Sendable {
         var config = try windowsConfig()
         config.memory.mib = memoryMiB
         config.audio.output = false
+        let bundleURL = root.appendingPathComponent("W.vmpane")
+        for name in media {
+            config.removable.append(
+                Extensible(RemovableConfig(id: name, path: bundleURL.appendingPathComponent("install/\(name)").path, bus: .usb)))
+        }
         change(&config)
         self.config = config
-        let bundle = try VMBundle.create(at: root.appendingPathComponent("W.vmpane"), config: config)
+        let bundle = try VMBundle.create(at: bundleURL, config: config)
+        try FileManager.default.createDirectory(at: bundle.installDirectory, withIntermediateDirectories: true)
+        for name in media { try Data(count: 1 << 20).write(to: bundle.installDirectory.appendingPathComponent(name)) }
         try DiskImage.createRaw(at: bundle.currentDirectory.appendingPathComponent("disk.img"), sizeBytes: 1 << 30)
         let installation = QEMUInstallation(root: URL(fileURLWithPath: try #require(qemuBundle), isDirectory: true), source: .environment)
         layout = QEMULayout(bundle: bundle, runDirectory: run, installation: installation)
@@ -302,4 +313,18 @@ func aGuestPausedForAFullDiskStaysPausedAndStillStops() async throws {
     try await harness.backend.stop(.graceful)
     #expect(await harness.waitForEvent { $0 == .stopped(reason: "powered off while paused") } != nil)
     #expect(!harness.anyChildAlive)
+}
+
+@Test(.enabled(if: qemuBundle != nil))
+func installMediaAreEjectedByTheirConfigID() async throws {
+    let harness = try Harness(media: ["windows.iso", "unattend.iso"])
+    defer { harness.cleanUp() }
+    try await harness.backend.start(StartOptions(headless: true))
+    try await harness.backend.ejectMedia("unattend.iso")
+    guard case .array(let blocks) = try await harness.backend.qmp?.execute("query-block") else { Issue.record("query-block"); return }
+    let inserted = blocks.filter { $0["qdev"]?.stringValue?.contains("-dev/") == true }.map { $0["inserted"] != nil }
+    #expect(inserted == [true, false])  // windows.iso still in, unattend.iso out
+    await #expect(throws: (any Error).self) { try await harness.backend.ejectMedia("nonexistent") }
+    #expect(!harness.events.contains(.guestReset))
+    try await harness.backend.stop(.force)
 }

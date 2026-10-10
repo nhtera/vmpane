@@ -142,6 +142,7 @@ actor QEMUSession {
             Self.log.error("block I/O error: \(String(describing: event.data), privacy: .public)")
             pausedForSpace = true
         case "RESUME": events.yield(.resumed)
+        case "RESET" where event.data["guest"] == true: events.yield(.guestReset)
         case "SHUTDOWN":
             // The guest powered off (a normal stop) or QEMU is shutting down. QEMU runs with -no-shutdown, so
             // it waits here until the backend has disconnected the display, then quits.
