@@ -65,6 +65,7 @@ public struct VMWindowView: View {
                     .transition(.opacity)
             }
         }
+        .task { await model.watchInput() }
         .toolbar {
             VMToolbar(model: model)
             if captureKeys != nil {
@@ -150,6 +151,9 @@ struct VMToolbar: ToolbarContent {
             }
             .help("Save a screenshot of the VM to the Desktop")
             .disabled(model.state != .running && model.state != .paused)
+        }
+        ToolbarItem(placement: .status) {
+            AudioIndicators(output: model.audioOutput, input: model.audioInput, inputInUse: model.inputInUse)
         }
         ToolbarItem(placement: .status) {
             Label(
@@ -244,5 +248,29 @@ struct TransferHUD: View {
         .frame(width: 320)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Sound passed to the VM: the speaker and microphone as set (changed in Settings, from the next start), and a
+/// dot while the Mac's input device is in use.
+struct AudioIndicators: View {
+    let output: Bool
+    let input: Bool
+    let inputInUse: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: output ? "speaker.wave.2.fill" : "speaker.slash")
+                .foregroundStyle(output ? .primary : .secondary)
+                .help(output ? "The VM plays sound on this Mac" : "The VM's sound is off")
+                .accessibilityLabel(output ? "Sound on" : "Sound off")
+            Image(systemName: input ? "mic.fill" : "mic.slash")
+                .foregroundStyle(input ? .primary : .secondary)
+                .overlay(alignment: .topTrailing) {
+                    if input && inputInUse { Circle().fill(.orange).frame(width: 6, height: 6).offset(x: 2, y: -2) }
+                }
+                .help(input ? (inputInUse ? "Microphone on — the input device is in use" : "Microphone on") : "Microphone off")
+                .accessibilityLabel(input ? (inputInUse ? "Microphone on, input device in use" : "Microphone on") : "Microphone off")
+        }
     }
 }

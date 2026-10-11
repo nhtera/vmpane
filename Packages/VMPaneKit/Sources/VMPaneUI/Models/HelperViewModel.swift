@@ -34,6 +34,11 @@ public final class HelperViewModel {
     public var lastError: String?
     /// The last screenshot saved, for a confirmation.
     public private(set) var lastScreenshot: URL?
+    /// The VM's sound settings, for the toolbar's indicators.
+    public private(set) var audioOutput = false
+    public private(set) var audioInput = false
+    /// The Mac's default input device is in use (checked while the microphone is passed to a running VM).
+    public private(set) var inputInUse = false
     /// Files being copied into the guest (dropped on the window), with progress; nil when none.
     public internal(set) var transfer: Transfer?
 
@@ -58,6 +63,7 @@ public final class HelperViewModel {
             _ = try await channel.call(
                 ControlMethod.eventsSubscribe.rawValue, params: ["topics": ["vm", "install", "agent", "files"]], timeout: .seconds(5))
             await refresh()
+            await refreshAudio()
             agentConnected =
                 (try? await channel.call(ControlMethod.agentStatus.rawValue, params: nil, timeout: .seconds(5)))?["connected"] == true
         } catch {
@@ -80,12 +86,32 @@ public final class HelperViewModel {
         if case .array(let names)? = info["allowedRequests"] { allowed = Set(names.compactMap(\.stringValue)) }
     }
 
+    /// Reads the sound settings (after a start, they are what the VM runs with).
+    func refreshAudio() async {
+        guard let config = try? await channel.call(ControlMethod.vmSettingsGet.rawValue, params: nil, timeout: .seconds(5)) else { return }
+        audioOutput = config["audio"]?["output"] == true
+        audioInput = config["audio"]?["input"] == true
+    }
+
+    /// Follows the input device while the VM runs with the microphone (every 2 s; CoreAudio's own notification
+    /// would need a listener per device).
+    public func watchInput() async {
+        while !Task.isCancelled {
+            let watching = audioInput && state == .running
+            inputInUse = watching && MicrophoneActivity.defaultInputInUse()
+            try? await Task.sleep(for: .seconds(2))
+        }
+    }
+
     func apply(_ note: RPCRequest) {
         switch note.method {
         case ControlNotification.vmStateChanged.rawValue:
             if let state = note.params?["state"]?.stringValue.flatMap(VMRunState.init(rawValue:)) {
                 self.state = state
-                Task { await refresh() }
+                Task {
+                    await refresh()
+                    if state == .running { await refreshAudio() }
+                }
             }
         case ControlNotification.installProgress.rawValue:
             install = InstallProgress(
