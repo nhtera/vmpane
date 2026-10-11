@@ -55,6 +55,11 @@ public actor HelperController {
     var agentGeneration = 0
     /// Asks the person before an agent's command or admin action (`HelperController+Confirm`).
     var confirmationPresenter: (@Sendable (ConfirmationRequest) async -> Bool)?
+    var confirmationDismiss: (@Sendable () async -> Void)?
+    /// A question is on screen (they are asked one at a time).
+    var confirming = false
+    /// Agent sessions' undo snapshots being taken (concurrent first calls wait for the same one).
+    var agentSnapshotTasks: [String: Task<SnapshotMeta?, Never>] = [:]
     /// Agent sessions' undo snapshots (`HelperController+AgentSession`).
     var agentSessions: [String: AgentSession] = [:]
     /// The file drop in progress (`vm.files.cancel` stops it).
@@ -153,12 +158,7 @@ public actor HelperController {
         let caller = identity(of: connection)
         let started = ContinuousClock.now
         if let denial = authorize(request, caller) { return .failure(denial) }
-        if let question = confirmation(for: request, caller), await !ask(question) {
-            let refusal = RPCError(.policyDenied, "the person at this Mac did not allow it (\(question.title))")
-            audit(request, caller, result: .failure(refusal), since: started)
-            return .failure(refusal)
-        }
-        if let refusal = await snapshotBeforeAgentChange(request, caller) {
+        if let refusal = await agentChecks(request, caller) {
             audit(request, caller, result: .failure(refusal), since: started)
             return .failure(refusal)
         }
@@ -213,7 +213,7 @@ public actor HelperController {
         case .vmStart?, .vmPause?, .vmResume?, .vmSuspend?, .vmStop?:
             return await lifecycle(request.method, request.params)
         case .vmSnapshotList?, .vmSnapshotCreate?, .vmSnapshotDelete?, .vmSnapshotRestore?:
-            return await snapshotRequest(request.method, request.params)
+            return await snapshotRequest(request.method, request.params, byApp: identity(of: connection).identity == .ui)
         default:
             return .failure(RPCError(.methodNotFound, "\(request.method) is not available in this helper"))
         }

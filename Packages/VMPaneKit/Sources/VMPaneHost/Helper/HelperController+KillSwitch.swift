@@ -47,6 +47,8 @@ extension HelperController {
     /// Ends everything agents are doing here.
     func stopAgents() async {
         agentGeneration += 1
+        if confirming { await confirmationDismiss?() }  // an open question is a no now
+        if let owner = dropOwner, identities[owner]?.identity != .ui { dropTask?.cancel() }
         let agents = identities.values.filter { $0.identity != .ui }
         let owners = Set(agents.compactMap { $0.connection.map(ObjectIdentifier.init) })
         await agentExecs.kill(ownedBy: owners)

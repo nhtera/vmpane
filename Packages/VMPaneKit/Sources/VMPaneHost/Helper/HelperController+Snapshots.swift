@@ -14,7 +14,8 @@ extension HelperController {
 
     private struct IDParams: Decodable { var id: UUID }
 
-    func snapshotRequest(_ method: String, _ params: JSONValue?) async -> Result<JSONValue, RPCError> {
+    /// `byApp`: from VMPane's app. Others cannot name a snapshot an agent session's undo point, nor delete one.
+    func snapshotRequest(_ method: String, _ params: JSONValue?, byApp: Bool = true) async -> Result<JSONValue, RPCError> {
         let store = SnapshotStore(lock: prepared.lock)
         do {
             switch ControlMethod(rawValue: method) {
@@ -22,9 +23,13 @@ extension HelperController {
                 return RPCParams.encode(try await Blocking.run { try store.list() })
             case .vmSnapshotCreate?:
                 let create = try RPCParams.decode(CreateParams.self, from: params).get()
-                return RPCParams.encode(try await createSnapshot(create.name, kind: create.kind, origin: create.origin ?? .user))
+                let origin = byApp ? create.origin ?? .user : .user
+                return RPCParams.encode(try await createSnapshot(create.name, kind: create.kind, origin: origin))
             case .vmSnapshotDelete?:
                 let id = try RPCParams.decode(IDParams.self, from: params).get().id
+                if !byApp, try await Blocking.run({ try store.list() }).contains(where: { $0.id == id && $0.origin == .agentSession }) {
+                    throw RPCError(.policyDenied, "an agent session's undo snapshot is removed only in VMPane")
+                }
                 try await Blocking.run { try store.delete(id) }
                 return .success(.object([:]))
             case .vmSnapshotRestore?:

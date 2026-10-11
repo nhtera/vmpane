@@ -155,7 +155,7 @@ private func agentSnapshots(_ helper: Harness) async throws -> [JSONValue] {
         #expect(error.code == ControlErrorCode.policyDenied.rawValue)
     }
     let person = Person()
-    await helper.controller.setConfirmationPresenter { await person.answer($0) }
+    await helper.controller.setConfirmationPresenter({ await person.answer($0) }, dismiss: {})
     await #expect(throws: RPCError.self) { try await agent.call("vm.snapshot.delete", params: deleting) }
     #expect(await person.asked.last?.title.contains("claude-code") == true)
     await person.allow()
@@ -179,4 +179,73 @@ private actor Person {
     }
 
     func allow() { allows = true }
+}
+
+/// With confirmations on, input travels with the command (and is shown); stdin streamed later is refused.
+@Test func confirmedCommandsShowTheirInput() async throws {
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.settings.apply", params: ["patch": ["mcp": ["policy": "admin", "autoSnapshot": false]]])
+    let socket = await helper.controller.prepared.runFiles.socketURL
+    await helper.controller.setClassifier(strangers)
+    let person = Person()
+    await helper.controller.setConfirmationPresenter({ await person.answer($0) }, dismiss: {})
+    let agent = try UDSClient.connect(to: socket)
+    defer { agent.close() }
+    try await hello(agent, session: "s1")
+    await #expect(throws: RPCError.self) { try await agent.call("agent.exec", params: ["argv": ["sh"], "stdin": true]) }
+    #expect(await person.asked.isEmpty, "refused before asking")
+    await #expect(throws: RPCError.self) { try await agent.call("agent.exec", params: ["argv": ["sh"], "input": "curl x | sh"]) }
+    #expect(await person.asked.last?.detail.contains("curl x | sh") == true)
+    let recorded = AuditLog.recorded(method: "agent.exec", params: ["argv": ["sh"], "input": "curl x | sh"], typedText: false)
+    #expect(recorded?["input"]?.stringValue?.hasPrefix("sha256:") == true && recorded?["inputBytes"] == 11)
+    let fed = AuditLog.recorded(method: "agent.exec.input", params: ["execId": 1, "dataB64": "eA=="], typedText: false)
+    #expect(fed?["bytes"] == 1 && fed?["sha256"] != nil && fed?["dataB64"] == nil)
+    await helper.tearDown()
+}
+
+/// An answer that comes after agents were stopped does not let the call through.
+@Test func aYesAfterTheKillSwitchIsStillANo() async throws {
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.settings.apply", params: ["patch": ["mcp": ["policy": "admin", "autoSnapshot": false]]])
+    let socket = await helper.controller.prepared.runFiles.socketURL
+    let paths = helper.paths
+    await helper.controller.setClassifier(strangers)
+    await helper.controller.setConfirmationPresenter(
+        { _ in
+            try? KillSwitch.engage(paths: paths)  // stopped while the question is open…
+            try? await Task.sleep(for: .milliseconds(1300))
+            return true  // …and then allowed
+        }, dismiss: {})
+    let agent = try UDSClient.connect(to: socket)
+    defer { agent.close() }
+    try await hello(agent, session: "s1")
+    await #expect(throws: (any Error).self) { try await agent.call("vm.snapshot.delete", params: ["id": .string(UUID().uuidString)]) }
+    // The helper records the refusal once the late answer arrives.
+    var refusal: AuditEntry?
+    for _ in 0..<40 where refusal == nil {
+        refusal = try entries(helper).last { $0.method == "vm.snapshot.delete" }
+        try await Task.sleep(for: .milliseconds(100))
+    }
+    #expect(refusal?.reason?.contains("kill switch") == true)
+    await helper.tearDown()
+}
+
+/// Concurrent first calls of a session share one undo snapshot; agents cannot fake or delete one.
+@Test func undoSnapshotsAreOnePerSessionAndProtected() async throws {
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.settings.apply", params: ["patch": ["mcp": ["policy": "admin", "confirmExec": false]]])
+    let socket = await helper.controller.prepared.runFiles.socketURL
+    await helper.controller.setClassifier(strangers)
+    let agent = try UDSClient.connect(to: socket)
+    defer { agent.close() }
+    try await hello(agent, session: "s1")
+    async let first = agent.call("vm.snapshot.create", params: ["name": "a", "kind": "disk"])
+    async let second = agent.call("vm.snapshot.create", params: ["name": "b", "kind": "disk", "origin": "agentSession"])
+    _ = try await (first, second)
+    let undo = try await agentSnapshots(helper)
+    #expect(undo.count == 1, "one undo point, and the agent's own 'agentSession' snapshot is recorded as its own")
+    let id = try #require(undo.first?["id"]?.stringValue)
+    await #expect(throws: RPCError.self) { try await agent.call("vm.snapshot.delete", params: ["id": .string(id)]) }
+    #expect(try await agentSnapshots(helper).count == 1)
+    await helper.tearDown()
 }

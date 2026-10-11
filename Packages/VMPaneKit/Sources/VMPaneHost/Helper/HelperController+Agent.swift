@@ -117,7 +117,14 @@ extension HelperController {
             switch ControlMethod(rawValue: method) {
             case .agentExec?:
                 let request = try RPCParams.decode(ExecRequest.self, from: params).get()
+                if let input = request.input, input.utf8.count > Self.execInputLimit {
+                    throw RPCError(.invalidParams, "input is at most 64 KiB (feed more with agent.exec.input)")
+                }
                 let execId = try await agentExecs.start(request.agentParams, owner: owner, on: connection)
+                // Input given with the command (shown in the confirmation, recorded as a hash): fed, then closed.
+                if let input = request.input {
+                    try await agentExecs.input(execId, data: Data(input.utf8), eof: true, owner: owner)
+                }
                 return .success(["execId": .int(Int64(execId))])
             case .agentExecInput?:
                 let input = try RPCParams.decode(ExecInput.self, from: params).get()
@@ -168,6 +175,7 @@ extension HelperController {
     // MARK: - Files
 
     private static let fileChunk = 1 << 20
+    static let execInputLimit = 64 << 10
 
     /// Host file → guest: hashed first (the agent checks size and SHA-256 before renaming into place).
     /// Pushes a host file to the guest; `progress` hears the bytes sent so far.
@@ -314,15 +322,18 @@ private struct ExecRequest: Decodable {
     var env: [String: String]?
     var timeoutMs: UInt64?
     var stdin: Bool?
+    /// Text for the command's stdin, given with it (at most 64 KiB).
+    var input: String?
 
     enum CodingKeys: String, CodingKey {
-        case argv, shell, cwd, env, timeoutMs, stdin
+        case argv, shell, cwd, env, timeoutMs, stdin, input
         case runAs = "as"
     }
 
     var agentParams: AgentExecStartParams {
         AgentExecStartParams(
-            argv: argv, shell: shell, env: env, cwd: cwd, as: runAs ?? .user, stdin: stdin ?? false, timeoutMs: timeoutMs)
+            argv: argv, shell: shell, env: env, cwd: cwd, as: runAs ?? .user, stdin: (stdin ?? false) || input != nil,
+            timeoutMs: timeoutMs)
     }
 }
 

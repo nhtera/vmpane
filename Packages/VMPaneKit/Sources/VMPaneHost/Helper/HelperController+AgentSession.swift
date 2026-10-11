@@ -20,6 +20,24 @@ extension HelperController {
         guard caller.identity != .ui, let session = caller.session, config.mcp.autoSnapshot,
             !Self.readOnlyMethods.contains(request.method), agentSessions[session] == nil
         else { return nil }
+        // Concurrent first calls of a session wait for the one snapshot.
+        if let pending = agentSnapshotTasks[session] {
+            return await pending.value == nil ? Self.snapshotUnavailable : nil
+        }
+        let task = Task { await self.takeAgentSnapshot(caller) }
+        agentSnapshotTasks[session] = task
+        let taken = await task.value
+        agentSnapshotTasks[session] = nil
+        guard let taken else { return Self.snapshotUnavailable }
+        agentSessions[session] = AgentSession(snapshot: taken.id, connection: caller.connection)
+        await pruneAgentSnapshots()
+        return nil
+    }
+
+    static let snapshotUnavailable = RPCError(
+        .invalidState, "auto-snapshot unavailable for this VM now: take a snapshot, or turn off auto-snapshot in its settings")
+
+    private func takeAgentSnapshot(_ caller: CallerIdentity) async -> SnapshotMeta? {
         let stamp = Date().formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false))
         let name = "agent: \(caller.claimedClient?.replacingOccurrences(of: " (claimed)", with: "") ?? "agent") \(stamp)"
         let live = (state == .running || state == .paused) && backend?.capabilities.contains(.liveSnapshot) == true
@@ -27,13 +45,7 @@ extension HelperController {
         for kind in live ? [SnapshotMeta.Kind.live, .disk] : [.disk] where taken == nil {
             taken = try? await createSnapshot(name, kind: kind, origin: .agentSession)
         }
-        guard let taken else {
-            return RPCError(
-                .invalidState, "auto-snapshot unavailable for this VM now: take a snapshot, or turn off auto-snapshot in its settings")
-        }
-        agentSessions[session] = AgentSession(snapshot: taken.id, connection: caller.connection)
-        await pruneAgentSnapshots()
-        return nil
+        return taken
     }
 
     /// Keeps the newest agent snapshots and every live session's first one.

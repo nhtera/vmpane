@@ -112,7 +112,18 @@ enum ConfirmationDialog {
         // The helper stops waiting after a minute (a no); the dialog goes too.
         let timeout = DispatchWorkItem { NSApp.abortModal() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 60, execute: timeout)
-        defer { timeout.cancel() }
+        showing = true
+        defer {
+            timeout.cancel()
+            showing = false
+        }
         return alert.runModal() == .alertSecondButtonReturn
     }
+
+    /// The helper asks one question at a time: this closes it (a no), e.g. when agents are stopped.
+    static func dismiss() {
+        if showing { NSApp.abortModal() }
+    }
+
+    private static var showing = false
 }

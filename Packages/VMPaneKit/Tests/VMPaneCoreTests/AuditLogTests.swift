@@ -47,5 +47,6 @@ private func temporaryLog(maxBytes: Int = AuditLog.maxBytes) -> AuditLog {
     let clip = AuditLog.recorded(method: "vm.clipboard.write", params: ["items": [["type": "text", "text": "pw"]]], typedText: true)
     guard case .array(let items)? = clip?["items"] else { Issue.record("no items"); return }
     #expect(items.first?["text"]?.stringValue?.hasPrefix("sha256:") == true)
-    #expect(AuditLog.recorded(method: "agent.exec.input", params: ["execId": 1, "dataB64": "eA=="], typedText: false) == ["execId": 1])
+    let input = AuditLog.recorded(method: "agent.exec.input", params: ["execId": 1, "dataB64": "eA=="], typedText: false)
+    #expect(input?["dataB64"] == nil && input?["bytes"] == 1 && input?["sha256"]?.stringValue?.count == 64)
 }

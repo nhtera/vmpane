@@ -31,8 +31,9 @@ enum GuestTools {
             let vm = try args.string("vm")
             var params: [String: JSONValue] = [
                 "as": .string(args["as"]?.stringValue ?? "user"), "timeoutMs": .int((args["timeout_s"]?.intValue ?? 120) * 1000),
-                "stdin": .bool(args["stdin"] != nil),
             ]
+            // Given with the command: the person asked to allow it sees it, and the record keeps its hash.
+            if let input = args["stdin"]?.stringValue { params["input"] = .string(input) }
             if let argv = args["argv"], !argv.arrayItems.isEmpty {
                 params["argv"] = argv
             } else {
@@ -40,7 +41,7 @@ enum GuestTools {
             }
             if let cwd = args["cwd"]?.stringValue { params["cwd"] = .string(cwd) }
             let outcome = try await access.withOwnConnection(vm) { client in
-                try await run(client, params: .object(params), stdin: args["stdin"]?.stringValue, context: context)
+                try await run(client, params: .object(params), context: context)
             }
             let code = outcome.code.map { "exit code \($0)" } ?? (outcome.timedOut ? "timed out" : "ended by \(outcome.signal ?? "?")")
             var text = outcome.stdout
@@ -66,15 +67,10 @@ enum GuestTools {
     }
 
     /// Starts the command on its own connection and collects its output until it exits.
-    static func run(_ client: UDSClient, params: JSONValue, stdin: String?, context: ToolContext) async throws -> Outcome {
+    static func run(_ client: UDSClient, params: JSONValue, context: ToolContext) async throws -> Outcome {
         let notes = client.notifications
         let started = try await client.call(ControlMethod.agentExec.rawValue, params: params)
         guard let execId = started["execId"]?.intValue else { throw ToolFailure("the VM did not start the command") }
-        if let stdin {
-            _ = try await client.call(
-                ControlMethod.agentExecInput.rawValue,
-                params: ["execId": .int(execId), "dataB64": .string(Data(stdin.utf8).base64EncodedString()), "eof": true])
-        }
         var outcome = Outcome()
         var stdout = Data()
         var stderr = Data()

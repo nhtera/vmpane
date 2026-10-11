@@ -135,8 +135,19 @@ public final class AuditLog: @unchecked Sendable {
             }
         case "agent.exec":
             if case .object(let env)? = fields["env"] { fields["env"] = .array(env.keys.sorted().map { .string($0) }) }
+            if let input = fields["input"]?.stringValue {
+                fields["input"] = hashed(fields["input"])
+                fields["inputBytes"] = .int(Int64(input.utf8.count))
+            }
         case "agent.exec.input":
-            fields["dataB64"] = nil
+            // What went in, as a hash and a size: the record shows that input was given, not what it said.
+            if let data = fields["dataB64"]?.stringValue.flatMap({ Data(base64Encoded: $0) }) {
+                fields["dataB64"] = nil
+                fields["sha256"] = .string(SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined())
+                fields["bytes"] = .int(Int64(data.count))
+            } else {
+                fields["dataB64"] = nil
+            }
         default:
             break
         }
