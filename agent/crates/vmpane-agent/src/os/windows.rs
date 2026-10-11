@@ -5,13 +5,15 @@ use std::path::Path;
 use std::process::ExitStatus;
 use std::time::SystemTime;
 
-use vmpane_agent_proto::methods::{ListeningPort, NetInterface, Signal};
+use vmpane_agent_proto::methods::Signal;
 use windows::Win32::Foundation::{FILETIME, SYSTEMTIME};
 use windows::Win32::System::SystemInformation::SetSystemTime;
 use windows::Win32::System::Time::FileTimeToSystemTime;
 
-/// `net.addrs` and `ports.listening` are not implemented on Windows yet.
-pub const HAS_NET_INFO: bool = false;
+mod net;
+pub use net::{interfaces, listening_ports};
+
+pub const HAS_NET_INFO: bool = true;
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
@@ -114,14 +116,6 @@ pub fn shutdown_command(reboot: bool, force: bool) -> (&'static str, Vec<&'stati
         args.push("/f");
     }
     ("shutdown.exe", args)
-}
-
-pub fn interfaces() -> std::io::Result<Vec<NetInterface>> {
-    Err(std::io::ErrorKind::Unsupported.into())
-}
-
-pub fn listening_ports() -> std::io::Result<Vec<ListeningPort>> {
-    Err(std::io::ErrorKind::Unsupported.into())
 }
 
 /// No volume freeze without VSS: nothing frozen, nothing to thaw.
