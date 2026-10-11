@@ -20,7 +20,7 @@ Apple silicon) or not Windows 11 (build 22000 or later), and an edition the ISO 
 The wizard asks for the edition, a local account (name and password), the computer name, the time zone and
 keyboard (from your Mac), an optional product key, and your acceptance of
 [Microsoft's licence terms](https://www.microsoft.com/en-us/useterms). Then the install runs on its own,
-with no clicks, in about 40 minutes:
+with no clicks, in about 10 minutes (7 on an M4 Pro Mac, Windows 11 build 26300):
 
 1. Windows Setup starts from the ISO (VMPane presses the "any key" the ISO asks for) and installs to the disk.
    The VM has **no network** during the install, so Windows creates the local account you chose instead of

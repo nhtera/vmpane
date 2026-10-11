@@ -145,9 +145,9 @@ it_golden_macos() {
     echo "$golden"
 }
 
-# The golden Windows bundle (imported from the S1 install; see build-golden-windows.sh).
-# Built once into ~/VMPaneItest/win11-base.vmpane; scenarios clone it. Exit 77 when the source is missing.
-IT_GOLDEN_WINDOWS_VERSION=2
+# The golden Windows bundle (VMPane's unattended install; see build-golden-windows.sh).
+# Built once into ~/VMPaneItest/win11-base.vmpane; scenarios clone it. Exit 77 without a Windows ISO.
+IT_GOLDEN_WINDOWS_VERSION=3
 it_golden_windows() {
     local golden="$HOME/VMPaneItest/win11-base.vmpane" status
     if [[ $(cat "$golden/.ready" 2>/dev/null) == "$IT_GOLDEN_WINDOWS_VERSION" ]]; then echo "$golden"; return 0; fi
@@ -238,3 +238,19 @@ it_windows_install_bundle() {
 
 # it_install_phase <bundle>: the phase in install/install.json ("unknown" without one).
 it_install_phase() { jq -r .phase "$1/install/install.json" 2>/dev/null || echo unknown; }
+
+# it_wait_install <bundle> <minutes>: follows install/install.json, printing each phase, until the install is done
+# (0), or failed, cancelled or out of time (1).
+it_wait_install() {
+    local bundle=$1 start=$SECONDS phase last=''
+    while ((SECONDS - start < $2 * 60)); do
+        phase=$(it_install_phase "$bundle")
+        [[ $phase != "$last" ]] && echo "$IT_SCENARIO: $phase after $(((SECONDS - start) / 60)) min" && last=$phase
+        case $phase in
+            done) return 0 ;;
+            failed | cancelled) it_fail "install $phase: $(jq -r .reason "$bundle/install/install.json")"; return 1 ;;
+        esac
+        sleep 5
+    done
+    it_fail "the install did not finish within $2 min (at $phase)"
+}

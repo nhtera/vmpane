@@ -10,7 +10,7 @@ source "$VMPANE_ROOT/itest/lib/common.sh"
 IT_SCENARIO=win-install
 
 scenario_run() {
-    local out iso tools work bundle request password pid socket start phase last='' state
+    local out iso tools work bundle request password pid socket start state
     iso=$(it_windows_iso) || { echo "win-install: no Windows 11 Arm64 ISO (set VMPANE_WINDOWS_ISO)"; return 77; }
     (($(df -g "$HOME" | awk 'NR == 2 {print $4}') >= 25)) || { echo "win-install: needs 25 GiB free"; return 77; }
     tools=$("$VMPANE_ROOT/guest-tools/build-iso.sh" | tail -1) || it_fail "cannot build the guest-tools ISO" || return 1
@@ -35,16 +35,7 @@ scenario_run() {
     # 2. The install, watched through install/install.json.
     start=$SECONDS
     out=$(it_rpc "$socket" vm.start '{"headless": true}') || it_fail "vm.start failed: $out" || return 1
-    while ((SECONDS - start < 80 * 60)); do
-        phase=$(it_install_phase "$bundle")
-        [[ $phase != "$last" ]] && echo "win-install: $phase after $(((SECONDS - start) / 60)) min" && last=$phase
-        case $phase in
-            done) break ;;
-            failed | cancelled) it_fail "install $phase: $(jq -r .reason "$bundle/install/install.json")"; return 1 ;;
-        esac
-        sleep 20
-    done
-    [[ $phase == "done" ]] || it_fail "the install did not finish within 80 min (at $phase)" || return 1
+    it_wait_install "$bundle" 80 || return 1
     echo "win-install: installed in $(((SECONDS - start) / 60)) min (target ≤ 40)"
 
     # 3. Finalized and running again, with the desktop up and no password left.

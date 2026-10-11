@@ -1,40 +1,36 @@
 #!/usr/bin/env bash
-# Builds the golden Windows bundle from the Gate 00 S1 install (Windows 11 Pro 26H2 ARM64, local account with
-# auto-logon, ramfb, no virtio drivers), until Phase 06 can install Windows unattended. Only
-# the disk is imported (APFS clone); the UEFI variables (our Secure Boot template: PK, MS KEK/db, dbx) and
-# the TPM are VMPane's own, made at first start like any VM VMPane creates: with no boot entry, EDK2 boots
-# Windows through \EFI\BOOT\BOOTAA64.EFI. Then boots it once through the helper to the desktop and shuts
-# it down. (BitLocker must be off on that install: with a new TPM Windows would ask for the recovery key
-# and the desktop check fails.)
-# Usage: build-golden-windows.sh <bundle path>   (needs $APP, $VMPANE_ROOT; VMPANE_WIN_SPIKE overrides the source)
+# Builds the golden Windows bundle the Windows scenarios clone: VMPane's own unattended install (as win-install)
+# from the ISO it_windows_iso finds, with the guest tools (virtio drivers, virtio display, network), then shut
+# down. A local account with a throwaway password and no auto sign-in: a boot ends at the lock screen, which the
+# desktop check (it_wait_windows_desktop) counts.
+# Usage: build-golden-windows.sh <bundle path>   (needs $APP, $VMPANE_ROOT; exit 77 without an ISO or 25 GiB free)
 set -euo pipefail
 golden=$1
 source "$VMPANE_ROOT/itest/lib/common.sh"
 IT_SCENARIO=golden-windows
 
-source_dir=${VMPANE_WIN_SPIKE:-$VMPANE_ROOT/spikes/s01-win-qemu-boot/assets/win-sb2}
-[[ -f $source_dir/disk.raw ]] || { echo "golden-windows: missing $source_dir/disk.raw (the S1 spike install)" >&2; exit 77; }
+iso=$(it_windows_iso) || { echo "golden-windows: no Windows 11 Arm64 ISO (set VMPANE_WINDOWS_ISO)" >&2; exit 77; }
+rm -rf "$golden.partial" "$golden"  # an outdated golden: its space counts towards the check below
+(($(df -g "$HOME" | awk 'NR == 2 {print $4}') >= 25)) || { echo "golden-windows: needs 25 GiB free" >&2; exit 77; }
+tools=$("$VMPANE_ROOT/guest-tools/build-iso.sh" | tail -1)
 
 work=$(cd "$(mktemp -d /tmp/vp-golden-win.XXXXXX)" && pwd -P)
 export VMPANE_SUPPORT_DIR="$work/s"
-trap 'set +e; [[ -n ${pid:-} ]] && kill -TERM "$pid" 2>/dev/null && it_wait_exit "$pid" 150; rm -rf "$work"' EXIT
-rm -rf "$golden.partial" "$golden"
+trap 'set +e; unset VMPANE_TEST_WIN_INSTALL; [[ -n ${pid:-} ]] && kill -TERM "$pid" 2>/dev/null && it_wait_exit "$pid" 150; rm -rf "$work" "$golden.partial"' EXIT
 mkdir -p "$(dirname "$golden")"
-it_create_bundle "$golden.partial" windows \
-    '.name = "windows-base" | .backend = "qemu" | .cpu.count = 4 | .memory.mib = 4096 | .vz = null
-     | .disks[0] |= (.bus = "nvme" | .sizeGiB = 64) | .network = [] | .audio.output = false
-     | .qemu = {tpm: true, secureBoot: true, gpu: "ramfb", storageBus: "nvme", smbiosUUID: "'"$(uuidgen)"'"}
-     | .windows = {}'
-cp -c "$source_dir/disk.raw" "$golden.partial/current/disk.img"
-chmod -R go-rwx "$golden.partial"
-mv "$golden.partial" "$golden"
+it_windows_install_bundle "$golden.partial" "$iso" "$tools" "$work/request.json" "Gw-$(uuidgen | cut -c1-12)"
+export VMPANE_TEST_WIN_INSTALL=$work/request.json
+pid=$(it_start_helper "$golden.partial")
+unset VMPANE_TEST_WIN_INSTALL
+socket=$(it_socket "$golden.partial")
 
-pid=$(it_start_helper "$golden")
-socket=$(it_socket "$golden")
 start=$SECONDS
-it_rpc "$socket" vm.start '{"headless": true}' >/dev/null || { it_fail "vm.start failed"; exit 1; }
-it_wait_windows_desktop "$socket" 180 || { it_fail "no Windows desktop within 180 s"; exit 1; }
-echo "golden-windows: desktop after $((SECONDS - start)) s"
+out=$(it_rpc "$socket" vm.start '{"headless": true}') || { it_fail "vm.start failed: $out"; exit 1; }
+it_wait_install "$golden.partial" 80 || exit 1
+it_wait_for 120 bash -c "[[ \$(/usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' '$socket' vm.info | jq -r .state) == running ]]" \
+    || { it_fail "the VM did not start again after finalize"; exit 1; }
+it_wait_windows_desktop "$socket" 300 || { it_fail "no Windows screen within 5 min of finalize"; exit 1; }
+echo "golden-windows: installed and up after $(((SECONDS - start) / 60)) min"
 sleep 60  # let first-boot work settle before the shutdown
 it_rpc "$socket" vm.stop '{"mode": "graceful"}' >/dev/null
 it_wait_for 150 bash -c "[[ \$(/usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' '$socket' vm.info | jq -r .state) == stopped ]]" \
@@ -42,5 +38,8 @@ it_wait_for 150 bash -c "[[ \$(/usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' 
 it_rpc "$socket" helper.shutdown >/dev/null || true
 it_wait_exit "$pid" 30 || true
 pid=
+rm -rf "$golden.partial/install"  # only install.json (done) is left there
+chmod -R go-rwx "$golden.partial"
+mv "$golden.partial" "$golden"
 echo "$IT_GOLDEN_WINDOWS_VERSION" >"$golden/.ready"
 du -sh "$golden" | awk '{print "golden Windows bundle ready: " $1}'
