@@ -19,7 +19,7 @@ scenario_run() {
     it_rpc "$socket" vm.input.text '{"text": "VMPANE-INSTALL-AGENT\n"}' >/dev/null
     it_wait_for 60 grep -qa 'VMPANE-AGENT-INSTALLED rc=0' "$bundle/logs/serial.log" || it_fail "the agent did not install" || return 1
     it_wait_for 30 it_agent_connected || it_fail "the agent did not connect" || return 1
-    it_rpc "$socket" vm.settings.apply '{"patch": {"mcp": {"policy": "admin"}}}' >/dev/null || it_fail "cannot set the policy" || return 1
+    it_rpc "$socket" vm.settings.apply '{"patch": {"mcp": {"policy": "admin", "confirmExec": false}}}' >/dev/null || it_fail "cannot set the policy" || return 1
     export VMPANE_EXCHANGE_DIR="$work/exchange"
 
     /usr/bin/python3 - "$cli" "$bundle" "$socket" <<'PY' || { it_fail "the MCP session failed"; return 1; }

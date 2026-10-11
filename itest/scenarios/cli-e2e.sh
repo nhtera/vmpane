@@ -16,7 +16,7 @@ scenario_run() {
         || { echo "cli-e2e: the app has no Linux guest tools (guest-tools/build-linux.sh, then rebuild)" >&2; return 77; }
     it_boot_linux_clone || return 1
     # Agents' level for this VM, set as the app sets it (the bridge is the app to a development helper): tagged.
-    it_rpc "$socket" vm.settings.apply '{"patch": {"mcp": {"policy": "admin"}}}' >/dev/null || it_fail "cannot set the policy" || return 1
+    it_rpc "$socket" vm.settings.apply '{"patch": {"mcp": {"policy": "admin", "confirmExec": false}}}' >/dev/null || it_fail "cannot set the policy" || return 1
     trap 'set +e; [[ -n ${pid:-} ]] && kill -9 "$pid" 2>/dev/null; rm -rf "$work"; true' RETURN
     it_rpc "$socket" vm.input.text '{"text": "VMPANE-INSTALL-AGENT\n"}' >/dev/null
     it_wait_for 60 grep -qa 'VMPANE-AGENT-INSTALLED rc=0' "$bundle/logs/serial.log" || it_fail "the agent did not install" || return 1
@@ -73,7 +73,7 @@ scenario_run() {
     # Hand-raising the level in config.json does not count (no tag).
     jq '.mcp.policy = "admin"' "$bundle/config.json" >"$work/c.json" && cp "$work/c.json" "$bundle/config.json"
     [[ $("$cli" list --json | jq length) == 0 ]] || it_fail "a hand-edited policy made the VM visible" || return 1
-    it_rpc "$socket" vm.settings.apply '{"patch": {"mcp": {"policy": "admin"}}}' >/dev/null || it_fail "cannot raise the policy" || return 1
+    it_rpc "$socket" vm.settings.apply '{"patch": {"mcp": {"policy": "admin", "confirmExec": false}}}' >/dev/null || it_fail "cannot raise the policy" || return 1
     echo "cli-e2e: at observe a script is refused (77, audited); a hand-edited level counts as off"
 
     # 6. stop

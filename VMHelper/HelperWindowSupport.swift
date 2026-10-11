@@ -87,3 +87,32 @@ final class GeneralPasteboard: HostPasteboard {
         }
     }
 }
+
+/// Asks the person whether an AI agent may go ahead (`mcp.confirmExec`): the command in a scrollable box, Deny
+/// as the default, gone after the helper's minute without an answer.
+@MainActor
+enum ConfirmationDialog {
+    static func ask(_ question: ConfirmationRequest) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = question.title
+        alert.informativeText = "Allow it this once? Check what it does first."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Deny")
+        alert.addButton(withTitle: "Allow Once")
+        let text = NSTextView(frame: NSRect(x: 0, y: 0, width: 420, height: 90))
+        text.string = question.detail
+        text.isEditable = false
+        text.font = .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+        let scroll = NSScrollView(frame: text.frame)
+        scroll.documentView = text
+        scroll.hasVerticalScroller = true
+        alert.accessoryView = scroll
+        alert.window.level = .floating
+        NSApp.activate()
+        // The helper stops waiting after a minute (a no); the dialog goes too.
+        let timeout = DispatchWorkItem { NSApp.abortModal() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 60, execute: timeout)
+        defer { timeout.cancel() }
+        return alert.runModal() == .alertSecondButtonReturn
+    }
+}

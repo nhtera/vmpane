@@ -53,6 +53,8 @@ public actor HelperController {
     var killSwitchWatch: DispatchSourceFileSystemObject?
     var killSwitchPoll: Task<Void, Never>?
     var agentGeneration = 0
+    /// Asks the person before an agent's command or admin action (`HelperController+Confirm`).
+    var confirmationPresenter: (@Sendable (ConfirmationRequest) async -> Bool)?
     /// Agent sessions' undo snapshots (`HelperController+AgentSession`).
     var agentSessions: [String: AgentSession] = [:]
     /// The file drop in progress (`vm.files.cancel` stops it).
@@ -151,6 +153,11 @@ public actor HelperController {
         let caller = identity(of: connection)
         let started = ContinuousClock.now
         if let denial = authorize(request, caller) { return .failure(denial) }
+        if let question = confirmation(for: request, caller), await !ask(question) {
+            let refusal = RPCError(.policyDenied, "the person at this Mac did not allow it (\(question.title))")
+            audit(request, caller, result: .failure(refusal), since: started)
+            return .failure(refusal)
+        }
         if let refusal = await snapshotBeforeAgentChange(request, caller) {
             audit(request, caller, result: .failure(refusal), since: started)
             return .failure(refusal)

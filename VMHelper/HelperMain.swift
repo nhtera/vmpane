@@ -98,7 +98,10 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
         }
         self.prepared = prepared
         let controller = makeController(prepared, runtimeVersion: runtime, paths: paths)
-        Task { await controller.setHostPasteboard(GeneralPasteboard()) }
+        Task {
+            await controller.setHostPasteboard(GeneralPasteboard())
+            await controller.setConfirmationPresenter { question in await MainActor.run { ConfirmationDialog.ask(question) } }
+        }
         Task {
             do {
                 try await controller.start()

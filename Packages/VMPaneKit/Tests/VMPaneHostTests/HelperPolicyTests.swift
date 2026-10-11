@@ -137,3 +137,46 @@ private func agentSnapshots(_ helper: Harness) async throws -> [JSONValue] {
     #expect(try await agentSnapshots(helper).isEmpty)
     await helper.tearDown()
 }
+
+/// With confirmExec (the default), an agent's command or admin action waits for the person's answer.
+@Test func agentsAskBeforeAdminActions() async throws {
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.settings.apply", params: ["patch": ["mcp": ["policy": "admin", "autoSnapshot": false]]])
+    let socket = await helper.controller.prepared.runFiles.socketURL
+    await helper.controller.setClassifier(strangers)
+    let agent = try UDSClient.connect(to: socket)
+    defer { agent.close() }
+    try await hello(agent, session: "s1")
+    let deleting: JSONValue = ["id": .string(UUID().uuidString)]
+    do {
+        _ = try await agent.call("vm.snapshot.delete", params: deleting)
+        Issue.record("nobody could answer: refused")
+    } catch let error as RPCError {
+        #expect(error.code == ControlErrorCode.policyDenied.rawValue)
+    }
+    let person = Person()
+    await helper.controller.setConfirmationPresenter { await person.answer($0) }
+    await #expect(throws: RPCError.self) { try await agent.call("vm.snapshot.delete", params: deleting) }
+    #expect(await person.asked.last?.title.contains("claude-code") == true)
+    await person.allow()
+    do {
+        _ = try await agent.call("vm.snapshot.delete", params: deleting)
+    } catch let error as RPCError {
+        #expect(error.code != ControlErrorCode.policyDenied.rawValue, "allowed: now it fails on its own (no such snapshot)")
+    }
+    #expect(try await helper.client.call("vm.info")["state"] == "stopped", "reading needs no answer")
+    await helper.tearDown()
+}
+
+/// The person answering confirmations in a test.
+private actor Person {
+    private(set) var asked: [ConfirmationRequest] = []
+    private var allows = false
+
+    func answer(_ question: ConfirmationRequest) -> Bool {
+        asked.append(question)
+        return allows
+    }
+
+    func allow() { allows = true }
+}
