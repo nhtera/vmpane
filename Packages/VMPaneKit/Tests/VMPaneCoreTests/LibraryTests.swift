@@ -128,3 +128,44 @@ import Testing
     #expect(VMLibrary.problem(BundleError.symlink, at: here).contains("symbolic link"))
     #expect(!VMLibrary.problem(BundleError.notABundle, at: here).contains("notABundle"))
 }
+
+/// The app lists a VM found in the default folder; its helper then opens the same bundle through another spelling of
+/// the path (/tmp vs /private/tmp) and adopts it: the VM keeps its identity.
+@Test func aVMFoundInTheDefaultFolderKeepsItsIdentityWhenItsHelperAdoptsIt() throws {
+    let root = URL(fileURLWithPath: "/tmp/vp-found-\(UUID().uuidString.prefix(8))")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let paths = VMPanePaths(root: root)
+    let library = VMLibrary(paths: paths)
+    try FileManager.default.createDirectory(at: paths.defaultLibrary, withIntermediateDirectories: true)
+    let folder = paths.defaultLibrary
+    let a = try VMBundle.create(at: folder.appendingPathComponent("A.vmpane"), config: makeConfig(name: "A", mac: "52:54:00:00:00:0a"))
+    _ = try VMBundle.create(at: folder.appendingPathComponent("B.vmpane"), config: makeConfig(name: "B", mac: "52:54:00:00:00:0b"))
+    let id = try ConfigStore.load(a).id
+    #expect(try library.items().count == 2)  // the app's listing indexes both
+
+    let opened = try VMBundle.open(URL(fileURLWithPath: root.path).appendingPathComponent("VMs/A.vmpane"))
+    let lock = try #require(try opened.tryLock(retryingFor: 5))
+    defer { lock.release() }
+    let adopted = try library.adopt(holding: lock)
+    #expect(!adopted.regenerated)
+    #expect(adopted.config.id == id)
+    #expect(try library.readIndex().bundles.count == 2)
+}
+
+/// A Finder copy keeps the original's id until its helper adopts it; until then it is listed under an id of its own
+/// (stable across listings), so no two listed VMs share one.
+@Test func anUnadoptedCopyIsListedUnderAnIDOfItsOwn() throws {
+    try withTempDirectory { dir in
+        let paths = VMPanePaths(root: dir.appendingPathComponent("support"))
+        let library = VMLibrary(paths: paths)
+        try FileManager.default.createDirectory(at: paths.defaultLibrary, withIntermediateDirectories: true)
+        let original = try VMBundle.create(at: paths.defaultLibrary.appendingPathComponent("B.vmpane"), config: makeConfig(name: "B"))
+        try library.register(original)
+        try FileManager.default.copyItem(at: original.url, to: paths.defaultLibrary.appendingPathComponent("B copy.vmpane"))
+        let items = try library.items()
+        #expect(items.count == 2)
+        #expect(Set(items.map(\.id)).count == 2)
+        #expect(items.first { $0.bundle.url.lastPathComponent == "B.vmpane" }?.id == (try ConfigStore.load(original).id))
+        #expect(try library.items().map(\.id) == items.map(\.id))
+    }
+}

@@ -230,10 +230,11 @@ public final class LibraryStore {
         do {
             switch action {
             case .start(let headless):
+                var id = id
                 if row.state == nil {
                     let bundle = try VMBundle.open(row.bundleURL)
                     try await launch(bundle, headless)
-                    try await attachWhenUp(id)
+                    id = try await attachWhenUp(id, bundle: bundle.url)
                 }
                 _ = try await links.call(id, ControlMethod.vmStart.rawValue, params: ["headless": .bool(headless)])
             case .stop(let force):
@@ -250,12 +251,20 @@ public final class LibraryStore {
         }
     }
 
-    /// A launched helper takes a moment to listen: attach once it does (up to 10 s).
-    private func attachWhenUp(_ id: UUID) async throws {
-        for _ in 0..<50 {
+    /// A launched helper takes a moment to listen: attach once it does (up to 10 s). Returns the VM's id, which is
+    /// new when its helper found it to be a copy (e.g. duplicated in Finder): the row is then found again by its bundle.
+    private func attachWhenUp(_ id: UUID, bundle: URL) async throws -> UUID {
+        var id = id
+        for attempt in 1...50 {
             if watches[id] == nil { attach(id) }
             try await Task.sleep(for: .milliseconds(200))
-            if row(id)?.state != nil { return }
+            if row(id)?.state != nil { return id }
+            guard attempt % 5 == 0 else { continue }
+            await reload()
+            if let found = rows.first(where: { VMBundle.samePlace($0.bundleURL.path, bundle.path) })?.id, found != id {
+                if selection == id { selection = found }
+                id = found
+            }
         }
         throw RPCError(.backendUnavailable, "the VM's helper did not start")
     }

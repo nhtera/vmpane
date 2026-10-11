@@ -213,3 +213,33 @@ final class LockedFlag: @unchecked Sendable {
     #expect(ShareWarning.reason(for: home.appendingPathComponent("Library/Keychains"), home: home) != nil)
     #expect(ShareWarning.reason(for: home.appendingPathComponent("Projects/app"), home: home) == nil)
 }
+
+/// A VM duplicated in Finder: listing it again and again works (rows never share an id), and starting the copy
+/// follows it to the identity its helper gives it.
+@Test @MainActor func aFinderCopyIsListedAndStartedUnderItsNewIdentity() async throws {
+    let links = FakeLinks()
+    // The helper: adopts the copy (a new id), then answers.
+    let fixture = try makeStore(links) { bundle, _ in
+        let library = VMLibrary(paths: VMPanePaths(root: bundle.url.deletingLastPathComponent().deletingLastPathComponent()))
+        let lock = try #require(try bundle.tryLock(retryingFor: 5))
+        let adopted = try library.adopt(holding: lock)
+        lock.release()
+        links.run(adopted.config.id, in: .stopped)
+    }
+    let (store, ops, root) = (fixture.store, fixture.ops, fixture.root)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let original = try ops.create(name: "Base", os: .linux, diskGiB: 8)
+    let copy = original.url.deletingLastPathComponent().appendingPathComponent("Base copy.vmpane")
+    try FileManager.default.copyItem(at: original.url, to: copy)
+    await store.reload()
+    await store.reload()
+    #expect(store.rows.count == 2)
+    let listed = try #require(store.rows.first { $0.bundleURL.lastPathComponent == "Base copy.vmpane" })
+    store.selection = listed.id
+    await store.perform(.start(headless: false), on: listed.id)
+    #expect(store.lastError == nil)
+    let adopted = try ConfigStore.load(try VMBundle.open(copy)).id
+    #expect(adopted != (try ConfigStore.load(original).id))
+    #expect(links.calls.last.map { "\($0.method) \($0.vm)" } == "vm.start \(adopted)")
+    #expect(store.selection == adopted)
+}

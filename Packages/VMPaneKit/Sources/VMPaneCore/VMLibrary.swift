@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// `library.json`: the VMs the user has, by id, path and a bookmark that follows moves.
@@ -98,6 +99,12 @@ public struct VMLibrary: Sendable {
         }
     }
 
+    /// The listing id of a copy not adopted yet: derived from its path, so it is the same at every listing.
+    static func listingID(forCopyAt url: URL) -> UUID {
+        let bytes = Array(SHA256.hash(data: Data(url.path.utf8)).prefix(16))
+        return NSUUID(uuidBytes: bytes) as UUID
+    }
+
     public func unregister(id: UUID) throws {
         try updateIndex { $0.bundles.removeAll { $0.id == id } }
     }
@@ -133,8 +140,9 @@ public struct VMLibrary: Sendable {
                     let config = try? ConfigStore.load(bundle)
                 else { continue }
                 if indexedIDs.contains(config.id) {
-                    // A copy of an indexed VM: listed, but indexed only once it is adopted with its own identity.
-                    unindexed.append((config.id, bundle.url))
+                    // A copy of an indexed VM (it may still be being copied): indexed only once its helper adopts it
+                    // with an identity of its own; listed meanwhile under an id of its own, never the original's.
+                    unindexed.append((Self.listingID(forCopyAt: bundle.url), bundle.url))
                     continue
                 }
                 index.bundles.append(.init(id: config.id, path: bundle.url.path, bookmark: try? bundle.url.bookmarkData()))
