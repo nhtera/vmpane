@@ -57,10 +57,10 @@ public enum WindowsInstall {
         case .notWindows: throw WindowsInstallError.notWindowsMedia
         case .unreadable: throw WindowsInstallError.unreadable
         }
-        guard editions.contains(where: { $0.name == input.editionName }) else {
+        guard let edition = editions.first(where: { $0.name == input.editionName }) else {
             throw WindowsInstallError.editionMissing(input.editionName, available: editions.map(\.name))
         }
-        let xml = try AutounattendGenerator.generate(input)  // validates the input before anything is copied
+        let xml = try AutounattendGenerator.generate(input.speaking(edition.languages))  // validates it before anything is copied
 
         let bundle = lock.bundle
         let sources = [iso] + (tools.map { [$0] } ?? [])

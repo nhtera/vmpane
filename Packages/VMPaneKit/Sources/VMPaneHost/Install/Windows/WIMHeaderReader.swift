@@ -7,6 +7,8 @@ public struct WindowsImage: Equatable, Sendable {
     /// `ARCH` of the image: 12 is ARM64 (9 x64, 0 x86).
     public var architecture: Int?
     public var build: Int?
+    /// The languages the image installs (`en-US`…), its default first; Setup can only run in one of these.
+    public var languages: [String] = []
 
     public var isARM64: Bool { architecture == 12 }
     /// Windows 11 is build 22000 and later.
@@ -56,10 +58,13 @@ public enum WIMHeaderReader {
             guard let image = node as? XMLElement, let index = image.attribute(forName: "INDEX")?.stringValue.flatMap(Int.init) else {
                 return nil
             }
-            func value(_ path: String) -> String? { (try? image.nodes(forXPath: path))?.first?.stringValue }
+            func values(_ path: String) -> [String] { ((try? image.nodes(forXPath: path)) ?? []).compactMap(\.stringValue) }
+            func value(_ path: String) -> String? { values(path).first }
+            let languages = values("WINDOWS/LANGUAGES/LANGUAGE"), fallback = value("WINDOWS/LANGUAGES/DEFAULT")
             return WindowsImage(
                 index: index, name: value("NAME") ?? value("DISPLAYNAME") ?? "Image \(index)",
-                architecture: value("WINDOWS/ARCH").flatMap(Int.init), build: value("WINDOWS/VERSION/BUILD").flatMap(Int.init))
+                architecture: value("WINDOWS/ARCH").flatMap(Int.init), build: value("WINDOWS/VERSION/BUILD").flatMap(Int.init),
+                languages: (fallback.map { [$0] } ?? []) + languages.filter { $0 != fallback })
         }
     }
 }

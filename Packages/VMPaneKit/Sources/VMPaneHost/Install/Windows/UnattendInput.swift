@@ -65,6 +65,18 @@ public struct UnattendInput: Sendable, Equatable {
         "Windows 11 Education": "YNMGQ-8RYV3-4PGQ3-C8XTP-7CFBY",
     ]
 
+    /// This input in a language the image has: Setup stops at its language page for any other (an en-US ISO on a
+    /// Mac set to en-GB or en-VN), so the Mac's language is kept only when the image installs it, and otherwise
+    /// the image's default is used (formats and keyboard can be changed in Windows). Unknown languages: unchanged.
+    func speaking(_ languages: [String]) -> UnattendInput {
+        guard let fallback = languages.first else { return self }
+        func pick(_ tag: String) -> String { languages.first { $0.caseInsensitiveCompare(tag) == .orderedSame } ?? fallback }
+        var input = self
+        input.locale = pick(locale)
+        input.inputLocale = pick(inputLocale)
+        return input
+    }
+
     /// Checks everything Setup would otherwise reject halfway through an unattended install.
     func validate() throws {
         guard eulaAcceptedAt != nil else { throw UnattendError.eulaNotAccepted }

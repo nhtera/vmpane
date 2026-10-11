@@ -213,3 +213,25 @@ private let realWindowsISO = ProcessInfo.processInfo.environment["VMPANE_WINDOWS
     #expect(editions.allSatisfy { $0.isARM64 && $0.isWindows11 })
     print("real ISO editions: \(editions.map { "\($0.index) \($0.name) build \($0.build ?? 0)" })")
 }
+
+@Test func imageLanguagesAreReadDefaultFirstAndSetupSpeaksOneOfThem() throws {
+    let xml = """
+        <WIM><IMAGE INDEX="1"><NAME>Windows 11 Pro</NAME><WINDOWS><ARCH>12</ARCH><VERSION><BUILD>26100</BUILD></VERSION>
+        <LANGUAGES><LANGUAGE>en-GB</LANGUAGE><LANGUAGE>en-US</LANGUAGE><DEFAULT>en-US</DEFAULT></LANGUAGES></WINDOWS></IMAGE></WIM>
+        """
+    let image = try #require(try WIMHeaderReader.parse(Data(xml.utf8)).first)
+    #expect(image.languages == ["en-US", "en-GB"])
+
+    let input = UnattendInput(
+        locale: "en-VN", timeZone: "SE Asia Standard Time", computerName: "WIN", userName: "user", password: "p",
+        eulaAcceptedAt: Date())
+    // A Mac language the image does not have (Setup would stop at its language page): the image's default.
+    #expect(input.speaking(image.languages).locale == "en-US")
+    #expect(input.speaking(image.languages).inputLocale == "en-US")
+    // One it has is kept, whatever its case.
+    var british = input
+    british.locale = "en-gb"
+    #expect(british.speaking(image.languages).locale == "en-GB")
+    // Nothing known about the image: unchanged.
+    #expect(input.speaking([]).locale == "en-VN")
+}
