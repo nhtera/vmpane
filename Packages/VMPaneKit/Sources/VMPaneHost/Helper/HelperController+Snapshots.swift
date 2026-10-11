@@ -136,6 +136,10 @@ extension HelperController {
                     availableSpace: { _ in .max })
             }
             await clearSavedState()  // the state now belongs to the snapshot
+            if SharedPreferences.excludeRAMSnapshotsFromBackup {
+                let state = bundle.snapshotsDirectory.appendingPathComponent("\(meta.id.uuidString)/state", isDirectory: true)
+                try? SharedPreferences.excludeFromBackup(state)
+            }
             if wasRunning {
                 // The snapshot exists either way; a guest that cannot continue (e.g. paused for a full disk)
                 // stays paused and its backend says why.

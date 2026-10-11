@@ -6,6 +6,7 @@ import VMPaneUI
 struct LibraryWindow: View {
     @Bindable var store: LibraryStore
     @State private var showingWizard = false
+    @AppStorage("onboarded") private var onboarded = false
 
     var body: some View {
         NavigationSplitView {
@@ -42,6 +43,9 @@ struct LibraryWindow: View {
             }
         }
         .sheet(isPresented: $showingWizard) { NewVMWizard(store: store) }
+        .sheet(isPresented: Binding(get: { !onboarded }, set: { if !$0 { onboarded = true } })) {
+            OnboardingFlow { onboarded = true }
+        }
         .task {
             await store.reload()
             // The library changes from outside too (the CLI, Finder): look again now and then.

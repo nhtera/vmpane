@@ -12,6 +12,12 @@ struct VMPaneApp: App {
             LibraryWindow(store: appDelegate.library)
                 .frame(minWidth: 640, minHeight: 400)
         }
+        Settings {
+            PreferencesView(paths: appDelegate.supervisor.paths)
+        }
+        MenuBarExtra("VMPane", systemImage: "square.stack.3d.up") {
+            MenuBarExtraView(store: appDelegate.library)
+        }
     }
 }
 

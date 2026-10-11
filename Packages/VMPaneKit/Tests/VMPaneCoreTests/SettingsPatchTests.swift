@@ -61,3 +61,11 @@ import Testing
     #expect(SettingsPatch.merge(old, patch ?? [:]) == new)
     #expect(SettingsPatch.makePatch(from: old, to: old) == nil)
 }
+
+@Test func backupExclusionMarksTheDirectory() throws {
+    let dir = URL(fileURLWithPath: "/tmp/vp-tm-\(UUID().uuidString.prefix(8))", isDirectory: true)
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    try SharedPreferences.excludeFromBackup(dir)
+    #expect(try dir.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
+}
