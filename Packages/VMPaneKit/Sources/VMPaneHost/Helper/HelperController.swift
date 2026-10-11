@@ -260,6 +260,7 @@ public actor HelperController {
             "allowedRequests": .array(backend == nil ? [] : HelperStateMachine.allowedRequests(in: state).map { .string($0.rawValue) }),
             "capabilities": .array(capabilities.map { .string($0) }),
             "pendingRestart": .bool(pendingRestart),
+            "suspended": .bool(state == .stopped && prepared.lock.bundle.isSuspended),
             // The agent level in effect, and whether a raised level was set outside VMPane (and so counts as off).
             "policy": .string(policy.level.rawValue), "policyTampered": .bool(policy.tampered),
         ])

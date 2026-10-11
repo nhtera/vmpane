@@ -130,7 +130,9 @@ struct VMToolbar: ToolbarContent {
     var body: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
             if model.can(.start) {
-                button("Start", "play.fill", .start, help: "Start the VM")
+                button(
+                    model.suspended ? "Resume" : "Start", "play.fill", .start,
+                    help: model.suspended ? "Resume the VM where it was suspended" : "Start the VM")
             } else {
                 button("Shut Down", "power", .shutDown, help: "Shut down the guest (the power button)")
                     .keyboardShortcut(".", modifiers: .command)
@@ -200,7 +202,7 @@ struct StoppedOverlay: View {
         Button {
             Task { await model.perform(.start) }
         } label: {
-            Label("Start", systemImage: "play.circle.fill").font(.title)
+            Label(model.suspended ? "Resume" : "Start", systemImage: "play.circle.fill").font(.title)
         }
         .buttonStyle(.borderless)
         .padding(16)

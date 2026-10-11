@@ -18,6 +18,8 @@ public final class LibraryStore {
         public var bundleURL: URL
         /// nil: no helper runs it.
         public var state: VMRunState?
+        /// Stopped with its RAM state saved (a start resumes it).
+        public var suspended = false
         /// Space the bundle takes on disk (sparse disks count what they use); nil until measured.
         public var diskBytes: UInt64?
         /// Why the bundle cannot be read, if it cannot.
@@ -189,11 +191,12 @@ public final class LibraryStore {
             urls.map { id, url in
                 let thumbnail = url.appendingPathComponent("thumbnail.png")
                 let date = (try? thumbnail.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-                return (id, Self.allocatedBytes(url), date.map { _ in thumbnail }, date)
+                return (id, Self.allocatedBytes(url), date.map { _ in thumbnail }, date, VMBundle.isSuspended(url))
             }
         }
-        for (id, size, thumbnail, date) in measured {
+        for (id, size, thumbnail, date, suspended) in measured {
             guard let index = rows.firstIndex(where: { $0.id == id }) else { continue }
+            rows[index].suspended = suspended
             rows[index].diskBytes = size
             rows[index].thumbnail = thumbnail
             rows[index].thumbnailDate = date
@@ -223,6 +226,7 @@ public final class LibraryStore {
     private func setState(_ state: VMRunState?, for id: UUID) {
         guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
         rows[index].state = state
+        if state == nil || state == .stopped { rows[index].suspended = VMBundle.isSuspended(rows[index].bundleURL) }
     }
 
     public func perform(_ action: Action, on id: UUID) async {

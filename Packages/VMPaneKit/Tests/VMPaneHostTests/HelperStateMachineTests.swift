@@ -84,9 +84,15 @@ final class ScriptedBackend: VMBackend, @unchecked Sendable {
     }
     func pause() async throws { try record("pause"); continuation.yield(.paused) }
     func resume() async throws { try record("resume"); continuation.yield(.resumed) }
+    /// Like VZ: the VM's power-off at the end of a suspend arrives as a stop, before `suspend` returns.
+    var announcesStopOnSuspend = false
     func suspend(to stateDirectory: URL) async throws {
         try record("suspend")
         try Data("ram".utf8).write(to: stateDirectory.appendingPathComponent("suspend.scripted"))
+        if announcesStopOnSuspend {
+            continuation.yield(.stopped(reason: "powered off"))
+            try? await Task.sleep(for: .milliseconds(100))  // the helper applies it meanwhile
+        }
     }
     func saveState(to stateDirectory: URL) async throws {
         try record("saveState")

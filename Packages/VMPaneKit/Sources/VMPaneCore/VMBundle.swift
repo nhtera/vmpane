@@ -26,6 +26,12 @@ public struct VMBundle: Sendable, Equatable {
     public var generationURL: URL { currentDirectory.appendingPathComponent("generation.json") }
     public var auxDirectory: URL { currentDirectory.appendingPathComponent("aux", isDirectory: true) }
     public var stateDirectory: URL { currentDirectory.appendingPathComponent("state", isDirectory: true) }
+    /// Suspended: its RAM state is saved (`suspend.json`, written last, marks a complete save); a start resumes it.
+    public var isSuspended: Bool { Self.isSuspended(url) }
+    public static func isSuspended(_ bundle: URL) -> Bool {
+        let marker = bundle.appendingPathComponent("current/state/\(StateMeta.fileName)")
+        return FileManager.default.fileExists(atPath: marker.path)
+    }
     public var snapshotsDirectory: URL { url.appendingPathComponent("snapshots", isDirectory: true) }
     public var installDirectory: URL { url.appendingPathComponent("install", isDirectory: true) }
     public var restoreJournalURL: URL { url.appendingPathComponent("restore.journal") }

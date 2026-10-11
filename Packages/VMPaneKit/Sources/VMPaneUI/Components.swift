@@ -37,20 +37,25 @@ public struct OSBadge: View {
 /// A VM's run state as a coloured dot and a word.
 public struct StateDot: View {
     let state: VMRunState?
+    let suspended: Bool
 
-    public init(_ state: VMRunState?) { self.state = state }
+    public init(_ state: VMRunState?, suspended: Bool = false) {
+        self.state = state
+        self.suspended = suspended
+    }
 
     public var body: some View {
         HStack(spacing: 4) {
-            Circle().fill(Self.color(state)).frame(width: 7, height: 7)
-            Text(Self.label(state)).font(.caption).foregroundStyle(.secondary)
+            Circle().fill(Self.color(state, suspended: suspended)).frame(width: 7, height: 7)
+            Text(Self.label(state, suspended: suspended)).font(.caption).foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("State: \(Self.label(state))")
+        .accessibilityLabel("State: \(Self.label(state, suspended: suspended))")
     }
 
-    public static func label(_ state: VMRunState?) -> String {
-        switch state {
+    public static func label(_ state: VMRunState?, suspended: Bool = false) -> String {
+        if suspended, state == nil || state == .stopped { return "Suspended" }
+        return switch state {
         case nil, .stopped?: "Stopped"
         case .starting?: "Starting"
         case .running?: "Running"
@@ -61,8 +66,9 @@ public struct StateDot: View {
         }
     }
 
-    static func color(_ state: VMRunState?) -> Color {
-        switch state {
+    static func color(_ state: VMRunState?, suspended: Bool = false) -> Color {
+        if suspended, state == nil || state == .stopped { return .blue }
+        return switch state {
         case .running?: .green
         case .paused?, .suspending?, .starting?, .stopping?: .orange
         case .error?: .red

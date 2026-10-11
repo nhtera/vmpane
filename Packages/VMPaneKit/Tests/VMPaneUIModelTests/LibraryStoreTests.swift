@@ -243,3 +243,22 @@ final class LockedFlag: @unchecked Sendable {
     #expect(links.calls.last.map { "\($0.method) \($0.vm)" } == "vm.start \(adopted)")
     #expect(store.selection == adopted)
 }
+
+/// A VM stopped with its RAM state saved reads "Suspended" in the library (a start resumes it).
+@Test @MainActor func aSuspendedVMIsShownAsSuspended() async throws {
+    let links = FakeLinks()
+    let fixture = try makeStore(links)
+    let (store, ops, root) = (fixture.store, fixture.ops, fixture.root)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let bundle = try ops.create(name: "VM", os: .linux, diskGiB: 8)
+    let id = try ConfigStore.load(bundle).id
+    await store.reload()
+    #expect(store.row(id)?.suspended == false)
+    try FileManager.default.createDirectory(at: bundle.stateDirectory, withIntermediateDirectories: true)
+    try Data("{}".utf8).write(to: bundle.stateDirectory.appendingPathComponent(StateMeta.fileName))
+    await store.reload()
+    let row = try #require(store.row(id))
+    #expect(row.suspended)
+    #expect(StateDot.label(row.state, suspended: row.suspended) == "Suspended")
+    #expect(StateDot.label(.running, suspended: true) == "Running")
+}

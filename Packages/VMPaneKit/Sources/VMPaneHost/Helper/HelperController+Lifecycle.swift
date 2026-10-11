@@ -268,7 +268,13 @@ extension HelperController {
             transition(.resumed, reason: "suspend failed")  // the backend contract: still running
             throw error
         }
-        transition(.suspended)
+        // The backend's power-off may already have announced "stopped", before the state was complete: announce
+        // it again now, so clients see a suspended VM.
+        if !transition(.suspended) {
+            server?.broadcast(
+                topic: "vm", method: ControlNotification.vmStateChanged.rawValue,
+                params: ["state": .string(state.rawValue), "reason": "suspended"])
+        }
     }
 
     func savedStateDecision() async -> SavedStateDecision {

@@ -140,7 +140,7 @@ struct VMRowView: View {
             OSBadge(row.os)
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.name).lineLimit(1)
-                StateDot(row.state)
+                StateDot(row.state, suspended: row.suspended)
             }
             Spacer()
             ByteSizeText(row.diskBytes).font(.caption).foregroundStyle(.secondary)
@@ -170,8 +170,8 @@ struct VMActionMenu: View {
         } else {
             // A VM whose config cannot be read (moved, deleted, damaged) cannot start.
             Group {
-                Button("Start") { act(.start(headless: false)) }
-                Button("Start Without Window") { act(.start(headless: true)) }
+                Button(row.suspended ? "Resume" : "Start") { act(.start(headless: false)) }
+                Button(row.suspended ? "Resume Without Window" : "Start Without Window") { act(.start(headless: true)) }
             }
             .disabled(row.error != nil)
         }
@@ -203,7 +203,7 @@ struct VMDetailView: View {
             Section {
                 LabeledContent("Name", value: row.name)
                 LabeledContent("System", value: OSBadge.name(row.os))
-                LabeledContent("State") { StateDot(row.state) }
+                LabeledContent("State") { StateDot(row.state, suspended: row.suspended) }
                 LabeledContent("On disk") { ByteSizeText(row.diskBytes) }
                 LabeledContent("Location") {
                     Text(row.bundleURL.path).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
@@ -231,8 +231,8 @@ struct VMDetailView: View {
                         .help("Shut down the guest")
                         .keyboardShortcut(".", modifiers: .command)
                 } else {
-                    Button("Start", systemImage: "play.fill") { act(.start(headless: false)) }
-                        .help(row.error == nil ? "Start this VM" : "This VM cannot start: see Problem")
+                    Button(row.suspended ? "Resume" : "Start", systemImage: "play.fill") { act(.start(headless: false)) }
+                        .help(row.error != nil ? "This VM cannot start: see Problem" : row.suspended ? "Resume this VM" : "Start this VM")
                         .keyboardShortcut("r", modifiers: .command)
                         .disabled(row.error != nil)
                 }
