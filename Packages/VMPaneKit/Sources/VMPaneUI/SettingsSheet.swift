@@ -58,6 +58,9 @@ public struct SettingsSheet: View {
                     row("audio.input") { Toggle("Microphone", isOn: $model.draft.audio.input) }
                     row("shares") { SharedFoldersEditor(shares: $model.draft.shares) }
                 }
+                AgentPolicySection(
+                    mcp: $model.draft.mcp, clipboardAllowWithAgents: $model.draft.clipboard.allowWithAgents,
+                    tampered: model.policyTampered, writableShares: model.draft.shares.contains { !$0.readOnly })
                 if model.draft.network.contains(where: { $0.mode == .nat }) {
                     Section("Port Forwarding") {
                         row("portForwards") {
@@ -96,7 +99,10 @@ public struct SettingsSheet: View {
             .padding()
         }
         .frame(width: 520, height: 600)
-        .task { await model.refreshPorts() }
+        .task {
+            await model.refreshPorts()
+            await model.refreshPolicy()
+        }
         .alert("Settings not saved", isPresented: errorShown) {
             Button("OK", role: .cancel) {}
         } message: {

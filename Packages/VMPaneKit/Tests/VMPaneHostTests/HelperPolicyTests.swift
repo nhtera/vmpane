@@ -49,6 +49,8 @@ private func entries(_ helper: Harness) throws -> [AuditEntry] {
     let helper = try await Harness.make(configure: { config in
         config.mcp.policy = .admin  // no tag
     })
+    let info = try await helper.client.call("vm.info")  // as the app: it is told why the level does not count
+    #expect(info["policy"] == "off" && info["policyTampered"] == true)
     await helper.controller.setClassifier(strangers)
     await #expect(throws: RPCError.self) { try await helper.client.call("vm.info") }
     #expect(try entries(helper).last?.policy == "off")

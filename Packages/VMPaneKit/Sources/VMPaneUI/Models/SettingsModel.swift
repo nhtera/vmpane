@@ -17,6 +17,9 @@ public final class SettingsModel {
     /// Each saved port forward's state (`vm.ports.list`), by rule id.
     public private(set) var portStatuses: [String: PortStatus] = [:]
 
+    /// A raised agent level was set outside VMPane, so it counts as off (`vm.info`).
+    public private(set) var policyTampered = false
+
     /// Ports the guest listens on (from its agent), for one-click forwards.
     public private(set) var listening: [ListeningPort] = []
 
@@ -60,6 +63,12 @@ public final class SettingsModel {
 
     /// Some saved change waits for the next start.
     public var needsRestart: Bool { outcomes.values.contains(.nextBoot) }
+
+    /// Whether the agent policy was changed outside VMPane.
+    public func refreshPolicy() async {
+        let info = try? await channel.call(ControlMethod.vmInfo.rawValue, params: nil, timeout: .seconds(5))
+        policyTampered = info?["policyTampered"] == true
+    }
 
     /// Reads the forwards' states from the helper.
     public func refreshPorts() async {
@@ -108,6 +117,7 @@ public final class SettingsModel {
             original = accepted
             draft = accepted
             if outcomes.keys.contains(where: { $0.hasPrefix("portForwards") }) { await refreshPorts() }
+            if outcomes.keys.contains(where: { $0.hasPrefix("mcp") || $0.hasPrefix("clipboard") }) { await refreshPolicy() }
         } catch let error as RPCError {
             lastError = error.message
         } catch {

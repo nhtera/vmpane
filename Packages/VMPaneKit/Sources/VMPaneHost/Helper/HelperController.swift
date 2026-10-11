@@ -228,12 +228,15 @@ public actor HelperController {
 
     private func info() -> Result<JSONValue, RPCError> {
         let capabilities = backend.map { Self.names($0.capabilities) } ?? []
+        let policy = effectivePolicy()
         return .success([
             "id": .string(config.id.uuidString), "name": .string(config.name), "os": .string(config.os.rawValue),
             "backend": .string(config.backend.rawValue), "state": .string(state.rawValue),
             "allowedRequests": .array(backend == nil ? [] : HelperStateMachine.allowedRequests(in: state).map { .string($0.rawValue) }),
             "capabilities": .array(capabilities.map { .string($0) }),
             "pendingRestart": .bool(pendingRestart),
+            // The agent level in effect, and whether a raised level was set outside VMPane (and so counts as off).
+            "policy": .string(policy.level.rawValue), "policyTampered": .bool(policy.tampered),
         ])
     }
 
