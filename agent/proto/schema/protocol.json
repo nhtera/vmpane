@@ -764,7 +764,7 @@
     "internalError": -32603,
     "invalidParams": -32602,
     "invalidRequest": -32600,
-    "io": -32044,
+    "ioError": -32044,
     "methodNotFound": -32601,
     "noSession": -32048,
     "notFound": -32042,

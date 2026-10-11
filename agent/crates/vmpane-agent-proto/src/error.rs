@@ -88,7 +88,7 @@ pub enum ErrorCode {
     NotFound = -32042,
     PermissionDenied = -32043,
     /// A guest I/O call failed; the message says which.
-    Io = -32044,
+    IoError = -32044,
     Timeout = -32045,
     /// A size limit (`maxBytes`, clipboard size, open streams).
     TooLarge = -32046,
@@ -114,7 +114,7 @@ impl ErrorCode {
         ErrorCode::CapUnsupported,
         ErrorCode::NotFound,
         ErrorCode::PermissionDenied,
-        ErrorCode::Io,
+        ErrorCode::IoError,
         ErrorCode::Timeout,
         ErrorCode::TooLarge,
         ErrorCode::Busy,
