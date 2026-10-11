@@ -1,6 +1,7 @@
 # Unattended Windows 11 install on the QEMU backend, from a Microsoft ISO to a signed-in desktop with no input:
 #   1. the wizard's step (WindowsInstall.prepare under the helper's lock, VMPANE_TEST_WIN_INSTALL) on a blank
-#      VM with the guest-tools ISO (guest-tools/build-iso.sh);
+#      VM with the guest-tools ISO (guest-tools/build-iso.sh), for a Mac set to a language the ISO lacks (vi-VN):
+#      the answers must use one the ISO has, or Setup stops at its language page;
 #   2. the helper drives it: first boot, Setup (the ISO ejected at its first reboot), first sign-in, guest tools,
 #      finalize (no install media, virtio display, NIC back), and the VM starts again (target ≤ 40 min);
 #   3. the desktop comes up, and the password is nowhere in the bundle (config, logs, install/) or the helper log.
@@ -24,7 +25,7 @@ scenario_run() {
     # 1. The request holds the password: 0600, and the helper deletes it once read.
     password="It-$(uuidgen | cut -c1-12)"
     request="$work/request.json"
-    it_windows_install_bundle "$bundle" "$iso" "$tools" "$request" "$password"
+    it_windows_install_bundle "$bundle" "$iso" "$tools" "$request" "$password" vi-VN
     export VMPANE_TEST_WIN_INSTALL=$request
     pid=$(it_start_helper "$bundle") || return 1
     unset VMPANE_TEST_WIN_INSTALL

@@ -227,10 +227,10 @@ it_windows_iso() {
     [[ -f $iso ]] && echo "$iso"
 }
 
-# it_windows_install_bundle <bundle> <iso> <tools iso> <request> <password>: a blank 64 GiB Windows VM, and the
-# 0600 request for the helper's VMPANE_TEST_WIN_INSTALL hook (the wizard's step).
+# it_windows_install_bundle <bundle> <iso> <tools iso> <request> <password> [locale]: a blank 64 GiB Windows VM,
+# and the 0600 request for the helper's VMPANE_TEST_WIN_INSTALL hook (the wizard's step; locale: the Mac's, en-US).
 it_windows_install_bundle() {
-    local bundle=$1 iso=$2 tools=$3 request=$4 password=$5
+    local bundle=$1 iso=$2 tools=$3 request=$4 password=$5 locale=${6:-en-US}
     it_create_bundle "$bundle" windows \
         '.name = "win-install" | .backend = "qemu" | .cpu.count = 4 | .memory.mib = 4096 | .vz = null
          | .disks[0] |= (.bus = "nvme" | .sizeGiB = 64) | .audio.output = false
@@ -238,8 +238,8 @@ it_windows_install_bundle() {
          | .windows = {}'
     mkfile -n 64g "$bundle/current/disk.img"
     chmod 600 "$bundle/current/disk.img"
-    (umask 077 && jq -n --arg iso "$iso" --arg tools "$tools" --arg password "$password" '{
-        iso: $iso, tools: $tools, locale: "en-US", timeZone: "UTC", computerName: "VMPANE-IT",
+    (umask 077 && jq -n --arg iso "$iso" --arg tools "$tools" --arg password "$password" --arg locale "$locale" '{
+        iso: $iso, tools: $tools, locale: $locale, timeZone: "UTC", computerName: "VMPANE-IT",
         userName: "vmpane", password: $password, editionName: "Windows 11 Pro"}' >"$request")
 }
 

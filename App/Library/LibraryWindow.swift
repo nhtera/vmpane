@@ -168,11 +168,16 @@ struct VMActionMenu: View {
             Button("Shut Down") { act(.stop(force: false)) }
             Button("Force Stop") { act(.stop(force: true)) }
         } else {
-            Button("Start") { act(.start(headless: false)) }
-            Button("Start Without Window") { act(.start(headless: true)) }
+            // A VM whose config cannot be read (moved, deleted, damaged) cannot start.
+            Group {
+                Button("Start") { act(.start(headless: false)) }
+                Button("Start Without Window") { act(.start(headless: true)) }
+            }
+            .disabled(row.error != nil)
         }
         Divider()
         Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([row.bundleURL]) }
+            .disabled(row.isMissing)
         if row.error != nil, !row.isRunning {
             Button("Remove from Library") { Task { await store.removeFromLibrary(row.id) } }
         }
@@ -227,8 +232,9 @@ struct VMDetailView: View {
                         .keyboardShortcut(".", modifiers: .command)
                 } else {
                     Button("Start", systemImage: "play.fill") { act(.start(headless: false)) }
-                        .help("Start this VM")
+                        .help(row.error == nil ? "Start this VM" : "This VM cannot start: see Problem")
                         .keyboardShortcut("r", modifiers: .command)
+                        .disabled(row.error != nil)
                 }
             }
         }

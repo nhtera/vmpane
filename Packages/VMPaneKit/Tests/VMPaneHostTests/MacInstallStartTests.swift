@@ -24,6 +24,7 @@ private func installingMacOS(replyAfter: Duration) async throws -> Harness {
     let reply = try await helper.client.call("vm.start", params: ["headless": true])
     #expect(reply["state"] == "starting")
     #expect(reply["installing"] == true)
+    #expect(try await helper.state() == "starting")  // the reply came while installing, not after
     var running = false
     for _ in 0..<300 where !running {
         try await Task.sleep(for: .milliseconds(50))

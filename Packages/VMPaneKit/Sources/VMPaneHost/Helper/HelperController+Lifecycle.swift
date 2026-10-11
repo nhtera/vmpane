@@ -103,18 +103,19 @@ extension HelperController {
         // A macOS install runs inside the start, for many minutes: reply once it is under way (a refusal, e.g. for
         // space, still comes back as the reply), so the app, vmpane and agents do not time out. The state stays
         // `starting`; install events report the progress, and a failure later is a `failed` state change.
-        let start = Task { await self.carryOut(request, backend, params) }
+        // Whichever comes first is the reply; the other is left behind (a task group would wait for the install).
+        let (first, settle) = AsyncStream.makeStream(of: Result<JSONValue, RPCError>.self)
         let wait = installReplyAfter
-        return await withTaskGroup(of: Result<JSONValue, RPCError>?.self) { group in
-            group.addTask { await start.value }
-            group.addTask {
-                try? await Task.sleep(for: wait)
-                return nil
-            }
-            let first = await group.next() ?? nil
-            group.cancelAll()  // stops waiting, not the start
-            return first ?? .success(["state": .string(VMRunState.starting.rawValue), "installing": true])
+        let timer = Task {
+            try await Task.sleep(for: wait)
+            settle.yield(.success(["state": .string(VMRunState.starting.rawValue), "installing": true]))
         }
+        Task {
+            settle.yield(await self.carryOut(request, backend, params))
+            timer.cancel()
+        }
+        for await reply in first { return reply }
+        return .failure(RPCError(.internalError, "the start ended without a reply"))
     }
 
     /// A macOS VM whose install has not finished (`VZBackend.installed` drops the source once it has).

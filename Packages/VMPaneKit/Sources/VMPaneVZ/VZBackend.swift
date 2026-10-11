@@ -56,8 +56,9 @@ public final class VZBackend: VMBackend {
             // The window (and its progress overlay) shows now: the VM counts as running only after the install.
             if !options.headless { await showDisplay() }
             try await runner.install(restoreImage: image)
-            // The installer leaves the VM running the installed system; start it only if it did not.
-            if try await runner.state != .running { try await runner.start() }
+            // The installer leaves the VM running only to finish up: it powers off, then the installed system starts.
+            try await runner.awaitInstallerPowerOff()
+            try await runner.start()
             return
         }
         try await create(plan)

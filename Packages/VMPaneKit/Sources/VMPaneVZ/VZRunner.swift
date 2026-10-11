@@ -129,6 +129,22 @@ actor VZRunner {
         continuation.yield(.installProgress(fraction: 1, message: "macOS installed"))
     }
 
+    /// After `install`: the VM is still running while the guest finishes the install, and powers off by itself
+    /// seconds later (measured: 2 s). Waits for that, powering off after `timeout`, without reporting it as the
+    /// VM stopping; the caller then starts the installed system.
+    func awaitInstallerPowerOff(timeout: Duration = .seconds(120)) async throws {
+        let vm = try machine()
+        guard vm.state == .running, let delegate else { return }
+        let stopped = await withCheckedContinuation { (done: CheckedContinuation<Bool, Never>) in
+            delegate.interceptStop { done.resume(returning: true) }
+            Task {
+                try? await Task.sleep(for: timeout)
+                if delegate.endIntercept() { done.resume(returning: false) }
+            }
+        }
+        if !stopped, vm.canStop { try await vm.stop() }
+    }
+
     // MARK: - Live settings (S11)
 
     /// Replaces the shares of the VMPane share device; false if the VM was created without one. A macOS guest's
@@ -238,11 +254,28 @@ actor VZRunner {
             self.continuation = continuation
         }
 
+        private let lock = NSLock()
+        private var stopHandler: (@Sendable () -> Void)?
+
+        /// The next stop goes to `handler` instead of becoming an event.
+        func interceptStop(_ handler: @escaping @Sendable () -> Void) { lock.withLock { stopHandler = handler } }
+
+        /// Ends `interceptStop`; true if no stop came meanwhile.
+        func endIntercept() -> Bool { lock.withLock { stopHandler.take() } != nil }
+
+        private func intercepted() -> Bool {
+            guard let handler = lock.withLock({ stopHandler.take() }) else { return false }
+            handler()
+            return true
+        }
+
         func guestDidStop(_ virtualMachine: VZVirtualMachine) {
+            guard !intercepted() else { return }
             continuation.yield(.stopped(reason: "guest shut down"))
         }
 
         func virtualMachine(_ virtualMachine: VZVirtualMachine, didStopWithError error: any Error) {
+            guard !intercepted() else { return }
             continuation.yield(.failed(message: error.localizedDescription))
         }
     }
