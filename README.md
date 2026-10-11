@@ -9,6 +9,27 @@ A native macOS app for running virtual machines on Apple silicon:
 
 Status: early development (pre-alpha). Requires macOS 15 or later on Apple silicon.
 
+## Install
+
+Public betas will be on [GitHub Releases](https://github.com/nhtera/vmpane/releases) as a notarized DMG (with
+`SHA256SUMS` and the GPL corresponding source of the bundled QEMU), and through Homebrew:
+`brew install --cask nhtera/tap/vmpane`. VMPane updates itself (Sparkle) and asks before installing an update.
+
+## Limits
+
+- **ARM guests only.** No x86 or x86-64 operating systems (no emulation).
+- **Windows 11 ARM**: 2D display only (no DirectX or GPU acceleration); no Hyper-V, WSL2 or other nested
+  virtualization inside it. The Windows licence is yours: VMPane installs from your ISO.
+- **macOS guests** install from an Apple restore image (IPSW); Apple allows two macOS VMs running at once per Mac.
+- **No USB passthrough** in 1.0.
+- AI agents act only on VMs you open to them (every VM starts at **Off**), within the level you choose. See
+  [docs/mcp.md](docs/mcp.md) and [docs/security-model.md](docs/security-model.md).
+
+## Documentation
+
+[`vmpane` commands](docs/cli.md) · [VMPane for AI agents](docs/mcp.md) · [Security model](docs/security-model.md) ·
+[Releasing](docs/release.md) · [Security policy](SECURITY.md)
+
 ## Building
 
 ```sh

@@ -1,0 +1,46 @@
+name: Crash or hang
+description: VMPane, a VM's window or a VM quit unexpectedly or stopped responding.
+labels: [bug, crash]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        VMPane sends no crash reports anywhere. To help, make a diagnostics zip and attach it:
+        `vmpane doctor --diagnostics ~/Desktop/vmpane-diagnostics.zip`. It holds system information, VMPane's checks,
+        VM settings (without install answers), log tails and the crash reports macOS kept for VMPane, and no
+        disks, passwords, keys or VM memory. Look inside before attaching it.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you were doing, and what quit or stopped responding (the app, a VM window, the VM itself).
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: VMPane version
+      description: From VMPane > About VMPane, or `vmpane version`.
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and Mac model
+      placeholder: macOS 15.7.3, MacBook Pro M4 Pro
+    validations:
+      required: true
+  - type: dropdown
+    id: guest
+    attributes:
+      label: Guest
+      options: [macOS, Linux, Windows 11, Not guest-specific]
+    validations:
+      required: true
+  - type: dropdown
+    id: again
+    attributes:
+      label: Does it happen again?
+      options: [Every time, Sometimes, Once so far]
+    validations:
+      required: true
