@@ -104,6 +104,7 @@ extension HelperController {
         } catch let error as RPCError {
             return .failure(error)
         } catch let error as InsufficientSpace {
+            if state == .starting { transition(.stopped) }  // refused before the VM ran
             return .failure(
                 RPCError(.insufficientSpace, "needs \(error.requiredBytes >> 30) GiB free, \(error.availableBytes >> 30) GiB available"))
         } catch {

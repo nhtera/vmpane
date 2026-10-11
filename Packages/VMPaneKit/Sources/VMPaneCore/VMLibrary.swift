@@ -147,10 +147,10 @@ public struct VMLibrary: Sendable {
                 do {
                     return Item(id: id, bundle: bundle, config: try ConfigStore.load(bundle), error: nil)
                 } catch {
-                    return Item(id: id, bundle: bundle, config: nil, error: String(describing: error))
+                    return Item(id: id, bundle: bundle, config: nil, error: Self.problem(error, at: url))
                 }
             } catch {
-                return Item(id: id, bundle: VMBundle(uncheckedURL: url), config: nil, error: String(describing: error))
+                return Item(id: id, bundle: VMBundle(uncheckedURL: url), config: nil, error: Self.problem(error, at: url))
             }
         }
     }
@@ -180,5 +180,24 @@ public struct VMLibrary: Sendable {
         try FileManager.default.createDirectory(
             at: paths.root, withIntermediateDirectories: true,
             attributes: [.posixPermissions: 0o700])
+    }
+
+    /// Why the bundle at `url` cannot be listed or acted on, in words for the library's "Problem" section and alerts.
+    public static func problem(_ error: Error, at url: URL) -> String {
+        if !FileManager.default.fileExists(atPath: url.path) {
+            return "Not found. The VM was moved, renamed or deleted, or it is on a disk that is not connected."
+        }
+        switch error {
+        case BundleError.notABundle: return "This is not a VMPane VM: it has no settings file (config.json)."
+        case BundleError.symlink: return "It is reached through a symbolic link, which VMPane does not follow."
+        case BundleError.locked: return "Another process is using it."
+        case BundleError.unsafePath(let path): return "Its settings point outside the VM (\(path)), so VMPane does not open it."
+        case ConfigError.newerSchema: return "It was made by a newer version of VMPane. Update VMPane to open it."
+        case is ConfigError, is DecodingError: return "Its settings file (config.json) is damaged."
+        default:
+            // Cocoa and POSIX errors read well localised; VMPane's own errors describe themselves.
+            let domain = (error as NSError).domain
+            return [NSCocoaErrorDomain, NSPOSIXErrorDomain].contains(domain) ? error.localizedDescription : String(describing: error)
+        }
     }
 }

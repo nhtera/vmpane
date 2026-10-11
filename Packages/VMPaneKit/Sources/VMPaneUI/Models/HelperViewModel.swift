@@ -29,6 +29,8 @@ public final class HelperViewModel {
     public private(set) var state: VMRunState = .stopped
     public private(set) var allowed: Set<String> = []
     public private(set) var install: InstallProgress?
+    /// The guest system (from `vm.info`); names what an install overlay installs.
+    public private(set) var os: GuestOS?
     public private(set) var agentConnected = false
     /// The last failed action, for an alert.
     public var lastError: String?
@@ -83,6 +85,7 @@ public final class HelperViewModel {
     private func refresh() async {
         guard let info = try? await channel.call(ControlMethod.vmInfo.rawValue, params: nil, timeout: .seconds(5)) else { return }
         if let state = info["state"]?.stringValue.flatMap(VMRunState.init(rawValue:)) { self.state = state }
+        if let os = info["os"]?.stringValue.flatMap(GuestOS.init(rawValue:)) { self.os = os }
         if case .array(let names)? = info["allowedRequests"] { allowed = Set(names.compactMap(\.stringValue)) }
     }
 

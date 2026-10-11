@@ -3,7 +3,7 @@ import SwiftUI
 import VMPaneCore
 
 /// The VM window's content: the guest display (VZ's view or the SPICE view, kept as the same `NSView` so
-/// capture and input still find it), an overlay while Windows installs, and the window toolbar.
+/// capture and input still find it), an overlay while the guest system installs, and the window toolbar.
 public struct VMWindowView: View {
     let display: NSView
     @Bindable var model: HelperViewModel
@@ -49,7 +49,7 @@ public struct VMWindowView: View {
                     return true
                 }
             if let install = model.install, install.isActive {
-                InstallProgressOverlay(progress: install)
+                InstallProgressOverlay(progress: install, os: model.os)
             } else if model.state == .stopped || model.state == .error {
                 StoppedOverlay(model: model)
             }
@@ -173,13 +173,14 @@ struct VMToolbar: ToolbarContent {
     }
 }
 
-/// While Windows installs (the guest needs no input): what is happening and how far along.
+/// While macOS or Windows installs (the guest needs no input): what is happening and how far along.
 struct InstallProgressOverlay: View {
     let progress: HelperViewModel.InstallProgress
+    let os: GuestOS?
 
     var body: some View {
         VStack(spacing: 10) {
-            Text("Installing Windows").font(.headline)
+            Text(os.map { "Installing \(OSBadge.name($0))" } ?? "Installing").font(.headline)
             ProgressView(value: Double(progress.percent), total: 100)
             Text(progress.message).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
             Text("You can leave this running; VMPane restarts the VM when it is done.").font(.caption).foregroundStyle(.secondary)

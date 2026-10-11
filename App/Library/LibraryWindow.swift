@@ -82,7 +82,11 @@ struct LibraryWindow: View {
                 if let row = deleting { Task { await store.delete(row.id) } }
             }
         } message: {
-            Text("Its disks and snapshots are deleted too. This cannot be undone.")
+            if deleting?.isMissing == true {
+                Text("It is no longer on disk; this takes it off the list.")
+            } else {
+                Text("Its disks and snapshots are deleted too. This cannot be undone.")
+            }
         }
         .sheet(isPresented: Binding(get: { !onboarded }, set: { if !$0 { onboarded = true } })) {
             OnboardingFlow { onboarded = true }
@@ -169,6 +173,9 @@ struct VMActionMenu: View {
         }
         Divider()
         Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([row.bundleURL]) }
+        if row.error != nil, !row.isRunning {
+            Button("Remove from Library") { Task { await store.removeFromLibrary(row.id) } }
+        }
     }
 
     private func act(_ action: LibraryStore.Action) {
@@ -198,7 +205,13 @@ struct VMDetailView: View {
                 }
             }
             if let error = row.error {
-                Section("Problem") { Text(error).foregroundStyle(.red) }
+                Section("Problem") {
+                    Text(error).foregroundStyle(.red)
+                    if !row.isRunning {
+                        Button("Remove from Library") { Task { await store.removeFromLibrary(row.id) } }
+                            .help("Takes this VM off the list. Nothing on disk is deleted.")
+                    }
+                }
             }
             AgentActivityView(bundle: row.bundleURL)
         }

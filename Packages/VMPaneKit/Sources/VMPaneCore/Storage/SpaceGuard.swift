@@ -34,6 +34,19 @@ public enum SpaceGuard {
         return UInt64(info.f_bavail) * UInt64(info.f_bsize)
     }
 
+    /// Refuses to begin writing `bytes` (an install) at `url` unless they fit with `reserveBytes` to spare, so a
+    /// long write does not leave the Mac's disk full. `url` may not exist yet: its nearest existing folder is measured.
+    public static func require(
+        _ bytes: UInt64, at url: URL,
+        available: (URL) throws -> UInt64 = SpaceGuard.freeBytes
+    ) throws {
+        var probe = url
+        while !FileManager.default.fileExists(atPath: probe.path), probe.pathComponents.count > 1 { probe.deleteLastPathComponent() }
+        let required = bytes + reserveBytes
+        let free = try available(probe)
+        if free < required { throw InsufficientSpace(requiredBytes: required, availableBytes: free) }
+    }
+
     /// Uses `freeBytes` (no purgeable space), the same measure the QEMU disk-full watchdog pauses on, so a
     /// save that passes this check does not itself trip the watchdog.
     public static func check(

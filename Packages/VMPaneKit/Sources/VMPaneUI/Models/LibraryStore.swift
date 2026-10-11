@@ -27,6 +27,8 @@ public final class LibraryStore {
         public var thumbnailDate: Date?
 
         public var isRunning: Bool { state.map { ![.stopped, .error].contains($0) } ?? false }
+        /// Listed, but its bundle is no longer on disk (moved, deleted, on a disk not connected).
+        public var isMissing: Bool { error != nil && !FileManager.default.fileExists(atPath: bundleURL.path) }
     }
 
     public enum Action: Sendable {
@@ -65,13 +67,17 @@ public final class LibraryStore {
             _ = try await Blocking.run { try ops.clone(bundle, name: name) }
             await reload()
         } catch {
-            lastError = "Cannot clone \(row.name): \(error)"
+            lastError = "Cannot clone \(row.name): \(VMLibrary.problem(error, at: row.bundleURL))"
         }
     }
 
-    /// Deletes a stopped VM (its bundle, disks and snapshots).
+    /// Deletes a stopped VM (its bundle, disks and snapshots). One already gone from disk is taken off the list.
     public func delete(_ id: UUID) async {
         guard let row = row(id), !row.isRunning else { return }
+        if row.isMissing {
+            await removeFromLibrary(id)
+            return
+        }
         let ops = LibraryOps(library: library, identity: .ui)
         do {
             let bundle = try VMBundle.open(row.bundleURL)
@@ -79,7 +85,20 @@ public final class LibraryStore {
             if selection == id { selection = nil }
             await reload()
         } catch {
-            lastError = "Cannot delete \(row.name): \(error)"
+            lastError = "Cannot delete \(row.name): \(VMLibrary.problem(error, at: row.bundleURL))"
+        }
+    }
+
+    /// Takes a VM the library cannot open (moved, deleted, damaged) off the list; nothing on disk changes.
+    public func removeFromLibrary(_ id: UUID) async {
+        guard let row = row(id), row.error != nil, !row.isRunning else { return }
+        let library = library
+        do {
+            try await Blocking.run { try library.unregister(id: id) }
+            if selection == id { selection = nil }
+            await reload()
+        } catch {
+            lastError = "Cannot remove \(row.name) from the library: \(error.localizedDescription)"
         }
     }
 
@@ -92,7 +111,7 @@ public final class LibraryStore {
             do {
                 last = try await Blocking.run { try ops.importBundle(at: url).url }
             } catch {
-                lastError = "Cannot add \(url.lastPathComponent): \(error)"
+                lastError = "Cannot add \(url.lastPathComponent): \(VMLibrary.problem(error, at: url))"
             }
         }
         await reload()

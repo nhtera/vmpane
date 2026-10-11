@@ -274,3 +274,17 @@ func thousandSnapshotCyclesStayFastAndFree() throws {
         try BackupExclusion.apply(false, to: bundle)  // clearing twice is fine
     }
 }
+
+@Test func anInstallNeedsItsSizePlusTheReserve() throws {
+    let gib: UInt64 = 1 << 30
+    let notYet = URL(fileURLWithPath: "/no/such/bundle/aux/storage")
+    var measured: URL?
+    #expect(throws: InsufficientSpace(requiredBytes: 25 * gib, availableBytes: 24 * gib)) {
+        try SpaceGuard.require(20 * gib, at: notYet) { url in
+            measured = url
+            return 24 * gib
+        }
+    }
+    #expect(measured?.path == "/")  // the nearest folder that exists
+    try SpaceGuard.require(20 * gib, at: notYet, available: { _ in 25 * gib })
+}

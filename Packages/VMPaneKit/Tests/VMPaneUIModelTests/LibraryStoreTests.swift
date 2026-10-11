@@ -169,6 +169,23 @@ final class LockedFlag: @unchecked Sendable {
     #expect(store.lastError == nil)
 }
 
+@Test @MainActor func aVMGoneFromDiskIsExplainedAndDeletingItTakesItOffTheList() async throws {
+    let links = FakeLinks()
+    let fixture = try makeStore(links)
+    let (store, ops, root) = (fixture.store, fixture.ops, fixture.root)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let bundle = try ops.create(name: "Gone", os: .linux, diskGiB: 8)
+    let id = try ConfigStore.load(bundle).id
+    try FileManager.default.removeItem(at: bundle.url)
+    await store.reload()
+    let row = try #require(store.row(id))
+    #expect(row.isMissing)
+    #expect(row.error?.hasPrefix("Not found.") == true)
+    await store.delete(id)
+    #expect(store.rows.isEmpty)
+    #expect(store.lastError == nil)
+}
+
 @Test @MainActor func importedBundlesAreListedAndSelected() async throws {
     let links = FakeLinks()
     let fixture = try makeStore(links)

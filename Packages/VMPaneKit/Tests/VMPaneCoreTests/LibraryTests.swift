@@ -98,3 +98,33 @@ import Testing
     #expect(!adopted.regenerated && adopted.config.id == id)
     #expect(try library.readIndex().bundles.count == 1)
 }
+
+@Test func aDeletedOrDamagedVMIsExplainedInWordsAndCanBeRemoved() throws {
+    try withTempDirectory { dir in
+        let library = VMLibrary(paths: VMPanePaths(root: dir.appendingPathComponent("support")))
+        let elsewhere = dir.appendingPathComponent("elsewhere", isDirectory: true)
+        try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
+        let gone = try VMBundle.create(at: elsewhere.appendingPathComponent("Gone.vmpane"), config: makeConfig(name: "Gone"))
+        let damaged = try VMBundle.create(at: elsewhere.appendingPathComponent("Damaged.vmpane"), config: makeConfig(name: "Damaged"))
+        try library.register(gone)
+        try library.register(damaged)
+        try FileManager.default.removeItem(at: gone.url)
+        try Data("{".utf8).write(to: damaged.configURL)
+
+        let items = try library.items()
+        let problems = Dictionary(uniqueKeysWithValues: items.map { ($0.bundle.url.lastPathComponent, $0.error) })
+        #expect(problems["Gone.vmpane"]??.hasPrefix("Not found.") == true)
+        #expect(problems["Damaged.vmpane"]??.contains("damaged") == true)
+
+        let goneID = try #require(library.readIndex().bundles.first { $0.path.hasSuffix("Gone.vmpane") }?.id)
+        try library.unregister(id: goneID)
+        #expect(try library.items().map(\.bundle.url.lastPathComponent) == ["Damaged.vmpane"])
+    }
+}
+
+@Test func libraryProblemsReadAsSentences() {
+    let here = URL(fileURLWithPath: "/")
+    #expect(VMLibrary.problem(ConfigError.newerSchema(found: 9, supported: 1), at: here).contains("newer version of VMPane"))
+    #expect(VMLibrary.problem(BundleError.symlink, at: here).contains("symbolic link"))
+    #expect(!VMLibrary.problem(BundleError.notABundle, at: here).contains("notABundle"))
+}

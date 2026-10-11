@@ -14,6 +14,9 @@ public final class VZBackend: VMBackend {
     /// Saved RAM state inside the state directory (see `SavedStateRule`).
     public static let stateFileName = "suspend.vzvmsave"
 
+    /// What a macOS install writes to the VM's disk: macOS 15 takes about 15 GiB, more after its first boot.
+    public static let macInstallBytes: UInt64 = 20 << 30
+
     /// The plan for the next start, and the one the current VM was created from.
     private let plans: OSAllocatedUnfairLock<(next: VZPlan, running: VZPlan?)>
     private let replan: (@Sendable (VMConfigV1) throws -> VZPlan)?
@@ -45,7 +48,9 @@ public final class VZBackend: VMBackend {
         }
         let plan = plans.withLock { $0.next }
         if case .mac(let aux, let image?) = plan.platform {
-            // First start of a macOS guest: install, then boot the installed system.
+            // First start of a macOS guest: install, then boot the installed system. Space is checked before
+            // anything is written (once the platform files exist, a start no longer installs).
+            try SpaceGuard.require(Self.macInstallBytes, at: aux.auxiliaryStorage)
             try await runner.prepareMacInstall(restoreImage: image, aux: aux)
             try await create(plan)
             try await runner.install(restoreImage: image)
