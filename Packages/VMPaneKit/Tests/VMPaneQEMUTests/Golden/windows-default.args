@@ -32,7 +32,7 @@ emulator,id=tpm0,chardev=chrtpm
 -device
 tpm-tis-device,tpmdev=tpm0,ppi=off
 -device
-qemu-xhci,id=xhci
+qemu-xhci,id=xhci,p2=8,p3=8
 -device
 usb-kbd,bus=xhci.0
 -device

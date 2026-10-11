@@ -10,7 +10,7 @@ source "$VMPANE_ROOT/itest/lib/common.sh"
 IT_SCENARIO=win-install-resume
 
 scenario_run() {
-    local iso tools work bundle request pid socket start attempts
+    local out iso tools work bundle request pid socket start attempts
     iso=$(it_windows_iso) || { echo "win-install-resume: no Windows 11 Arm64 ISO (set VMPANE_WINDOWS_ISO)"; return 77; }
     (($(df -g "$HOME" | awk 'NR == 2 {print $4}') >= 25)) || { echo "win-install-resume: needs 25 GiB free"; return 77; }
     tools=$("$VMPANE_ROOT/guest-tools/build-iso.sh" | tail -1) || it_fail "cannot build the guest-tools ISO" || return 1
@@ -29,7 +29,7 @@ scenario_run() {
 
     # 1. Until Setup's first reboot.
     start=$SECONDS
-    it_rpc "$socket" vm.start '{"headless": true}' >/dev/null || it_fail "vm.start failed" || return 1
+    out=$(it_rpc "$socket" vm.start '{"headless": true}') || it_fail "vm.start failed: $out" || return 1
     it_wait_for 2400 bash -c "jq -e .mediaEjected '$bundle/install/install.json' >/dev/null 2>&1" \
         || it_fail "Setup did not reboot within 40 min (at $(it_install_phase "$bundle"))" || return 1
     echo "win-install-resume: Setup rebooted after $(((SECONDS - start) / 60)) min; killing the helper"
@@ -41,7 +41,7 @@ scenario_run() {
     kill -KILL "$pid"
     it_wait_exit "$pid" 15 || it_fail "the helper survived SIGKILL" || return 1
     pid=$(it_start_helper "$bundle") || return 1
-    it_rpc "$socket" vm.start '{"headless": true}' >/dev/null || it_fail "vm.start after the restart failed" || return 1
+    out=$(it_rpc "$socket" vm.start '{"headless": true}') || it_fail "vm.start after the restart failed: $out" || return 1
     sleep 60  # past the first-boot key window
     [[ $(it_install_phase "$bundle") == setupRunning ]] \
         || it_fail "resumed in $(it_install_phase "$bundle"), not setupRunning" || return 1

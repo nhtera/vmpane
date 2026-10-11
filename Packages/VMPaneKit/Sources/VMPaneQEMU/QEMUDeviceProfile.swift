@@ -20,8 +20,9 @@ public enum QEMUDeviceProfile: Sendable, Equatable {
     /// The QEMU RTC runs in UTC; Windows expects local time.
     var rtc: String { "base=localtime" }
 
-    /// Keyboard and absolute pointer on XHCI (inbox drivers, work in firmware and Setup).
-    var inputDevices: [String] { ["qemu-xhci,id=xhci", "usb-kbd,bus=xhci.0", "usb-tablet,bus=xhci.0"] }
+    /// Keyboard and absolute pointer on XHCI (inbox drivers, work in firmware and Setup). Removable media
+    /// (usb-storage) share its USB 2 ports: the default 4 leave room for two discs, an install needs three.
+    var inputDevices: [String] { ["qemu-xhci,id=xhci,p2=8,p3=8", "usb-kbd,bus=xhci.0", "usb-tablet,bus=xhci.0"] }
 
     /// HDA with the inbox Windows driver (S2). QEMU's CoreAudio backend only plays sound, so output only.
     var audioDevices: [String] { ["intel-hda,id=hda", "hda-output,bus=hda.0,audiodev=snd0"] }
