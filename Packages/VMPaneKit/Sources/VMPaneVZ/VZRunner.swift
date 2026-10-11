@@ -131,10 +131,14 @@ actor VZRunner {
 
     // MARK: - Live settings (S11)
 
-    /// Replaces the shares of the VMPane share device; false if the VM was created without one.
+    /// Replaces the shares of the VMPane share device; false if the VM was created without one. A macOS guest's
+    /// guest tools live on the same device and stay.
     func replaceShares(_ shares: [VZPlan.Share]) -> Bool {
         guard let device = shareDevice() else { return false }
         var directories: [String: VZSharedDirectory] = [:]
+        if let tools = (device.share as? VZMultipleDirectoryShare)?.directories[VZPlan.guestToolsTag] {
+            directories[VZPlan.guestToolsTag] = tools
+        }
         for share in shares { directories[share.name] = VZSharedDirectory(url: share.url, readOnly: share.readOnly) }
         device.share = VZMultipleDirectoryShare(directories: directories)
         return true

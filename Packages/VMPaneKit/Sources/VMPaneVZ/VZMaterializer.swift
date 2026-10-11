@@ -149,13 +149,12 @@ public enum VZMaterializer {
         for share in plan.shares { directories[share.name] = VZSharedDirectory(url: share.url, readOnly: share.readOnly) }
         // macOS guests see the tools in the automount share; Linux guests mount their own tag.
         if isMac, let tools = plan.guestTools { directories[VZPlan.guestToolsTag] = VZSharedDirectory(url: tools, readOnly: true) }
-        if !directories.isEmpty {
-            // macOS guests mount the automount tag by themselves (under /Volumes/My Shared Files).
-            let device = VZVirtioFileSystemDeviceConfiguration(
-                tag: isMac ? VZVirtioFileSystemDeviceConfiguration.macOSGuestAutomountTag : VZPlan.sharesTag)
-            device.share = VZMultipleDirectoryShare(directories: directories)
-            devices.append(device)
-        }
+        // Always there, even without shares, so folders can be shared while the VM runs. macOS guests mount the
+        // automount tag by themselves (under /Volumes/My Shared Files).
+        let device = VZVirtioFileSystemDeviceConfiguration(
+            tag: isMac ? VZVirtioFileSystemDeviceConfiguration.macOSGuestAutomountTag : VZPlan.sharesTag)
+        device.share = VZMultipleDirectoryShare(directories: directories)
+        devices.append(device)
         if !isMac, let tools = plan.guestTools {
             let device = VZVirtioFileSystemDeviceConfiguration(tag: VZPlan.guestToolsTag)
             device.share = VZSingleDirectoryShare(directory: VZSharedDirectory(url: tools, readOnly: true))

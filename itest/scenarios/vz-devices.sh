@@ -67,12 +67,12 @@ scenario_run() {
     it_rpc "$socket" helper.shutdown >/dev/null
     it_wait_exit "$pid"
 
-    # 3. Everything off: no /dev/kvm, no Rosetta, no shares.
+    # 3. Everything off: no /dev/kvm, no Rosetta, no shares (the share device stays, empty, for live adds).
     read -r b pid < <(boot_with off '.vz.rosetta = false | .vz.nestedVirtualization = false | .shares = []') || it_fail "VM did not boot" || return 1
     pids+=("$pid")
     probe=$(probe_after "$b" 0) || it_fail "no probe output" || return 1
     echo "off: $probe"
-    [[ $probe == *"kvm=no rosetta=no share=none fresh=none"* ]] || it_fail "devices present while off" || return 1
+    [[ $probe == *"kvm=no rosetta=no share= fresh="* ]] || it_fail "devices present while off" || return 1
     it_rpc "$(it_socket "$b")" vm.stop '{"mode": "force"}' >/dev/null
     it_rpc "$(it_socket "$b")" helper.shutdown >/dev/null
     it_wait_exit "$pid"

@@ -7,7 +7,8 @@ import VMPaneCore
 /// stdin or signal them.
 actor AgentExecs {
     private struct Route {
-        let owner: ControlConnection
+        /// Nil for the helper's own commands (`run`).
+        let owner: ControlConnection?
         let connection: AgentConnection
         let stdin: UInt32?
     }
@@ -61,6 +62,28 @@ actor AgentExecs {
             self.remove(key)
         }
         return started.execId
+    }
+
+    /// A command the helper ran for itself.
+    struct Finished: Sendable {
+        /// Nil when the agent went away first.
+        let exited: AgentExecExited?
+        let stdout: Data
+        let stderr: Data
+    }
+
+    /// Runs a command for the helper itself: its output (up to 64 KiB per stream) and how it ended.
+    func run(_ params: AgentExecStartParams, on connection: AgentConnection) async throws -> Finished {
+        let call = try await connection.call(AgentMethod.execStart, RPCParams.encode(params).get(), streams: Self.streamNames)
+        let started = try RPCParams.decode(AgentExecStartResult.self, from: call.result).get()
+        let key = Key(connection, started.execId)
+        routes[key] = Route(owner: nil, connection: connection, stdin: started.stdin)
+        async let stdout = (try? await call.inbound[started.stdout]?.collect(limit: 65536)) ?? Data()
+        async let stderr = (try? await call.inbound[started.stderr]?.collect(limit: 65536)) ?? Data()
+        let output = await (stdout, stderr)
+        let exited = await waitForExit(key)
+        remove(key)
+        return Finished(exited: exited, stdout: output.0, stderr: output.1)
     }
 
     private static func forward(_ stream: AgentInbound, name: String, execId: UInt32, to owner: ControlConnection) async {

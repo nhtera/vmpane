@@ -112,8 +112,10 @@ private func allExist(_ url: URL) -> Bool { true }
         let configuration = try VZMaterializer.configuration(plan, serialLog: nil)
         let devices = configuration.directorySharingDevices.compactMap { $0 as? VZVirtioFileSystemDeviceConfiguration }
             .filter { $0.tag != VZPlan.rosettaTag }
-        #expect(devices.map(\.tag) == [VZPlan.guestToolsTag])
-        let share = try #require(devices.first?.share as? VZSingleDirectoryShare)
+        // The shares device is there without shares too, so folders can be added while the VM runs.
+        #expect(devices.map(\.tag) == [VZPlan.sharesTag, VZPlan.guestToolsTag])
+        #expect((devices.first?.share as? VZMultipleDirectoryShare)?.directories.isEmpty == true)
+        let share = try #require(devices.last?.share as? VZSingleDirectoryShare)
         #expect(share.directory.isReadOnly)
         #expect(share.directory.url == tools)
     }

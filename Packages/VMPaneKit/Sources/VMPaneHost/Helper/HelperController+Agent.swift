@@ -41,6 +41,7 @@ extension HelperController {
                 await execs.disconnected(connection)
             }
             Task { await Self.syncClock(connection, peer: peer) }
+            Task { await self.mountShares(connection, peer: peer) }
             broadcastAgent(connected: true)
         case .disconnected:
             broadcastAgent(connected: false)
