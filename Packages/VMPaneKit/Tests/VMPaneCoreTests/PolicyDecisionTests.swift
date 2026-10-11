@@ -100,6 +100,30 @@ func sensitiveSettingsAreAppOnly(key: String) {
             context: agentsAllowed) != .allow)
 }
 
+@Test func theUsersOwnLANRulesDoNotMakeAPatchAppOnly() {
+    let lan = PortForwardConfig(id: "web", proto: .tcp, hostAddress: "0.0.0.0", hostPort: 8080, guestPort: 80, origin: .user)
+    let context = PolicyContext(clipboardAllowWithAgents: false, exposedPortRules: [lan])
+    func decide(_ rules: [JSONValue]) -> PolicyDecision {
+        PolicyEnforcer.decide(
+            method: "vm.settings.apply", params: ["patch": ["portForwards": .array(rules)]], level: .admin, identity: .automated,
+            context: context)
+    }
+    let kept: JSONValue = ["id": "web", "proto": "tcp", "hostAddress": "0.0.0.0", "hostPort": 8080, "guestPort": 80, "origin": "user"]
+    let added: JSONValue = ["id": "ssh", "proto": "tcp", "hostAddress": "127.0.0.1", "hostPort": 2222, "guestPort": 22, "origin": "agent"]
+    #expect(decide([kept, added]) == .allow)
+    #expect(decide([added]) == .allow)
+    let moved: JSONValue = ["id": "web", "proto": "tcp", "hostAddress": "0.0.0.0", "hostPort": 8080, "guestPort": 22, "origin": "user"]
+    #expect(decide([moved, added]) != .allow)
+    let another: JSONValue = ["id": "db", "proto": "tcp", "hostAddress": "0.0.0.0", "hostPort": 5432, "guestPort": 5432, "origin": "user"]
+    #expect(decide([kept, another]) != .allow)
+    for key in ["removable", "network", "name"] {
+        #expect(
+            PolicyEnforcer.decide(
+                method: "vm.settings.apply", params: ["patch": .object([key: "x"])], level: .admin, identity: .automated,
+                context: context) != .allow, "\(key) must be app-only")
+    }
+}
+
 @Test func clipboardNeedsTheAgentSwitchForAutomatedClients() {
     for method in ["vm.clipboard.read", "vm.clipboard.write"] {
         #expect(PolicyEnforcer.decide(method: method, params: nil, level: .admin, identity: .automated, context: agentsBlocked) != .allow)

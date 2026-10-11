@@ -17,7 +17,9 @@ enum CLI {
     static let identity: ClientIdentity =
         InteractiveSession.isInteractive() && OperatorGrant.isGranted(paths: paths) ? .operator : .automated
 
-    static var ops: LibraryOps { LibraryOps(library: library, identity: identity) }
+    static var ops: LibraryOps {
+        LibraryOps(library: library, identity: identity).recordingInVMLogs(label: identity == .operator ? "operator" : "cli", kind: "cli")
+    }
 
     static let connector = HelperConnector(
         paths: paths, clientName: "vmpane", clientVersion: VMPane.version, kind: "cli", operatorClaim: identity == .operator,

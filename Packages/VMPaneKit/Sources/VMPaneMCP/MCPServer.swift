@@ -44,6 +44,13 @@ public actor MCPServer {
         inFlight[key] = task
     }
 
+    /// Waits (at most `limit`) for the requests still running to answer: the client closed its input but may
+    /// still read the answers (`printf '…' | vmpane mcp`).
+    public func drain(within limit: Duration) async {
+        let deadline = ContinuousClock.now + limit
+        while !inFlight.isEmpty, ContinuousClock.now < deadline { try? await Task.sleep(for: .milliseconds(20)) }
+    }
+
     private func notification(_ method: String, _ params: JSONValue?) {
         if method == "notifications/cancelled", let id = params?["requestId"] {
             inFlight.removeValue(forKey: Self.key(id))?.cancel()

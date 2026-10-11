@@ -60,7 +60,9 @@ struct Exec: AsyncParsableCommand {
                 if let code { throw ArgumentParser.ExitCode(Int32(truncatingIfNeeded: code)) }
                 if note.params?["timedOut"] == true { CLI.fail("the command timed out", .failure) }
                 let signal = note.params?["signal"]?.stringValue ?? "?"
-                CLI.fail(signal == "disconnected" ? "the guest agent went away" : "the command ended by signal \(signal)", .failure)
+                if signal == "disconnected" { CLI.fail("the guest agent went away", .unavailable) }
+                FileHandle.standardError.write(Data("vmpane: the command ended by signal \(signal)\n".utf8))
+                throw ArgumentParser.ExitCode(ExitStatus.code(afterSignal: signal) ?? ExitStatus.failure.rawValue)
             default:
                 continue
             }

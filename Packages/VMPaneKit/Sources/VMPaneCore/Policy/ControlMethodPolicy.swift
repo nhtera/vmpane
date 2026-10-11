@@ -21,8 +21,8 @@ public enum PolicyRule: Sendable, Equatable {
     case clipboard
     /// `exec` for `as: "user"` (the default), `admin` for `as: "admin"`; any other value is denied.
     case agentExec
-    /// `admin`; a patch touching `mcp`, `clipboard`, `shares`, `agent`, `windows` or with a port rule not
-    /// bound to loopback is `uiOnly`.
+    /// `admin`; a patch touching `PolicyEnforcer.uiOnlySettings`, or adding or changing a port rule not bound
+    /// to loopback, is `uiOnly`.
     case settingsApply
 
     /// The "min level" cell of `docs/control-protocol.md`.
@@ -59,7 +59,6 @@ public enum ControlMethodPolicy {
         "vm.input.pointer": .level(.control),
         "vm.input.scroll": .level(.control),
         "vm.display.show": .level(.control),
-        "vm.display.resize": .level(.control),
         "vm.install.cancel": .uiOnly,
         "vm.settings.get": .level(.observe),
         "vm.settings.apply": .settingsApply,
@@ -74,8 +73,6 @@ public enum ControlMethodPolicy {
         "agent.file.pull": .level(.exec),
         "vm.files.drop": .level(.exec),
         "vm.files.cancel": .level(.exec),
-        "mcp.policy.get": .uiOnly,
-        "mcp.policy.set": .uiOnly,
         "mcp.enableAll": .uiOnly,
         "mcp.disableAll": .any,
         "events.subscribe": .level(.observe),
@@ -90,9 +87,13 @@ public enum ControlMethodPolicy {
 /// Facts about the VM that some rules need.
 public struct PolicyContext: Sendable, Equatable {
     public var clipboardAllowWithAgents: Bool
+    /// The VM's port rules that listen beyond loopback (the user's): a patch that keeps them unchanged is not
+    /// opening anything.
+    public var exposedPortRules: [PortForwardConfig]
 
-    public init(clipboardAllowWithAgents: Bool) {
+    public init(clipboardAllowWithAgents: Bool, exposedPortRules: [PortForwardConfig] = []) {
         self.clipboardAllowWithAgents = clipboardAllowWithAgents
+        self.exposedPortRules = exposedPortRules
     }
 }
 
@@ -104,7 +105,8 @@ public enum PolicyDecision: Sendable, Equatable {
 /// The one gate for helper requests and Core-direct library operations.
 public enum PolicyEnforcer {
     /// Settings that only the app may change.
-    public static let uiOnlySettings: Set<String> = ["mcp", "clipboard", "shares", "agent", "windows"]
+    /// `removable` and `network` reach the host's files and LAN; `name` is what the person sees in a question.
+    public static let uiOnlySettings: Set<String> = ["mcp", "clipboard", "shares", "agent", "windows", "removable", "network", "name"]
 
     public static func decide(
         method: String, params: JSONValue?, level: PolicyLevel, identity: ClientIdentity,
@@ -153,7 +155,9 @@ public enum PolicyEnforcer {
             }
         case .settingsApply:
             guard let patch = params?["patch"]?.objectValue else { return .failure(Denial("vm.settings.apply: patch must be an object")) }
-            if !uiOnlySettings.isDisjoint(with: patch.keys) || opensPortOnAllInterfaces(patch["portForwards"]) {
+            if !uiOnlySettings.isDisjoint(with: patch.keys)
+                || opensPortBeyondLoopback(patch["portForwards"], kept: context.exposedPortRules)
+            {
                 return .success(.uiOnly)
             }
             return .success(.level(.admin))
@@ -169,9 +173,18 @@ public enum PolicyEnforcer {
     /// LAN address, a missing address) exposes the guest beyond this Mac and is uiOnly.
     public static let loopbackAddresses: Set<String> = ["127.0.0.1", "::1", "localhost"]
 
-    private static func opensPortOnAllInterfaces(_ rules: JSONValue?) -> Bool {
+    /// Whether `rules` (the patch's whole list) adds or changes one that listens beyond loopback; the user's
+    /// own such rules, kept as they are, do not count.
+    private static func opensPortBeyondLoopback(_ rules: JSONValue?, kept: [PortForwardConfig]) -> Bool {
         guard let rules else { return false }
         guard case .array(let items) = rules else { return true }
-        return items.contains { !loopbackAddresses.contains($0["hostAddress"]?.stringValue ?? "") }
+        return items.contains { item in
+            if loopbackAddresses.contains(item["hostAddress"]?.stringValue ?? "") { return false }
+            return !kept.contains {
+                item["id"]?.stringValue == $0.id && item["proto"]?.stringValue == $0.proto.rawValue
+                    && item["hostAddress"]?.stringValue == $0.hostAddress && item["hostPort"]?.intValue == Int64($0.hostPort)
+                    && item["guestPort"]?.intValue == Int64($0.guestPort)
+            }
+        }
     }
 }

@@ -73,7 +73,9 @@ extension HelperController {
         }
         let decision = PolicyEnforcer.decide(
             method: request.method, params: request.params, level: policy.level, identity: caller.identity,
-            context: PolicyContext(clipboardAllowWithAgents: policy.clipboardAllowWithAgents))
+            context: PolicyContext(
+                clipboardAllowWithAgents: policy.clipboardAllowWithAgents,
+                exposedPortRules: config.portForwards.map(\.fields).filter { !PolicyEnforcer.loopbackAddresses.contains($0.hostAddress) }))
         guard case .deny(let reason) = decision else { return nil }
         writeAudit(request, caller, policy: policy.level, AuditOutcome(result: "denied", reason: reason, durationMs: nil))
         return RPCError(.policyDenied, reason)

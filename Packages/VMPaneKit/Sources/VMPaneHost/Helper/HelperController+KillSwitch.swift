@@ -9,7 +9,7 @@ import VMPaneCore
 /// agents added are taken down; they come back when the app releases it.
 extension HelperController {
     func startKillSwitch() {
-        killSwitchEngaged = KillSwitch.isEngaged(paths: prepared.runFiles.paths)
+        killSwitchEngaged = killSwitchReadsEngaged()
         let folder = open(prepared.runFiles.paths.root.path, O_EVTONLY)
         if folder >= 0 {
             let source = DispatchSource.makeFileSystemObjectSource(
@@ -36,12 +36,18 @@ extension HelperController {
     }
 
     func killSwitchChanged() async {
-        let engaged = KillSwitch.isEngaged(paths: prepared.runFiles.paths)
+        let engaged = killSwitchReadsEngaged()
         guard engaged != killSwitchEngaged else { return }
         killSwitchEngaged = engaged
         Self.log.notice("agent kill switch \(engaged ? "engaged" : "released", privacy: .public)")
         if engaged { await stopAgents() }
         await applyForwardsAllowedNow()
+    }
+
+    /// The switch as checked with the key this helper holds (see `effectivePolicy`).
+    private func killSwitchReadsEngaged() -> Bool {
+        if policyKey == nil { policyKey = PolicyKeyFile(paths: prepared.runFiles.paths).key(create: false) }
+        return KillSwitch.isEngaged(paths: prepared.runFiles.paths, key: policyKey)
     }
 
     /// Ends everything agents are doing here.

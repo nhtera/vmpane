@@ -58,9 +58,11 @@ files, sign binaries or drive the app's UI like the user.
   connections close, commands agents started are killed, their file transfers stop, and port forwards agents
   added go down (measured: all within 0.15 s). Only the app releases it. The file is written released when the
   policy key is made; after that a missing or edited file counts as engaged.
-- **Audit**: every call by a non-app client, and every refusal, is one line in the VM's
-  `logs/mcp-audit.jsonl` (synced before the answer; typed text and clipboard contents as SHA-256 unless the
-  VM records typed text; 10 MB × 5). It is a record, not tamper-proof.
+- **Audit**: every request a non-app client makes of a VM's helper, every refusal, and every clone or delete
+  of the VM by the CLI or an agent is one line in the VM's `logs/mcp-audit.jsonl` (synced before the answer;
+  typed text and clipboard contents as SHA-256 unless the VM records typed text, a command's input always as
+  SHA-256 and size; 10 MB × 5). Listing the library, creating and importing touch no VM and are not recorded.
+  It is a record, not tamper-proof.
 
 ## Accepted risks (v1)
 

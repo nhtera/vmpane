@@ -12,9 +12,10 @@ public enum KillSwitch {
     private static func message(engaged: Bool) -> Data { Data("vmpane kill switch\n\(engaged ? "engaged" : "released")".utf8) }
 
     /// Whether agents are stopped. Without a policy key nothing can be raised above `off` anyway (no tag
-    /// checks out), so the switch reads as released then.
-    public static func isEngaged(paths: VMPanePaths) -> Bool {
-        guard let key = PolicyKeyFile(paths: paths).key(create: false) else { return false }
+    /// checks out), so the switch reads as released then. A helper passes the key it holds (`key`), so removing
+    /// the key file does not release the switch for policies it still honours.
+    public static func isEngaged(paths: VMPanePaths, key held: SymmetricKey? = nil) -> Bool {
+        guard let key = held ?? PolicyKeyFile(paths: paths).key(create: false) else { return false }
         guard let text = try? String(contentsOf: url(paths), encoding: .utf8) else { return true }
         let lines = text.split(separator: "\n").map(String.init)
         guard lines.count == 2, let tag = Data(base64Encoded: lines[1]) else { return true }

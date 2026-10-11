@@ -1,16 +1,33 @@
 import Foundation
 
 /// Library operations that need no running helper (list, create, clone, delete, import), behind the
-/// same policy gate as helper requests. Phase 10 supplies real identities and the audit sink.
+/// same policy gate as helper requests.
 public struct LibraryOps: Sendable {
     public let library: VMLibrary
     public let identity: ClientIdentity
-    /// Called for every decision (Phase 10 writes `mcp-audit.jsonl`).
-    public var audit: @Sendable (_ method: String, _ vm: UUID?, _ decision: PolicyDecision) -> Void = { _, _, _ in }
+    /// Called for every decision, with the VM's policy level (`recordingInVMLogs`).
+    public var audit: @Sendable (_ method: String, _ vm: UUID?, _ level: PolicyLevel, _ decision: PolicyDecision) -> Void = { _, _, _, _ in
+    }
 
     public init(library: VMLibrary, identity: ClientIdentity) {
         self.library = library
         self.identity = identity
+    }
+
+    /// These operations, recorded in the VM's audit log (`logs/mcp-audit.jsonl`) like its helper's requests:
+    /// `label` and `kind` as the helper would record this client, `session` the agent session if any.
+    public func recordingInVMLogs(label: String, kind: String, session: String? = nil) -> LibraryOps {
+        var ops = self
+        let library = library
+        ops.audit = { method, vm, level, decision in
+            guard let vm, let item = try? library.items().first(where: { $0.id == vm }) else { return }
+            let reason: String? = if case .deny(let why) = decision { why } else { nil }
+            let entry = AuditEntry(
+                session: session, identity: label, kind: kind, method: method, policy: level.rawValue,
+                result: reason == nil ? "ok" : "denied", reason: reason)
+            try? AuditLog(bundle: item.bundle).append(entry)
+        }
+        return ops
     }
 
     public struct PolicyDenied: Error, Equatable, Sendable { public let reason: String }
@@ -52,7 +69,8 @@ public struct LibraryOps: Sendable {
         try gate("vm.clone", vm: config.id, level: policy(config).level)
         guard let lock = try bundle.tryLock(retryingFor: 0.5) else { throw VMRunning() }
         defer { lock.release() }
-        let clone = try FullClone.clone(holding: lock, to: uniqueURL(for: name), name: name)
+        let clone = try FullClone.clone(
+            holding: lock, to: uniqueURL(for: name), name: name, policyKey: PolicyKeyFile(paths: library.paths).key(create: false))
         try library.register(clone)
         return clone
     }
@@ -78,13 +96,13 @@ public struct LibraryOps: Sendable {
         // The kill switch stops agents here too (operators and the app are not agents).
         if identity == .automated, method != "mcp.disableAll", KillSwitch.isEngaged(paths: library.paths) {
             let decision = PolicyDecision.deny("AI agents are stopped (VMPane's kill switch)")
-            audit(method, vm, decision)
+            audit(method, vm, level, decision)
             throw PolicyDenied(reason: "AI agents are stopped (VMPane's kill switch)")
         }
         let decision = PolicyEnforcer.decide(
             method: method, params: nil, level: level, identity: identity,
             context: PolicyContext(clipboardAllowWithAgents: false))
-        audit(method, vm, decision)
+        audit(method, vm, level, decision)
         if case .deny(let reason) = decision { throw PolicyDenied(reason: reason) }
     }
 

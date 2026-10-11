@@ -103,3 +103,14 @@ private func line(_ value: JSONValue) -> Data { MCPServer.encode(value) }
     await server.receive(Data("not json".utf8))
     #expect(wire.messages.last?["error"]?["code"] == -32700)
 }
+
+/// When the client closes its input, calls still running get their answers out first.
+@Test func answersInFlightGoOutBeforeTheServerEnds() async throws {
+    let wire = Wire()
+    let server = wire.server()
+    let meta: JSONValue = ["io.modelcontextprotocol/protocolVersion": "2026-07-28"]
+    await server.receive(
+        line(["jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": ["name": "slow", "arguments": [:], "_meta": meta]]))
+    await server.drain(within: .seconds(10))
+    #expect(wire.messages.contains { $0["id"] == 1 && $0["result"] != nil })
+}

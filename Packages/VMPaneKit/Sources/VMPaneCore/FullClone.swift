@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// Copies of a VM that are separate machines: new VM id, MAC addresses, SMBIOS UUID and machine
@@ -15,17 +16,25 @@ public enum FullClone {
         if config.qemu != nil {
             config.qemu?.smbiosUUID = UUID()
         }
-        config.mcp.tag = nil  // the integrity tag covers the VM id; the app re-signs it
+        config.mcp.tag = nil  // the integrity tag covers the VM id (`clone` signs it again)
         return config
     }
 
     /// Clones a stopped bundle to `destination` as a new machine. RAM state, install files and snapshots
-    /// are not copied: the clone cold boots from the current disks.
+    /// are not copied: the clone cold boots from the current disks. With `policyKey`, a source agent policy that
+    /// checks out is tagged for the clone; one that does not stays untagged (off), so cloning does not make a
+    /// hand-edited level count.
     @discardableResult
-    public static func clone(holding lock: BundleLock, to destination: URL, name: String) throws -> VMBundle {
+    public static func clone(
+        holding lock: BundleLock, to destination: URL, name: String, policyKey: SymmetricKey? = nil
+    ) throws -> VMBundle {
         let source = lock.bundle
-        var config = newIdentity(try ConfigStore.load(source))
+        let original = try ConfigStore.load(source)
+        var config = newIdentity(original)
         config.name = name
+        if let policyKey, !PolicyIntegrity.effective(original, key: policyKey).tampered {
+            config = PolicyIntegrity.signed(config, key: policyKey)
+        }
         let fm = FileManager.default
         return try VMBundle.createStaged(at: destination, config: config) { target in
             for entry in try fm.contentsOfDirectory(at: source.currentDirectory, includingPropertiesForKeys: nil)

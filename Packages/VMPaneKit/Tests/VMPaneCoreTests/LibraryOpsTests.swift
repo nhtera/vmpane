@@ -40,12 +40,38 @@ private func makeLibrary(_ dir: URL) -> VMLibrary {
         try ConfigStore.save(PolicyIntegrity.signed(config, key: key), holding: lock)
         lock.release()
 
-        let agent = LibraryOps(library: library, identity: .automated)
+        let agent = LibraryOps(library: library, identity: .automated).recordingInVMLogs(label: "cli", kind: "mcp", session: "s1")
         #expect(try agent.list().map(\.bundle.url) == [visible.url])
         #expect(throws: LibraryOps.PolicyDenied.self) { try agent.create(name: "X", os: .linux, diskGiB: 1) }
         #expect(throws: LibraryOps.PolicyDenied.self) { try agent.delete(hidden) }
+        // The refusal is in the VM's own record.
+        let recorded = AuditLog(bundle: hidden).recent(limit: 5)
+        #expect(recorded.map(\.method) == ["vm.delete"])
+        #expect(recorded.first?.result == "denied" && recorded.first?.session == "s1" && recorded.first?.kind == "mcp")
         let human = LibraryOps(library: library, identity: .operator)
         #expect(try human.list().count == 2)
         #expect(throws: LibraryOps.PolicyDenied.self) { try human.create(name: "X", os: .linux, diskGiB: 1) }  // uiOnly
+    }
+}
+
+/// A clone keeps the agent policy the app set, and not one edited by hand.
+@Test func clonesKeepOnlyAPolicyThatChecksOut() throws {
+    try withTempDirectory { dir in
+        let library = makeLibrary(dir)
+        let app = LibraryOps(library: library, identity: .ui)
+        let key = try #require(PolicyKeyFile(paths: library.paths).key(create: true))
+        func make(_ name: String, signed: Bool) throws -> VMBundle {
+            let vm = try app.create(name: name, os: .linux, diskGiB: 1)
+            let lock = try #require(try vm.tryLock(retryingFor: 5))
+            var config = try ConfigStore.load(vm)
+            config.mcp.policy = .exec
+            try ConfigStore.save(signed ? PolicyIntegrity.signed(config, key: key) : config, holding: lock)
+            lock.release()
+            return vm
+        }
+        let tagged = try ConfigStore.load(try app.clone(try make("Set", signed: true), name: "Set copy"))
+        #expect(app.policy(tagged).level == .exec && !app.policy(tagged).tampered)
+        let edited = try ConfigStore.load(try app.clone(try make("Edited", signed: false), name: "Edited copy"))
+        #expect(app.policy(edited).level == .off && app.policy(edited).tampered)
     }
 }

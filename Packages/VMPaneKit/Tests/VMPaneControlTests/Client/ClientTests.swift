@@ -29,6 +29,8 @@ private func item(_ name: String, _ id: String) throws -> VMLibrary.Item {
     #expect(ExitStatus.of(RPCError(.policyDenied, "no")) == .policyDenied)
     #expect(ExitStatus.of(RPCError(.agentUnavailable, "no")) == .unavailable)
     #expect(ExitStatus.of(RPCError(.invalidState, "no")) == .tempFail)
+    #expect(ExitStatus.code(afterSignal: "SIGTERM") == 143 && ExitStatus.code(afterSignal: "SIGKILL") == 137)
+    #expect(ExitStatus.code(afterSignal: "10") == 138 && ExitStatus.code(afterSignal: "SIGBUS") == nil)
     #expect(ExitStatus.of(RPCError(.internalError, "no")) == .failure)
     #expect(ExitStatus.policyDenied.rawValue == 77)
 }

@@ -281,10 +281,17 @@ public actor HelperController {
 
     private struct SubscribeParams: Decodable { var topics: [String] }
 
+    /// `events.subscribe` is observe; the serial console's output (whatever the guest prints there, which can be
+    /// what is typed at it) needs control for an agent.
     private func subscribe(_ params: JSONValue?, _ connection: ControlConnection) -> Result<JSONValue, RPCError> {
-        RPCParams.decode(SubscribeParams.self, from: params).map { params in
+        RPCParams.decode(SubscribeParams.self, from: params).flatMap { params in
+            if params.topics.contains("console"), identity(of: connection).identity == .automated, effectivePolicy().level < .control {
+                return .failure(
+                    RPCError(
+                        .policyDenied, "the console topic needs policy level control; this VM allows \(effectivePolicy().level.rawValue)"))
+            }
             connection.subscribe(Set(params.topics))
-            return .object([:])
+            return .success(.object([:]))
         }
     }
 

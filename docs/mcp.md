@@ -28,9 +28,12 @@ Then, in VMPane, open the VM's **Settings › AI agents** and choose what agents
 The table in `ControlMethodPolicy` (`Packages/VMPaneKit/Sources/VMPaneCore/Policy/`) is the one source of these
 levels; the helper checks every call against it.
 
-Other settings there: **Ask before an agent runs a command** (on by default: a dialog shows the command, Deny is
-the default, no answer in a minute is a no), **Snapshot before each agent session** (on by default), **Record typed
-text** (off: typed text is recorded as a hash), **Let agents read and set the clipboard** (off).
+Other settings there: **Ask before an agent runs a command** (on by default: a dialog shows the command and its
+input, Deny is the default, no answer in a minute is a no; it also asks before an agent restores or deletes a
+snapshot or shuts the VM down, and the kill switch turns an open question into a no), **Snapshot before each agent session** (on by default),
+**Record typed text** (off: typed text is recorded as a hash), **Let agents read and set the clipboard** (off).
+Settings that reach beyond the VM (shared folders, removable media, networking, its name, port rules that listen
+beyond this Mac) can only be changed in the app.
 
 ## Tools
 
@@ -75,6 +78,7 @@ by the levels like any agent.
 
 ## The record
 
-Every agent call, and every refusal, is a line in the VM's `logs/mcp-audit.jsonl` (in the VM's bundle), written
-before the answer: who (as they claim to be), the session, the method, the level, and the result. See
+Every request an agent makes of a VM, and every refusal, is a line in the VM's `logs/mcp-audit.jsonl` (in the
+VM's bundle), written before the answer: who (as they claim to be), the session, the method, the level, and the
+result. `vm_list` reads the library and is not recorded. See
 `docs/security-model.md` for what the levels protect against and what they do not.

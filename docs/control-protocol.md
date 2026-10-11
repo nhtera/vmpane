@@ -31,10 +31,16 @@ exempt from levels; an interactive CLI session holding the app's one-time grant 
 at `admin` and is still refused `uiOnly` methods. Unlisted methods and unknown discriminator values are
 denied.
 
+In `helper.hello`, `sessionId` names an agent session (one `vmpane mcp` process: its undo snapshot and audit
+lines), and `client.operator: true` says the CLI passed its operator checks; the helper honours it only from a
+peer signed as VMPane's CLI. `agent.exec`'s `input` (UTF-8 text, at most 64 KiB) is the command's whole stdin, fed
+with end-of-file after it starts; when the VM asks before agents run commands, the question shows it, and
+`stdin: true` (streaming with `agent.exec.input`) is refused to agents.
+
 <!-- contract:methods:begin -->
 | method | params | result | min level |
 |---|---|---|---|
-| `helper.hello` | `{proto, minProto, client: {name, version, kind: ui\|cli\|mcp, sessionId?}}` | `{proto, helperVersion, runtimeVersion}` | any |
+| `helper.hello` | `{proto, minProto, client: {name, version, kind: ui\|cli\|mcp, operator?}, sessionId?}` | `{proto, helperVersion, runtimeVersion}` | any |
 | `helper.shutdown` | — | `{}` | admin |
 | `vm.info` | — | `{id, name, os, backend, state, allowedRequests, capabilities, pendingRestart}` | observe |
 | `vm.start` | `{headless}` | `{state}` | control |
@@ -52,7 +58,6 @@ denied.
 | `vm.input.pointer` | `{x, y, buttons}` | `{}` | control |
 | `vm.input.scroll` | `{dx, dy}` | `{}` | control |
 | `vm.display.show` | — | `{}` | control |
-| `vm.display.resize` | `{widthPx, heightPx}` | `{}` | control |
 | `vm.install.cancel` | — (ends a Windows install; a running VM is ejected from its install discs and stopped) | `{state}` | uiOnly |
 | `vm.settings.get` | — | `config` | observe |
 | `vm.settings.apply` | `{patch}` (JSON merge patch over the config) | `{fields: {path: applied\|nextBoot\|rejected}, reasons?}` | admin; sensitive patch: uiOnly |
@@ -60,15 +65,13 @@ denied.
 | `vm.clipboard.read` | `{types?}` (text, png, files) | `{items: [{type: text, text} \| {type: png, dataB64} \| {type: files, files}]}` (guest agent's clipboard: macOS guests) | control + clipboard.allowWithAgents |
 | `vm.clipboard.write` | `{items: [{type: text, text} \| {type: png, dataB64}]}` | `{}` | control + clipboard.allowWithAgents |
 | `agent.status` | — | `{connected, version, os, osVersion, proto, caps, session}` | observe |
-| `agent.exec` | `{argv, as, cwd, env, timeoutMs, stdin}` | `{execId}` | exec (as:user), admin (as:admin) |
+| `agent.exec` | `{argv, as, cwd, env, timeoutMs, stdin, input}` | `{execId}` | exec (as:user), admin (as:admin) |
 | `agent.exec.input` | `{execId, dataB64, eof}` | `{}` | exec |
 | `agent.exec.signal` | `{execId, signal}` (own exec only) | `{}` | exec |
 | `agent.file.push` | `{hostPath, guestPath, overwrite}` | `{bytes}` | exec |
 | `agent.file.pull` | `{guestPath, hostPath, overwrite}` | `{bytes}` | exec |
 | `vm.files.drop` | `{paths}` (host files and folders, e.g. dropped on the VM window) | `{guestPath, files, bytes, skipped, revealed}`: copied into a new folder in the logged-in user's `Desktop/VMPane Drops`, owned by that user, then shown | exec |
 | `vm.files.cancel` | — | `{}`: stops the running `vm.files.drop` this connection started (it fails with "cancelled"; the partial drop folder is removed) | exec |
-| `mcp.policy.get` | — | `{policy, confirmExec, autoSnapshot, auditTypedText}` | uiOnly |
-| `mcp.policy.set` | `{policy, …}` | `{}` | uiOnly |
 | `mcp.enableAll` | — | `{}` | uiOnly |
 | `mcp.disableAll` | `{until}` | `{}` | any |
 | `events.subscribe` | `{topics}` | `{}` | observe |
@@ -91,7 +94,8 @@ run in Core directly (no helper needed) through `LibraryOps`, behind the same po
 
 ## Notifications
 
-Sent to clients subscribed (`events.subscribe`) to the topic.
+Sent to clients subscribed (`events.subscribe`) to the topic. The `console` topic (the serial console's output, which can show what is typed
+at it) needs `control` for clients other than the app and an operator.
 
 <!-- contract:notifications:begin -->
 | notification | params |

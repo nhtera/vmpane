@@ -25,18 +25,20 @@ public struct PolicyKeyFile: PolicyKeyProvider {
         guard create else { return nil }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let fresh = SymmetricKey(size: .bits256)
-        let fd = open(url.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
-        if fd >= 0 {
-            let data = fresh.withUnsafeBytes { Data($0) }
-            let written = data.withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }
-            close(fd)
-            if written == 32 {
-                // From now on a missing kill-switch file means engaged: start released.
-                try? KillSwitch.write(engaged: false, paths: paths)
-                return fresh
-            }
-            unlink(url.path)
-            return nil
+        // Written whole beside it, then linked in place (fails if someone made it meanwhile): a reader never
+        // sees a short key.
+        let temporary = url.deletingLastPathComponent().appendingPathComponent(".policy.key.\(UUID().uuidString)")
+        defer { unlink(temporary.path) }
+        let fd = open(temporary.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+        guard fd >= 0 else { return nil }
+        let written = fresh.withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }
+        let synced = fsync(fd) == 0
+        close(fd)
+        guard written == 32, synced else { return nil }
+        if link(temporary.path, url.path) == 0 {
+            // From now on a missing kill-switch file means engaged: start released.
+            try? KillSwitch.write(engaged: false, paths: paths)
+            return fresh
         }
         // Someone else made it meanwhile.
         return (try? Data(contentsOf: url)).flatMap { $0.count == 32 ? SymmetricKey(data: $0) : nil }

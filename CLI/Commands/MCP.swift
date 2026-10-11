@@ -98,10 +98,15 @@ struct MCPServe: AsyncParsableCommand {
         let connector = HelperConnector(
             paths: CLI.paths, clientName: "vmpane mcp", clientVersion: VMPane.version, kind: "mcp", operatorClaim: false,
             sessionId: session, launch: CLI.launchHelper)
-        let access = VMAccess(ops: LibraryOps(library: CLI.library, identity: .automated), connector: connector)
-        // Files to and from VMs live in ~/VMPane Exchange/<vm>/ ($VMPANE_EXCHANGE_DIR for integration tests).
+        let ops = LibraryOps(library: CLI.library, identity: .automated).recordingInVMLogs(label: "cli", kind: "mcp", session: session)
+        let access = VMAccess(ops: ops, connector: connector)
+        // Files to and from VMs live in ~/VMPane Exchange/<vm>/ ($VMPANE_EXCHANGE_DIR for integration tests, in
+        // development builds only: an agent that sets the environment must not move where files land).
+        let testBuild = PeerIdentity.selfIdentity()?.isAdHoc ?? true
         let exchange =
-            ProcessInfo.processInfo.environment["VMPANE_EXCHANGE_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+            ProcessInfo.processInfo.environment["VMPANE_EXCHANGE_DIR"].flatMap {
+                testBuild ? URL(fileURLWithPath: $0, isDirectory: true) : nil
+            }
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("VMPane Exchange", isDirectory: true)
         let output = StandardOutput()
         let server = MCPServer(registry: VMPaneTools.registry(access, exchange: exchange), version: VMPane.version) { data in
@@ -111,7 +116,7 @@ struct MCPServe: AsyncParsableCommand {
             await server.receive(Data(line.utf8))
             if let client = await server.clientName { await access.setClient(client) }
         }
-        try? await Task.sleep(for: .seconds(1))  // stdin closed: let answers in flight go out
+        await server.drain(within: .seconds(60))  // stdin closed: let answers in flight go out
     }
 }
 

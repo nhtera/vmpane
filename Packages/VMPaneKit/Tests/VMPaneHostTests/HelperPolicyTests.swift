@@ -88,6 +88,20 @@ private func entries(_ helper: Harness) throws -> [AuditEntry] {
     await helper.tearDown()
 }
 
+/// Removing the key file does not release the switch in a helper that holds the key.
+@Test func removingTheKeyDoesNotReleaseTheSwitch() async throws {
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.settings.apply", params: ["patch": ["mcp": ["policy": "admin"]]])
+    try KillSwitch.engage(paths: helper.paths)
+    try await Task.sleep(for: .milliseconds(1200))
+    #expect(await helper.controller.killSwitchEngaged)
+    try FileManager.default.removeItem(at: PolicyKeyFile(paths: helper.paths).url)
+    try await Task.sleep(for: .milliseconds(1200))
+    #expect(await helper.controller.killSwitchEngaged)
+    #expect(await helper.controller.effectivePolicy().level == .admin)
+    await helper.tearDown()
+}
+
 private func hello(_ client: UDSClient, session: String) async throws {
     _ = try await client.call(
         "helper.hello",

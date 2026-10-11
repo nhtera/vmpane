@@ -25,4 +25,15 @@ public enum ExitStatus: Int32, Sendable, CaseIterable {
         default: .failure
         }
     }
+
+    /// A shell's code for a guest command ended by `signal` ("SIGTERM", or a number): 128 + n, for the signals
+    /// whose numbers Linux and macOS share; nil for others (and Windows, which has none).
+    public static func code(afterSignal signal: String) -> Int32? {
+        let shared: [String: Int32] = [
+            "SIGHUP": 1, "SIGINT": 2, "SIGQUIT": 3, "SIGILL": 4, "SIGTRAP": 5, "SIGABRT": 6, "SIGFPE": 8, "SIGKILL": 9,
+            "SIGSEGV": 11, "SIGPIPE": 13, "SIGALRM": 14, "SIGTERM": 15,
+        ]
+        guard let number = shared[signal] ?? Int32(signal), (1...64).contains(number) else { return nil }
+        return 128 + number
+    }
 }

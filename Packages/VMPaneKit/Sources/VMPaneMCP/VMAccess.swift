@@ -21,6 +21,7 @@ public actor VMAccess {
     public func setClient(_ name: String) {
         guard connector.clientName != name else { return }
         connector = connector.named(name)
+        for session in sessions.values { session.client.close() }
         sessions = [:]  // later connections say the new name
     }
 
