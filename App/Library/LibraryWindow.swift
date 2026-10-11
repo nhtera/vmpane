@@ -9,6 +9,7 @@ struct LibraryWindow: View {
     @State private var cloning: LibraryStore.Row?
     @State private var cloneName = ""
     @State private var deleting: LibraryStore.Row?
+    @State private var importing: URL?
     @AppStorage("onboarded") private var onboarded = false
 
     var body: some View {
@@ -55,6 +56,10 @@ struct LibraryWindow: View {
         }
         .navigationTitle("VMPane")
         .toolbar {
+            ToolbarItem(placement: .secondaryAction) {
+                Button("Import from Parallels…", systemImage: "square.and.arrow.down") { chooseParallelsVM() }
+                    .help("Make a VMPane VM from a Parallels virtual machine")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button("New VM", systemImage: "plus") { showingWizard = true }
                     .help("Create a virtual machine")
@@ -62,6 +67,7 @@ struct LibraryWindow: View {
             }
         }
         .sheet(isPresented: $showingWizard) { NewVMWizard(store: store) }
+        .sheet(item: $importing) { pvm in ImportParallelsSheet(store: store, pvm: pvm) }
         .alert("Clone “\(cloning?.name ?? "")”", isPresented: present($cloning)) {
             TextField("Name", text: $cloneName)
             Button("Clone") {
@@ -98,6 +104,23 @@ struct LibraryWindow: View {
             Text(store.lastError ?? "")
         }
     }
+}
+
+extension LibraryWindow {
+    /// Asks for a Parallels `.pvm` (the default Parallels folder first).
+    fileprivate func chooseParallelsVM() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.parallelsVM]
+        panel.treatsFilePackagesAsDirectories = false
+        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Parallels")
+        panel.message = "Choose a Parallels virtual machine (.pvm)"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        importing = url
+    }
+}
+
+extension URL: @retroactive Identifiable {
+    public var id: String { absoluteString }
 }
 
 private func present<T>(_ item: Binding<T?>) -> Binding<Bool> {

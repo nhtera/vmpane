@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import VMPaneControl
 import VMPaneCore
+import VMPaneHost
 
 /// The VM library as the app shows it: every bundle of the library with its live state, kept current from the
 /// helpers' `vm.stateChanged` events (a VM without a helper is "not running"). Stopped-VM operations go
@@ -96,6 +97,16 @@ public final class LibraryStore {
         if let last, let row = rows.first(where: { $0.bundleURL.standardizedFileURL == last.standardizedFileURL }) {
             selection = row.id
         }
+    }
+
+    /// A new VM from a Parallels `.pvm` (its boot disk converted with `qemu-img`), listed and selected; not started.
+    public func importParallels(
+        _ pvm: URL, name: String, os: GuestOS, qemuImg: URL, progress: @escaping @Sendable (Double) -> Void
+    ) async throws {
+        let ops = LibraryOps(library: library, identity: .ui)
+        let bundle = try await ParallelsImporter(qemuImg: qemuImg).importVM(pvm, name: name, os: os, ops: ops, progress: progress)
+        await reload()
+        selection = rows.first { $0.bundleURL.standardizedFileURL == bundle.url.standardizedFileURL }?.id
     }
 
     /// Creates VMs in this library (the wizard).

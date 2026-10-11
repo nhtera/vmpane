@@ -15,7 +15,9 @@ public struct LibraryOps: Sendable {
 
     public struct PolicyDenied: Error, Equatable, Sendable { public let reason: String }
     /// The VM is running (its helper holds the bundle lock): stop it first.
-    public struct VMRunning: Error, Equatable, Sendable {}
+    public struct VMRunning: Error, Equatable, Sendable {
+        public init() {}
+    }
 
     /// VMs this client may see: all for the app; for others only VMs whose policy is at least `observe`.
     public func list() throws -> [VMLibrary.Item] {
