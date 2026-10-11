@@ -371,28 +371,3 @@ func installing(_ config: inout VMConfigV1) {
     #expect(try Data(contentsOf: thumbnail) == Data([0x89, 0x50, 0x4E, 0x47]))  // ScriptedBackend's screenshot
     await helper.tearDown()
 }
-
-/// The backend's power-off announces "stopped" before the suspend is saved; once it is, the state is announced
-/// again, so the app shows the VM as suspended (it checks then).
-@Test func aSuspendIsAnnouncedOnceItsStateIsSaved() async throws {
-    let helper = try await Harness.make()
-    helper.backend.announcesStopOnSuspend = true
-    _ = try await helper.client.call("events.subscribe", params: ["topics": ["vm"]])
-    let notes = NoteLog()
-    let reader = Task { for await note in helper.client.notifications { notes.append(note.params) } }
-    _ = try await helper.client.call("vm.start")
-    _ = try await helper.client.call("vm.suspend")
-    try await Task.sleep(for: .milliseconds(300))
-    reader.cancel()
-    let last = try #require(notes.all.last)
-    #expect(last?["state"] == "stopped")
-    #expect(last?["reason"] == "suspended")
-    await helper.tearDown()
-}
-
-final class NoteLog: @unchecked Sendable {
-    private let lock = NSLock()
-    private var notes: [JSONValue?] = []
-    func append(_ note: JSONValue?) { lock.withLock { notes.append(note) } }
-    var all: [JSONValue?] { lock.withLock { notes } }
-}

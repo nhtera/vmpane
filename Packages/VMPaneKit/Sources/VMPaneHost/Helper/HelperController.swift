@@ -60,6 +60,8 @@ public actor HelperController {
     var confirming = false
     /// Agent sessions' undo snapshots being taken (concurrent first calls wait for the same one).
     var agentSnapshotTasks: [String: Task<SnapshotMeta?, Never>] = [:]
+    /// A snapshot is being taken: the next one waits for it (VZ cannot save a VM's state twice at once).
+    var snapshotting = false
     /// Agent sessions' undo snapshots (`HelperController+AgentSession`).
     var agentSessions: [String: AgentSession] = [:]
     /// The file drop in progress (`vm.files.cancel` stops it).

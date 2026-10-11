@@ -169,3 +169,16 @@ import Testing
         #expect(try library.items().map(\.id) == items.map(\.id))
     }
 }
+
+@Test func systemErrorsReadAsSentences() {
+    let vz = NSError(
+        domain: "VZErrorDomain", code: 3,
+        userInfo: [
+            NSLocalizedDescriptionKey: "Invalid virtual machine state.",
+            NSLocalizedFailureReasonErrorKey: "Virtual machine state “saving” is invalid for saving.",
+        ])
+    #expect(ErrorText.readable(vz) == "Invalid virtual machine state. Virtual machine state “saving” is invalid for saving.")
+    #expect(ErrorText.readable(BundleError.symlink) == String(describing: BundleError.symlink))
+    let posix = NSError(domain: NSPOSIXErrorDomain, code: Int(EBUSY))
+    #expect(!ErrorText.readable(posix).contains("Resource busy Resource busy"))
+}

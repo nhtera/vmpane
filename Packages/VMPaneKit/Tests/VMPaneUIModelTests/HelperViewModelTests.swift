@@ -185,3 +185,47 @@ private func eventually(_ condition: @MainActor () -> Bool) async -> Bool {
     #expect(channel.params(of: "vm.files.drop") == ["paths": ["/tmp/a", "/tmp/b"]])
     #expect(model.transfer == nil && model.lastError == nil)
 }
+
+/// The window's title is the VM's name and follows a rename; a snapshot taken from the toolbar is confirmed.
+@Test @MainActor func windowNamesTheVMAndConfirmsASnapshot() async {
+    let channel = FakeChannel()
+    channel.answer("vm.info", .success(["state": "running", "name": "Ubuntu", "allowedRequests": ["pause", "stop"]]))
+    let model = HelperViewModel(channel: channel)
+    await model.start()
+    #expect(model.name == "Ubuntu")
+    channel.answer("vm.info", .success(["state": "running", "name": "Ubuntu Dev", "allowedRequests": ["pause", "stop"]]))
+    await model.refresh()  // as when the settings sheet closes
+    #expect(model.name == "Ubuntu Dev")
+
+    #expect(model.notice == nil)
+    await model.perform(.snapshot)
+    #expect(model.notice == "Snapshot taken")
+    channel.answer("vm.snapshot.create", .failure(RPCError(.invalidState, "no")))
+    model.notice = nil
+    await model.perform(.snapshot)
+    #expect(model.notice == nil && model.lastError == "no")
+}
+
+/// While a snapshot is being taken its button waits, so a double click takes one snapshot.
+@Test @MainActor func theSnapshotButtonWaitsForTheSnapshot() async {
+    let channel = SlowChannel()
+    channel.answer("vm.info", .success(["state": "running", "allowedRequests": ["pause", "stop"]]))
+    let model = HelperViewModel(channel: channel)
+    await model.start()
+    #expect(model.can(.snapshot))
+    let taking = Task { await model.perform(.snapshot) }
+    #expect(await eventually { model.takingSnapshot && !model.can(.snapshot) })
+    await taking.value
+    #expect(model.can(.snapshot))
+}
+
+/// `vm.snapshot.create` takes a moment.
+final class SlowChannel: HelperChannel, @unchecked Sendable {
+    let inner = FakeChannel()
+    var notifications: AsyncStream<RPCRequest> { inner.notifications }
+    func answer(_ method: String, _ result: Result<JSONValue, RPCError>) { inner.answer(method, result) }
+    func call(_ method: String, params: JSONValue?, timeout: Duration) async throws -> JSONValue {
+        if method == "vm.snapshot.create" { try await Task.sleep(for: .milliseconds(300)) }
+        return try await inner.call(method, params: params, timeout: timeout)
+    }
+}

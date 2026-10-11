@@ -63,9 +63,23 @@ public struct VMWindowView: View {
                     .frame(maxHeight: .infinity, alignment: .top)
                     .padding(.top, 12)
                     .transition(.opacity)
+            } else if let notice = model.notice {
+                Label(notice, systemImage: "checkmark.circle.fill")
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(.regularMaterial, in: Capsule())
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .padding(.top, 12)
+                    .transition(.opacity)
+                    .accessibilityAddTraits(.updatesFrequently)
             }
         }
         .task { await model.watchInput() }
+        .task(id: model.notice) {
+            guard model.notice != nil else { return }
+            try? await Task.sleep(for: .seconds(3))
+            withAnimation { model.notice = nil }
+        }
         .toolbar {
             VMToolbar(model: model)
             if captureKeys != nil {
@@ -86,9 +100,15 @@ public struct VMWindowView: View {
                 .keyboardShortcut(",", modifiers: .command)
             }
         }
-        .sheet(isPresented: Binding(get: { settings != nil }, set: { if !$0 { settings = nil } })) {
-            if let settings { SettingsSheet(model: settings) }
-        }
+        .navigationTitle(model.name ?? "")
+        // A rename (or any saved change) shows in the title and the toolbar once the sheet closes.
+        .sheet(
+            isPresented: Binding(get: { settings != nil }, set: { if !$0 { settings = nil } }),
+            onDismiss: { Task { await model.refresh() } },
+            content: {
+                if let settings { SettingsSheet(model: settings) }
+            }
+        )
         .sheet(isPresented: Binding(get: { snapshots != nil }, set: { if !$0 { snapshots = nil } })) {
             if let snapshots { SnapshotsSheet(model: snapshots, running: model.state == .running || model.state == .paused) }
         }
@@ -107,7 +127,7 @@ public enum VMWindowContent {
         in window: NSWindow, display: NSView, model: HelperViewModel, captureKeys: (@MainActor (Bool) -> Void)? = nil
     ) {
         let hosting = NSHostingController(rootView: VMWindowView(display: display, model: model, captureKeys: captureKeys))
-        hosting.sceneBridgingOptions = [.toolbars]
+        hosting.sceneBridgingOptions = [.toolbars, .title]
         hosting.sizingOptions = []  // the window keeps its size and aspect; SwiftUI does not resize it
         let size = window.contentLayoutRect.size
         window.contentViewController = hosting

@@ -133,8 +133,8 @@ extension HelperController {
             return .failure(
                 RPCError(.insufficientSpace, "needs \(error.requiredBytes >> 30) GiB free, \(error.availableBytes >> 30) GiB available"))
         } catch {
-            if state == .starting || state == .stopping { transition(.failed, reason: String(describing: error)) }
-            return .failure(RPCError(.internalError, String(describing: error)))
+            if state == .starting || state == .stopping { transition(.failed, reason: ErrorText.readable(error)) }
+            return .failure(RPCError(.internalError, ErrorText.readable(error)))
         }
     }
 

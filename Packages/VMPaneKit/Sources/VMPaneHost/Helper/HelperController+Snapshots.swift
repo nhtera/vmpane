@@ -45,7 +45,7 @@ extension HelperController {
             return .failure(
                 RPCError(.insufficientSpace, "needs \(error.requiredBytes >> 30) GiB free, \(error.availableBytes >> 30) GiB available"))
         } catch {
-            return .failure(RPCError(.internalError, String(describing: error)))
+            return .failure(RPCError(.internalError, ErrorText.readable(error)))
         }
     }
 
@@ -58,6 +58,9 @@ extension HelperController {
     func createSnapshot(_ name: String, kind: SnapshotMeta.Kind, origin: SnapshotMeta.Origin) async throws -> SnapshotMeta {
         // Until the first sign-in removes them, the disk (and Setup's RAM) hold the install's answers, password included.
         guard !isInstallingWindows else { throw RPCError(.invalidState, "a VM installing Windows cannot be snapshotted") }
+        while snapshotting { try await Task.sleep(for: .milliseconds(50)) }  // one at a time, in turn
+        snapshotting = true
+        defer { snapshotting = false }
         let store = SnapshotStore(lock: prepared.lock)
         let context = snapshotContext
         switch kind {

@@ -61,7 +61,7 @@ extension HelperController {
             if case .rpc(let agentError) = error { return .failure(agentError) }
             return .failure(RPCError(.agentUnavailable, error.description))
         } catch {
-            return .failure(RPCError(.internalError, String(describing: error)))
+            return .failure(RPCError(.internalError, ErrorText.readable(error)))
         }
     }
 

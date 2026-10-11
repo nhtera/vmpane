@@ -27,6 +27,8 @@ public final class HelperViewModel {
     }
 
     public private(set) var state: VMRunState = .stopped
+    /// The VM's name (from `vm.info`): the window's title, which follows a rename.
+    public private(set) var name: String?
     /// Stopped with its RAM state saved: a start resumes it.
     public private(set) var suspended = false
     public private(set) var allowed: Set<String> = []
@@ -38,6 +40,10 @@ public final class HelperViewModel {
     public var lastError: String?
     /// The last screenshot saved, for a confirmation.
     public private(set) var lastScreenshot: URL?
+    /// A short confirmation the window shows for a moment ("Snapshot taken"); nil when there is none.
+    public var notice: String?
+    /// A snapshot is being taken (its button waits).
+    public private(set) var takingSnapshot = false
     /// The VM's sound settings, for the toolbar's indicators.
     public private(set) var audioOutput = false
     public private(set) var audioInput = false
@@ -84,10 +90,11 @@ public final class HelperViewModel {
         listener = nil
     }
 
-    private func refresh() async {
+    func refresh() async {
         guard let info = try? await channel.call(ControlMethod.vmInfo.rawValue, params: nil, timeout: .seconds(5)) else { return }
         if let state = info["state"]?.stringValue.flatMap(VMRunState.init(rawValue:)) { self.state = state }
         if let os = info["os"]?.stringValue.flatMap(GuestOS.init(rawValue:)) { self.os = os }
+        if let name = info["name"]?.stringValue { self.name = name }
         suspended = info["suspended"] == true
         if case .array(let names)? = info["allowedRequests"] { allowed = Set(names.compactMap(\.stringValue)) }
     }
@@ -149,7 +156,7 @@ public final class HelperViewModel {
         case .pause: allowed.contains("pause")
         case .resume: allowed.contains("resume")
         case .suspend: allowed.contains("suspend")
-        case .snapshot: state == .running || state == .paused
+        case .snapshot: (state == .running || state == .paused) && !takingSnapshot
         }
     }
 
@@ -164,8 +171,11 @@ public final class HelperViewModel {
             case .suspend: (.vmSuspend, nil)
             case .snapshot: (.vmSnapshotCreate, ["name": .string(Self.snapshotName()), "kind": "live"])
             }
+        if action == .snapshot { takingSnapshot = true }
+        defer { if action == .snapshot { takingSnapshot = false } }
         do {
             _ = try await channel.call(method.rawValue, params: params, timeout: .seconds(120))
+            if action == .snapshot { notice = "Snapshot taken" }
         } catch let error as RPCError {
             lastError = error.message
         } catch {
@@ -183,6 +193,7 @@ public final class HelperViewModel {
             let url = directory.appendingPathComponent("VM Screenshot \(Self.stamp()).png")
             try png.write(to: url)
             lastScreenshot = url
+            notice = "Screenshot saved to the Desktop"
         } catch let error as RPCError {
             lastError = error.message
         } catch {

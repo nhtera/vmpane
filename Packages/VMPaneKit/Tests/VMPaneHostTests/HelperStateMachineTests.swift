@@ -94,8 +94,15 @@ final class ScriptedBackend: VMBackend, @unchecked Sendable {
             try? await Task.sleep(for: .milliseconds(100))  // the helper applies it meanwhile
         }
     }
+    /// How long a live snapshot's save takes. Like VZ, a save while one runs fails.
+    var saveDelay: Duration?
+    private var saving = false
     func saveState(to stateDirectory: URL) async throws {
         try record("saveState")
+        guard !lock.withLock({ saving }) else { throw POSIXError(.EBUSY) }
+        lock.withLock { saving = true }
+        defer { lock.withLock { saving = false } }
+        if let saveDelay { try await Task.sleep(for: saveDelay) }
         try Data("ram".utf8).write(to: stateDirectory.appendingPathComponent("suspend.scripted"))
     }
     func stop(_ mode: StopMode) async throws {
