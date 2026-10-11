@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The VMPane user-session helper, in each GUI login: runs as that user what the host asks to run as the user.
+     An outdated helper is refused by the daemon and exits; KeepAlive brings back the installed binary. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>app.vmpane.session</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Application Support/VMPane/Agent/vmpane-agent</string>
+        <string>session</string>
+    </array>
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+</dict>
+</plist>

@@ -1,0 +1,7 @@
+#!/bin/sh
+# Stops a running agent and session helpers before their binary is replaced.
+launchctl bootout system/app.vmpane.agent 2>/dev/null || true
+for uid in $(ps -axo uid=,comm= | awk '$2 ~ /loginwindow$/ {print $1}' | sort -u); do
+    launchctl bootout "gui/$uid/app.vmpane.session" 2>/dev/null || true
+done
+exit 0

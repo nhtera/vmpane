@@ -170,7 +170,14 @@ answer named is dropped.
   ```
   sudo mount -t virtiofs vmpane-tools /mnt/vmpane-tools && sudo /mnt/vmpane-tools/install.sh
   ```
-- **macOS:** the guest tools appear as `/Volumes/My Shared Files/vmpane-tools`.
+- **macOS:** `guest-tools/build-macos.sh` builds `VMPane Agent.pkg`. It installs the binary in
+  `/Library/Application Support/VMPane/Agent`, the LaunchDaemon `app.vmpane.agent` and the LaunchAgent
+  `app.vmpane.session` (Aqua sessions). Signing:
+  - the binary with `VMPANE_SIGN_IDENTITY` (hardened runtime);
+  - the package with `VMPANE_INSTALLER_IDENTITY` (Developer ID Installer);
+  - notarized with `VMPANE_NOTARIZE=1`.
+
+  macOS guests find it at `/Volumes/My Shared Files/vmpane-tools`.
 - **Windows:** the agent ships as an MSI on the guest-tools ISO.
 
 ## Testing

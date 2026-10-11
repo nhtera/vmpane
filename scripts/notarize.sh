@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Notarize and staple a signed .dmg (or notarize a .zip of the app), then check Gatekeeper.
+# Notarize and staple a signed .dmg or .pkg (or notarize a .zip of the app), then check Gatekeeper.
 # Credentials: notarytool keychain profile $VMPANE_NOTARY_PROFILE (default vmpane-notary), created with
 #   xcrun notarytool store-credentials vmpane-notary --apple-id <id> --team-id <team>
-# Usage: scripts/notarize.sh <file.dmg|file.zip> [<VMPane.app to staple when submitting a zip>]
+# Usage: scripts/notarize.sh <file.dmg|file.pkg|file.zip> [<VMPane.app to staple when submitting a zip>]
 set -euo pipefail
 
-file=${1:?usage: scripts/notarize.sh <file.dmg|file.zip> [VMPane.app]}
+file=${1:?usage: scripts/notarize.sh <file.dmg|file.pkg|file.zip> [VMPane.app]}
 profile=${VMPANE_NOTARY_PROFILE:-vmpane-notary}
 
 # Parse the result even when notarytool exits non-zero, so the log can still be fetched.
@@ -23,6 +23,10 @@ case "$file" in
     *.dmg)
         xcrun stapler staple "$file"
         spctl -a -vv -t open --context context:primary-signature "$file"
+        ;;
+    *.pkg)
+        xcrun stapler staple "$file"
+        spctl -a -vv -t install "$file"
         ;;
     *.zip)
         # A zip cannot be stapled; staple the app it was made from.

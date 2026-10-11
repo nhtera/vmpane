@@ -1,0 +1,8 @@
+#!/bin/sh
+# Starts the agent daemon, and the session helper in every GUI login (new logins start it themselves).
+mkdir -p /Library/Logs/VMPane
+launchctl bootstrap system /Library/LaunchDaemons/app.vmpane.agent.plist
+for uid in $(ps -axo uid=,comm= | awk '$2 ~ /loginwindow$/ {print $1}' | sort -u); do
+    launchctl bootstrap "gui/$uid" /Library/LaunchAgents/app.vmpane.session.plist 2>/dev/null || true
+done
+exit 0

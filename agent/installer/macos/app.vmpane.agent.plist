@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The VMPane guest agent daemon (root): dials the host over vsock and serves its requests. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>app.vmpane.agent</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Application Support/VMPane/Agent/vmpane-agent</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardErrorPath</key>
+    <string>/Library/Logs/VMPane/agent.log</string>
+</dict>
+</plist>

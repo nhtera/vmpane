@@ -53,6 +53,11 @@ targets:
           else
             echo "warning: no Linux guest tools in build/guest-tools/linux (guest-tools/build-linux.sh); Linux guests get no agent"
           fi
+          # The macOS guest tools ("VMPane Agent.pkg"; guest-tools/build-macos.sh), in macOS guests' shared folders.
+          if [[ -f "$SRCROOT/build/guest-tools/macos/SHA256SUMS" ]]; then
+            mkdir -p "$app/Contents/Resources/GuestTools"
+            ditto "$SRCROOT/build/guest-tools/macos" "$app/Contents/Resources/GuestTools/macos"
+          fi
           if [[ ! -x "$bundle/bin/qemu-system-aarch64" ]]; then
             echo "warning: no QEMU bundle at $bundle (qemu/scripts/package.sh); Windows guests will not run"
             exit 0

@@ -4,10 +4,14 @@ import VMPaneCore
 
 @testable import VMPaneHost
 
-/// The real Rust agent (`agent/target/debug/vmpane-agent`, built by `cargo build`) dialing a Unix socket on this
-/// Mac, for tests of the host side against it. Tests using it are skipped when the agent is not built.
+/// The real Rust agent (`agent/target/debug/vmpane-agent`, built by `cargo build`, or `$VMPANE_AGENT_BINARY`, e.g.
+/// an earlier release's agent in scripts/agent-compat.sh) dialing a Unix socket on this Mac, for tests of the host
+/// side against it. Tests using it are skipped when the agent is not built.
 let agentBinary: URL = {
-    URL(fileURLWithPath: #filePath).deletingLastPathComponent()  // Tests/VMPaneHostTests/Agent
+    if let path = ProcessInfo.processInfo.environment["VMPANE_AGENT_BINARY"], !path.isEmpty {
+        return URL(fileURLWithPath: path)
+    }
+    return URL(fileURLWithPath: #filePath).deletingLastPathComponent()  // Tests/VMPaneHostTests/Agent
         .deletingLastPathComponent().deletingLastPathComponent()  // Tests
         .deletingLastPathComponent().deletingLastPathComponent()  // Packages
         .deletingLastPathComponent()  // repo root

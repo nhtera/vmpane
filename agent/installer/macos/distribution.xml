@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>VMPane Agent</title>
+    <options customize="never" require-scripts="false" hostArchitectures="arm64"/>
+    <volume-check>
+        <allowed-os-versions>
+            <os-version min="15.0"/>
+        </allowed-os-versions>
+    </volume-check>
+    <choices-outline>
+        <line choice="default"/>
+    </choices-outline>
+    <choice id="default" title="VMPane Agent">
+        <pkg-ref id="app.vmpane.agent"/>
+    </choice>
+    <pkg-ref id="app.vmpane.agent">vmpane-agent-component.pkg</pkg-ref>
+</installer-gui-script>
