@@ -176,7 +176,7 @@ public final class VZBackend: VMBackend {
     public func screenshot(maxEdge: Int) async throws -> Screenshot {
         let capture = await MainActor.run { display?.capture(maxEdge: maxEdge) }
         guard let capture else { throw VZBackendError.captureUnavailable }
-        return Screenshot(png: capture.png, width: capture.width, height: capture.height)
+        return Screenshot(png: capture.png, width: capture.width, height: capture.height, scale: capture.scale)
     }
 
     public func send(_ input: InputEvent) async throws {

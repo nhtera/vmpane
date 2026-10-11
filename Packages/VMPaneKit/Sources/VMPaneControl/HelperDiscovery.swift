@@ -28,22 +28,23 @@ public enum HelperDiscovery {
     /// are not mistaken for a live one.
     public static func connect(
         to vmID: UUID, paths: VMPanePaths, clientName: String, clientVersion: String,
-        kind: String, operatorClaim: Bool = false
+        kind: String, operatorClaim: Bool = false, sessionId: String? = nil
     ) async throws -> Session {
         await Blocking.run { _ = RunDirectoryReconciler.reconcile(paths: paths) }
         guard let socket = socket(for: vmID, paths: paths) else { throw DiscoveryError.notRunning }
         let client = try UDSClient.connect(to: socket)
         do {
-            let hello = try await client.call(
-                ControlMethod.helperHello.rawValue,
-                params: [
-                    "proto": .int(Int64(ControlProtocol.version)), "minProto": .int(Int64(ControlProtocol.minimumVersion)),
-                    "client": [
-                        "name": .string(clientName), "version": .string(clientVersion), "kind": .string(kind),
-                        // Honoured only from the signed vmpane CLI, which checked it itself (InteractiveSession, OperatorGrant).
-                        "operator": .bool(operatorClaim),
-                    ],
-                ])
+            var params: [String: JSONValue] = [
+                "proto": .int(Int64(ControlProtocol.version)), "minProto": .int(Int64(ControlProtocol.minimumVersion)),
+                "client": [
+                    "name": .string(clientName), "version": .string(clientVersion), "kind": .string(kind),
+                    // Honoured only from the signed vmpane CLI, which checked it itself (InteractiveSession, OperatorGrant).
+                    "operator": .bool(operatorClaim),
+                ],
+            ]
+            // An agent session (one `vmpane mcp` process), for the audit log and its snapshot.
+            if let sessionId { params["sessionId"] = .string(sessionId) }
+            let hello = try await client.call(ControlMethod.helperHello.rawValue, params: .object(params))
             return Session(
                 client: client, proto: Int(hello["proto"]?.intValue ?? 0),
                 helperVersion: hello["helperVersion"]?.stringValue ?? "",

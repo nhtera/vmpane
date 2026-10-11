@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import VMPaneCore
 
 /// A shared folder as the guest may reach it: every path is resolved inside `root`, one component at a time
 /// with `openat` and `O_NOFOLLOW`, so `..`, absolute paths and symlinks (planted by the guest or already there)
@@ -24,14 +25,7 @@ public struct PathJail: Sendable {
 
     /// The components of a share-relative path: each a plain name (no "/", ".", "..", NUL), NFC.
     public static func components(_ path: String) throws(Failure) -> [String] {
-        var parts: [String] = []
-        for part in path.split(separator: "/", omittingEmptySubsequences: true) {
-            let name = String(part).precomposedStringWithCanonicalMapping
-            guard name != ".", name != "..", !name.contains("\0"), !name.contains("\\"), name.utf8.count <= 255 else {
-                throw Failure.badPath
-            }
-            parts.append(name)
-        }
+        guard let parts = SafeName.components(path) else { throw Failure.badPath }
         return parts
     }
 

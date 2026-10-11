@@ -8,7 +8,8 @@ extension QEMUSession {
         guard let image = QEMUScreenshot.image(pixels), let shot = ScreenshotEncoder.png(image, maxEdge: maxEdge) else {
             throw QEMUScreenshotError.invalidImage("encoding")
         }
-        return shot
+        let scale = ScreenshotEncoder.scale(width: image.width, height: image.height, maxEdge: maxEdge)
+        return Screenshot(png: shot.png, width: shot.width, height: shot.height, scale: scale)
     }
 
     /// `screendump` into the run directory, read back (no symlinks, size capped) and deleted.

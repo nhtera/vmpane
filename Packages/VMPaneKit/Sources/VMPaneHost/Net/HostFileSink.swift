@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import VMPaneCore
 
 /// Where files from a guest land on the Mac (clipboard file lists, pulls): one folder per VM, normally
 /// `~/Downloads/VMPane/<vm>/` (Red Team #13). The guest names the files, so nothing it says is used as a path:
@@ -52,13 +53,7 @@ public final class HostFileSink: @unchecked Sendable {
 
     /// `name` as one safe path component (Unicode NFC), or nil: empty, `.`/`..`, separators, control characters,
     /// and names over 255 bytes are refused; surrounding spaces are trimmed.
-    public static func sanitizedName(_ name: String) -> String? {
-        let clean = name.precomposedStringWithCanonicalMapping.trimmingCharacters(in: .whitespaces)
-        guard !clean.isEmpty, clean != ".", clean != "..", clean.utf8.count <= 255 else { return nil }
-        guard !clean.unicodeScalars.contains(where: { $0 == "/" || $0 == ":" || $0 == "\\" || CharacterSet.controlCharacters.contains($0) })
-        else { return nil }
-        return clean
-    }
+    public static func sanitizedName(_ name: String) -> String? { SafeName.component(name) }
 
     /// Creates the file at `relativePath` (components separated by "/", each sanitized; folders made as needed)
     /// and returns it open for writing with where it is. An existing name gets " 2", " 3"… before its extension.

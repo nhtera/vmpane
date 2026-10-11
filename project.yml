@@ -149,6 +149,8 @@ targets:
         product: VMPaneCore
       - package: VMPaneKit
         product: VMPaneControl
+      - package: VMPaneKit
+        product: VMPaneMCP
       - package: swift-argument-parser
         product: ArgumentParser
   VMPaneUITests:

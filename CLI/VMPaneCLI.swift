@@ -11,7 +11,7 @@ struct VMPaneCLI: AsyncParsableCommand {
         version: VMPane.version,
         subcommands: [
             List.self, Info.self, Start.self, Stop.self, Suspend.self, Pause.self, Resume.self, Snapshot.self, Exec.self,
-            Port.self, Screenshot.self, Operator.self, Version.self,
+            Port.self, Screenshot.self, MCP.self, Operator.self, Version.self,
         ]
     )
 }

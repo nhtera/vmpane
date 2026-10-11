@@ -38,7 +38,7 @@ extension HelperController {
                 let shot = try await backend.screenshot(maxEdge: maxEdge)
                 return .success([
                     "dataB64": .string(shot.png.base64EncodedString()), "width": .int(Int64(shot.width)),
-                    "height": .int(Int64(shot.height)), "format": "png",
+                    "height": .int(Int64(shot.height)), "format": "png", "scale": .double(shot.scale),
                 ])
             case .vmInputKey?:
                 let key = try RPCParams.decode(KeyParams.self, from: params).get()

@@ -135,6 +135,9 @@ public final class UDSClient: @unchecked Sendable {
         queue.sync { closeOnQueue() }
     }
 
+    /// False once closed (by us, or by the helper going away).
+    public var isOpen: Bool { queue.sync { !closed } }
+
     private func closeOnQueue() {
         guard !closed else { return }
         closed = true

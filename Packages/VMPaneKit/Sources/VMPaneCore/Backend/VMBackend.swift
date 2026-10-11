@@ -60,11 +60,14 @@ public struct Screenshot: Sendable, Equatable {
     public let png: Data
     public let width: Int
     public let height: Int
+    /// Guest pixels per image pixel (> 1 when scaled down): `vm.input.pointer` takes guest pixels.
+    public let scale: Double
 
-    public init(png: Data, width: Int, height: Int) {
+    public init(png: Data, width: Int, height: Int, scale: Double = 1) {
         self.png = png
         self.width = width
         self.height = height
+        self.scale = scale
     }
 }
 
