@@ -44,7 +44,9 @@ deadline = time.time() + 10
 while b"VMPANE-TYPED hello from mcp" not in open(os.path.join(bundle, "logs/serial.log"), "rb").read():
     assert time.time() < deadline, "typed text did not arrive"
     time.sleep(0.2)
-print("mcp-e2e: list, screenshot (scaled), click, type arrived in the guest")
+undo = [s for s in client.call("vm_snapshot_list", vm=vm)["structuredContent"]["snapshots"] if s["origin"] == "agentSession"]
+assert len(undo) == 1 and undo[0]["name"].startswith("agent: itest-mcp"), undo
+print("mcp-e2e: list, screenshot (scaled), click, type arrived in the guest; the session's first change took its undo snapshot")
 
 uname = client.call("vm_exec", vm=vm, argv=["uname", "-s"], **{"as": "admin"})
 assert uname["structuredContent"]["stdout"].strip() == "Linux" and not uname.get("isError"), uname

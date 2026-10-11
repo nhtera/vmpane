@@ -87,3 +87,53 @@ private func entries(_ helper: Harness) throws -> [AuditEntry] {
     #expect(await !helper.controller.killSwitchEngaged)
     await helper.tearDown()
 }
+
+private func hello(_ client: UDSClient, session: String) async throws {
+    _ = try await client.call(
+        "helper.hello",
+        params: [
+            "proto": 1, "minProto": 1, "client": ["name": "claude-code", "version": "1", "kind": "mcp"], "sessionId": .string(session),
+        ])
+}
+
+private func agentSnapshots(_ helper: Harness) async throws -> [JSONValue] {
+    guard case .array(let all) = try await helper.client.call("vm.snapshot.list") else { return [] }
+    return all.filter { $0["origin"] == "agentSession" }
+}
+
+/// Before an agent session's first change, the VM is snapshotted, once per session.
+@Test func agentSessionsGetAnUndoSnapshot() async throws {
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.settings.apply", params: ["patch": ["mcp": ["policy": "admin"]]])
+    let socket = await helper.controller.prepared.runFiles.socketURL
+    await helper.controller.setClassifier(strangers)
+    let agent = try UDSClient.connect(to: socket)
+    defer { agent.close() }
+    try await hello(agent, session: "s1")
+    _ = try await agent.call("vm.info")
+    #expect(try await agentSnapshots(helper).isEmpty, "reading changes nothing")
+    _ = try await agent.call("vm.start")
+    let first = try await agentSnapshots(helper)
+    #expect(first.count == 1 && first[0]["name"]?.stringValue?.hasPrefix("agent: claude-code") == true)
+    _ = try await agent.call("vm.pause")
+    #expect(try await agentSnapshots(helper).count == 1, "one per session")
+    let other = try UDSClient.connect(to: socket)
+    defer { other.close() }
+    try await hello(other, session: "s2")
+    _ = try await other.call("vm.resume")
+    #expect(try await agentSnapshots(helper).count == 2)
+    await helper.tearDown()
+}
+
+@Test func autoSnapshotCanBeTurnedOff() async throws {
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.settings.apply", params: ["patch": ["mcp": ["policy": "admin", "autoSnapshot": false]]])
+    let socket = await helper.controller.prepared.runFiles.socketURL
+    await helper.controller.setClassifier(strangers)
+    let agent = try UDSClient.connect(to: socket)
+    defer { agent.close() }
+    try await hello(agent, session: "s1")
+    _ = try await agent.call("vm.start")
+    #expect(try await agentSnapshots(helper).isEmpty)
+    await helper.tearDown()
+}

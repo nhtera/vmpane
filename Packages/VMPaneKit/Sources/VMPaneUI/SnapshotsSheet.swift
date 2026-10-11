@@ -33,6 +33,10 @@ public struct SnapshotsSheet: View {
             List(model.snapshots, id: \.id) { snapshot in
                 SnapshotRow(snapshot: snapshot)
                     .contextMenu {
+                        if snapshot.origin == .agentSession {
+                            // Taken before an AI agent's first change: going back undoes that session.
+                            Button("Undo This Agent Session…") { restoring = snapshot }
+                        }
                         Button("Restore…") { restoring = snapshot }
                         Button("Delete…", role: .destructive) { deleting = snapshot }
                     }

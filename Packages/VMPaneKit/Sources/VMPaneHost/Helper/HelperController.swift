@@ -53,6 +53,8 @@ public actor HelperController {
     var killSwitchWatch: DispatchSourceFileSystemObject?
     var killSwitchPoll: Task<Void, Never>?
     var agentGeneration = 0
+    /// Agent sessions' undo snapshots (`HelperController+AgentSession`).
+    var agentSessions: [String: AgentSession] = [:]
     /// The file drop in progress (`vm.files.cancel` stops it).
     var dropTask: Task<Result<JSONValue, RPCError>, Never>?
     /// The connection that started it (only it may cancel it).
@@ -149,6 +151,10 @@ public actor HelperController {
         let caller = identity(of: connection)
         let started = ContinuousClock.now
         if let denial = authorize(request, caller) { return .failure(denial) }
+        if let refusal = await snapshotBeforeAgentChange(request, caller) {
+            audit(request, caller, result: .failure(refusal), since: started)
+            return .failure(refusal)
+        }
         let result = await route(request, from: connection)
         if caller.identity != .ui { audit(request, caller, result: result, since: started) }
         return result
