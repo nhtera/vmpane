@@ -15,6 +15,9 @@ public final class WebDAVServer: @unchecked Sendable {
     var shares: [String: PathJail]
     private var listener: Int32 = -1
     private var stopped = false
+    private var connections = 0
+    /// One guest's WebClient opens a handful; more is not a guest browsing its drive.
+    static let maxConnections = 32
 
     /// `prefix`: "" or "/token" (no trailing slash).
     public init(shares: [String: PathJail], prefix: String = "") {
@@ -31,37 +34,40 @@ public final class WebDAVServer: @unchecked Sendable {
         let thread = Thread { [self] in
             while true {
                 let client = accept(listener, nil, nil)
-                if client < 0 {
-                    if errno == EINTR || errno == ECONNABORTED { continue }
+                // Closing the listener (stop) wakes accept with ECONNABORTED: the descriptor number may already
+                // belong to someone else, so the loop ends instead of accepting on it again.
+                if lock.withLock({ stopped }) {
+                    if client >= 0 { close(client) }
                     return
+                }
+                if client < 0 {
+                    if errno == EMFILE || errno == ENFILE { usleep(100_000) }
+                    continue
+                }
+                guard
+                    lock.withLock({ () -> Bool in
+                        guard connections < Self.maxConnections else { return false }
+                        connections += 1
+                        return true
+                    })
+                else {
+                    close(client)
+                    continue
                 }
                 var enabled: Int32 = 1
                 setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &enabled, socklen_t(MemoryLayout<Int32>.size))
+                var idle = timeval(tv_sec: 300, tv_usec: 0)  // a silent client lets its thread go after 5 minutes
+                setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &idle, socklen_t(MemoryLayout<timeval>.size))
                 let connection = Thread { [self] in
                     serve(client)
                     close(client)
+                    lock.withLock { connections -= 1 }
                 }
                 connection.start()
             }
         }
         thread.name = "app.vmpane.webdav"
         thread.start()
-    }
-
-    /// A listening socket on 127.0.0.1 at a port the system picks, and that port.
-    public static func loopbackListener() throws -> (fd: Int32, port: UInt16) {
-        let fd = try Sockets.bound("127.0.0.1", 0, stream: true)
-        var address = sockaddr_in()
-        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
-        let named = withUnsafeMutablePointer(to: &address) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(fd, $0, &length) }
-        }
-        guard named == 0 else {
-            let code = errno
-            close(fd)
-            throw SocketError(call: "getsockname", code: code)
-        }
-        return (fd, UInt16(bigEndian: address.sin_port))
     }
 
     public func stop() {

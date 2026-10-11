@@ -17,7 +17,8 @@ public struct PathJail: Sendable {
     public let readOnly: Bool
 
     public init(root: URL, readOnly: Bool) {
-        self.root = root.standardizedFileURL
+        // The share's own path is the user's choice: resolved once, so a share of /tmp (a link) works.
+        self.root = root.standardizedFileURL.resolvingSymlinksInPath()
         self.readOnly = readOnly
     }
 

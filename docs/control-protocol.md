@@ -56,17 +56,17 @@ denied.
 | `vm.install.cancel` | — (ends a Windows install; a running VM is ejected from its install discs and stopped) | `{state}` | uiOnly |
 | `vm.settings.get` | — | `config` | observe |
 | `vm.settings.apply` | `{patch}` (JSON merge patch over the config) | `{fields: {path: applied\|nextBoot\|rejected}, reasons?}` | admin; sensitive patch: uiOnly |
-| `vm.ports.list` | — | `{rules: [{…rule, status: listening\|blocked\|failed\|inactive, reason?}]}` (`blocked`: macOS Local Network privacy) | observe |
+| `vm.ports.list` | — | `{rules: [{…rule, status: listening\|blocked\|failed\|inactive, reason?}], listening: [{proto, port, process?}]}` (`blocked`: macOS Local Network privacy; `listening`: the guest agent's open ports, as suggestions) | observe |
 | `vm.clipboard.read` | `{types?}` (text, png, files) | `{items: [{type: text, text} \| {type: png, dataB64} \| {type: files, files}]}` (guest agent's clipboard: macOS guests) | control + clipboard.allowWithAgents |
 | `vm.clipboard.write` | `{items: [{type: text, text} \| {type: png, dataB64}]}` | `{}` | control + clipboard.allowWithAgents |
-| `agent.status` | — | `{connected, version, os}` | observe |
+| `agent.status` | — | `{connected, version, os, osVersion, proto, caps, session}` | observe |
 | `agent.exec` | `{argv, as, cwd, env, timeoutMs, stdin}` | `{execId}` | exec (as:user), admin (as:admin) |
 | `agent.exec.input` | `{execId, dataB64, eof}` | `{}` | exec |
 | `agent.exec.signal` | `{execId, signal}` (own exec only) | `{}` | exec |
 | `agent.file.push` | `{hostPath, guestPath, overwrite}` | `{bytes}` | exec |
 | `agent.file.pull` | `{guestPath, hostPath, overwrite}` | `{bytes}` | exec |
 | `vm.files.drop` | `{paths}` (host files and folders, e.g. dropped on the VM window) | `{guestPath, files, bytes, skipped, revealed}`: copied into a new folder in the logged-in user's `Desktop/VMPane Drops`, owned by that user, then shown | exec |
-| `vm.files.cancel` | — | `{}`: stops a running `vm.files.drop` (it fails with "cancelled"; the partial drop folder is removed) | exec |
+| `vm.files.cancel` | — | `{}`: stops the running `vm.files.drop` this connection started (it fails with "cancelled"; the partial drop folder is removed) | exec |
 | `mcp.policy.get` | — | `{policy, confirmExec, autoSnapshot, auditTypedText}` | uiOnly |
 | `mcp.policy.set` | `{policy, …}` | `{}` | uiOnly |
 | `mcp.enableAll` | — | `{}` | uiOnly |

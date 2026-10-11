@@ -260,6 +260,10 @@ extension HelperController {
         let size = try RPCParams.decode(AgentFilePullResult.self, from: call.result).get().size
         guard let stream = call.inbound.values.first else { throw RPCError(.internalError, "no stream for the file") }
         do {
+            let available = (try? SpaceGuard.freeBytes(at: sink.root)) ?? 0
+            guard available >= size + Self.pullReserve else {
+                throw RPCError(.insufficientSpace, "the file needs \(size >> 20) MiB, \(available >> 20) MiB free on the host")
+            }
             try sink.reserve(bytes: Int64(size))
             var received: UInt64 = 0
             while let data = try await stream.next() {

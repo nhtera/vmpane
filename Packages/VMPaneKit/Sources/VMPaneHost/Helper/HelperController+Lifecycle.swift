@@ -67,6 +67,7 @@ extension HelperController {
             thumbnailsFollowState(next)
             forwardsFollowState(next)
             webdavFollowState(next)
+            clipboardFollowState(next)
             stateContinuation.yield(next)
             server?.broadcast(
                 topic: "vm", method: ControlNotification.vmStateChanged.rawValue,

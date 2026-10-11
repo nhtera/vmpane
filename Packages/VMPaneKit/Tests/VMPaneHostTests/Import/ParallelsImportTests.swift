@@ -101,6 +101,14 @@ private func temporary() throws -> URL {
         .write(to: external.appendingPathComponent("config.pvs"), atomically: true, encoding: .utf8)
     #expect(throws: PVMImportError.self) { try ParallelsVM.read(external) }  // no disk; the entity is never loaded
     #expect(ParallelsImporter.lastPercent("    (0.00/100%)\r    (37.50/100%)\r") == 37.5)
+    // An untrusted .pvm cannot point at files outside itself.
+    let escaping = try makePVM(in: root.appendingPathComponent("e"))
+    try descriptor(image: "../../../../../etc/hosts", sectors: 8)
+        .write(to: escaping.appendingPathComponent("harddisk.hdd/DiskDescriptor.xml"), atomically: true, encoding: .utf8)
+    #expect(throws: PVMImportError.self) { try ParallelsDisk.read(escaping.appendingPathComponent("harddisk.hdd")) }
+    try descriptor(image: "/etc/hosts", sectors: 8)
+        .write(to: escaping.appendingPathComponent("harddisk.hdd/DiskDescriptor.xml"), atomically: true, encoding: .utf8)
+    #expect(throws: PVMImportError.self) { try ParallelsDisk.read(escaping.appendingPathComponent("harddisk.hdd")) }
 }
 
 /// The whole import with QEMU's qemu-img: an expanding Parallels image converts to the same bytes, the VM gets the

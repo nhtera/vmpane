@@ -97,4 +97,20 @@ extension WebDAVServer {
 
     /// Only formats (thread-safe for that).
     nonisolated(unsafe) static let isoDate = ISO8601DateFormatter()
+
+    /// A listening socket on 127.0.0.1 at a port the system picks, and that port.
+    public static func loopbackListener() throws -> (fd: Int32, port: UInt16) {
+        let fd = try Sockets.bound("127.0.0.1", 0, stream: true)
+        var address = sockaddr_in()
+        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let named = withUnsafeMutablePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(fd, $0, &length) }
+        }
+        guard named == 0 else {
+            let code = errno
+            close(fd)
+            throw SocketError(call: "getsockname", code: code)
+        }
+        return (fd, UInt16(bigEndian: address.sin_port))
+    }
 }

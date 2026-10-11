@@ -89,6 +89,8 @@ private final class Forward: @unchecked Sendable {
     private var stopped = false
     private var open: Set<Int32> = []
     private var flows: [Sockets.Address: Int32] = [:]
+    /// Descriptors per rule (two per TCP client, one per UDP flow).
+    static let maxOpen = 512
 
     init(rule: PortRule, forwarder: PortForwarder) throws {
         self.rule = rule
@@ -146,8 +148,15 @@ private final class Forward: @unchecked Sendable {
     private func acceptLoop() {
         while Sockets.readable(socket, wake: wakeRead) {
             let client = Darwin.accept(socket, nil, nil)
-            if client < 0 { continue }  // the client gave up meanwhile
+            if client < 0 {
+                if errno == EMFILE || errno == ENFILE { usleep(100_000) }  // out of descriptors: no busy loop
+                continue  // or the client gave up meanwhile
+            }
             Sockets.noSigPipe(client)
+            guard lock.withLock({ open.count }) < Self.maxOpen else {
+                Darwin.close(client)  // a flood (e.g. a scan of an all-interfaces rule) is turned away
+                continue
+            }
             guard track(client) else {
                 Darwin.close(client)
                 return
@@ -213,7 +222,7 @@ private final class Forward: @unchecked Sendable {
             let flow = try? Sockets.udpConnected(to: address, rule.guestPort)
         else { return }
         let registered = lock.withLock {
-            guard !stopped, flows[client] == nil else { return false }
+            guard !stopped, flows[client] == nil, open.count < Self.maxOpen else { return false }
             flows[client] = flow
             open.insert(flow)
             replyThreads.enter()

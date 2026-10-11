@@ -35,11 +35,15 @@ public actor HelperController {
     /// helper app provides for it.
     var clipboardBridge: ClipboardBridge?
     var hostPasteboard: HostPasteboard?
+    /// Whether the VM's window is the key window now (kept for a bridge made later).
+    var windowFocused = false
     /// A running Windows VM's shared folders over WebDAV (`HelperController+Shares`), and the drive mapping task.
     var webdav: SharesWebDAV?
     var webdavMapping: Task<Void, Never>?
     /// The file drop in progress (`vm.files.cancel` stops it).
     var dropTask: Task<Result<JSONValue, RPCError>, Never>?
+    /// The connection that started it (only it may cancel it).
+    var dropOwner: ObjectIdentifier?
     /// A running VZ VM's port forwards (`HelperController+Ports`).
     var portForwarder: PortForwarder?
     /// Refreshes `thumbnail.png` while the VM runs (`HelperController+Thumbnail`).
@@ -144,9 +148,16 @@ public actor HelperController {
             let params = request.params
             let task = Task { await self.dropFiles(params) }
             dropTask = task
-            defer { dropTask = nil }
+            dropOwner = ObjectIdentifier(connection)
+            defer {
+                dropTask = nil
+                dropOwner = nil
+            }
             return await task.value
         case .vmFilesCancel?:
+            guard dropOwner == ObjectIdentifier(connection) else {
+                return .failure(RPCError(.invalidState, "no file drop started by this connection"))
+            }
             dropTask?.cancel()
             return .success([:])
         case .vmClipboardRead?: return await clipboardRead(request.params)

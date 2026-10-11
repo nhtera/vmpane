@@ -17,7 +17,7 @@ extension HelperController {
             let cache = GuestAddressCache()
             let forwarder = PortForwarder { refresh in
                 await cache.address(refresh: refresh) {
-                    await resolver.resolve(hints: await Self.agentAddressHints(hub, mac: resolver.macAddress))
+                    await resolver.resolve(hints: await Self.agentAddressHints(hub, mac: resolver.macAddress), refresh: refresh)
                 }
             }
             portForwarder = forwarder
@@ -101,7 +101,14 @@ extension HelperController {
         {
             guard seen.insert("\(port.proto.rawValue)/\(port.port)").inserted, ports.count < 64 else { continue }
             var entry: [String: JSONValue] = ["proto": .string(port.proto.rawValue), "port": .int(Int64(port.port))]
-            if let process = port.process { entry["process"] = .string(String(process.prefix(64))) }
+            if let process = port.process {
+                // The guest's text, shown in the UI: printable characters only (no controls, no bidi overrides).
+                let printable = process.unicodeScalars.filter {
+                    !CharacterSet.controlCharacters.contains($0) && !(0x202A...0x202E).contains($0.value)
+                        && !(0x2066...0x2069).contains($0.value)
+                }
+                entry["process"] = .string(String(String.UnicodeScalarView(printable).prefix(64)))
+            }
             ports.append(.object(entry))
         }
         return ports

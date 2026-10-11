@@ -93,8 +93,9 @@ extension HelperController {
         let argv =
             windows
             ? ["cmd.exe", "/c", "rmdir", "/s", "/q", path]
-            : ["/bin/sh", "-c", "rm -rf -- \"$1\"", "sh", path]
-        _ = try? await agentExecs.run(AgentExecStartParams(argv: argv, as: windows ? .user : .admin, timeoutMs: 60000), on: connection)
+            : ["/bin/rm", "-rf", "--", path]
+        // As the user: their folder, so they may remove what root wrote into it, and nothing else.
+        _ = try? await agentExecs.run(AgentExecStartParams(argv: argv, as: .user, timeoutMs: 60000), on: connection)
     }
 
     /// What `urls` expand to: each top-level item by its name, folders walked; symlinks are skipped (their names
@@ -143,19 +144,39 @@ extension HelperController {
                 argv: ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script], as: .user, timeoutMs: 30000)
         } else {
             let script = """
-                d="$HOME/Desktop/VMPane Drops/$(date '+%Y-%m-%d %H.%M.%S')"
-                mkdir -p "$d" || exit 1
-                for f in "$@"; do mkdir -p "$d/$f" || exit 1; done
-                printf '%s\\n%s:%s\\n' "$d" "$(id -u)" "$(id -g)"
+                d="$HOME/Desktop/VMPane Drops/$(/bin/date '+%Y-%m-%d %H.%M.%S')"
+                /bin/mkdir -p "$d" || exit 1
+                for f in "$@"; do /bin/mkdir -p "$d/$f" || exit 1; done
+                printf '%s\\n%s:%s\\n' "$d" "$(/usr/bin/id -u)" "$(/usr/bin/id -g)"
                 """
             params = AgentExecStartParams(argv: ["/bin/sh", "-c", script, "sh"] + folders, as: .user, timeoutMs: 30000)
         }
         let made = try await agentExecs.run(params, on: connection)
         let lines = (String(bytes: made.stdout, encoding: .utf8) ?? "").split(whereSeparator: \.isNewline).map(String.init)
-        guard made.exited?.code == 0, let path = lines.first, !path.isEmpty else {
+        // The path comes from the guest user's shell and steers a root chown: it must be a drop folder.
+        guard made.exited?.code == 0, let path = lines.first, Self.isDropFolder(path, windows: windows) else {
             let reason = String(bytes: made.stderr, encoding: .utf8) ?? ""
             throw RPCError(.agentUnavailable, "cannot make the drop folder in the guest (is someone logged in?) \(reason)")
         }
-        return (path, windows ? nil : lines.dropFirst().first)
+        let owner = lines.dropFirst().first
+        guard windows || owner.map(Self.isNumericOwner) == true else {
+            throw RPCError(.internalError, "the guest named an odd owner for the drop folder")
+        }
+        return (path, windows ? nil : owner)
+    }
+
+    /// `…/Desktop/VMPane Drops/<time>`, absolute, no `..` (what the drop script makes; anything else is refused).
+    static func isDropFolder(_ path: String, windows: Bool) -> Bool {
+        let separator: Character = windows ? "\\" : "/"
+        let parts = path.split(separator: separator, omittingEmptySubsequences: false)
+        let absolute = windows ? path.dropFirst().hasPrefix(":\\") : path.hasPrefix("/")
+        return absolute && parts.count >= 4 && !parts.contains("..") && !parts.contains(".")
+            && parts[parts.count - 3] == "Desktop" && parts[parts.count - 2] == "VMPane Drops" && !parts[parts.count - 1].isEmpty
+    }
+
+    /// `uid:gid`, digits only.
+    static func isNumericOwner(_ owner: String) -> Bool {
+        let ids = owner.split(separator: ":", omittingEmptySubsequences: false)
+        return ids.count == 2 && ids.allSatisfy { !$0.isEmpty && $0.allSatisfy(\.isNumber) }
     }
 }

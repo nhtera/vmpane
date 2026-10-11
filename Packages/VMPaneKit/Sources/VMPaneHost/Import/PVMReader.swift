@@ -102,7 +102,11 @@ public struct ParallelsVM: Sendable, Equatable {
             .sorted { Int($0.child("Index")?.value ?? "") ?? 0 < Int($1.child("Index")?.value ?? "") ?? 0 }
             .compactMap { disk -> URL? in
                 guard let name = disk.child("SystemName")?.value, !name.isEmpty else { return nil }
-                let url = name.hasPrefix("/") ? URL(fileURLWithPath: name) : pvm.appendingPathComponent(name)
+                // Inside the .pvm only: an untrusted .pvm must not point qemu-img at other files of this Mac.
+                let url = pvm.appendingPathComponent(name).standardizedFileURL.resolvingSymlinksInPath()
+                guard !name.hasPrefix("/"), url.path.hasPrefix(pvm.standardizedFileURL.resolvingSymlinksInPath().path + "/") else {
+                    return nil
+                }
                 return FileManager.default.fileExists(atPath: url.appendingPathComponent("DiskDescriptor.xml").path) ? url : nil
             }
         guard !disks.isEmpty else { throw PVMImportError.noDisk }
@@ -146,7 +150,10 @@ public struct ParallelsDisk: Sendable, Equatable {
         guard let image = images.first(where: { $0.child("GUID")?.value.lowercased() == top.lowercased() }) ?? images.first,
             let file = image.child("File")?.value, !file.isEmpty
         else { throw PVMImportError.noDisk }
-        let url = file.hasPrefix("/") ? URL(fileURLWithPath: file) : hdd.appendingPathComponent(file)
+        let url = hdd.appendingPathComponent(file).standardizedFileURL.resolvingSymlinksInPath()
+        guard !file.hasPrefix("/"), url.path.hasPrefix(hdd.standardizedFileURL.resolvingSymlinksInPath().path + "/") else {
+            throw PVMImportError.unreadable("the disk image \(file) is outside the disk's folder")
+        }
         guard FileManager.default.fileExists(atPath: url.path) else { throw PVMImportError.missingImage(url.lastPathComponent) }
         let sectors = root.child("Disk_Parameters")?.child("Disk_size").flatMap { UInt64($0.value) } ?? 0
         return ParallelsDisk(

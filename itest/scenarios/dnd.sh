@@ -45,13 +45,28 @@ scenario_run() {
 
     # A cancelled drop stops and leaves nothing behind.
     head -c 1073741824 /dev/zero >"$src/big.bin"
-    /usr/bin/python3 "$VMPANE_ROOT/itest/lib/rpc.py" "$socket" vm.files.drop "$(jq -nc --arg p "$src/big.bin" '{paths: [$p]}')" \
-        >"$work/cancelled.json" 2>&1 &
-    local dropper=$!
-    sleep 1
-    it_rpc "$socket" vm.files.cancel >/dev/null || it_fail "vm.files.cancel failed" || return 1
-    wait "$dropper" && { it_fail "the cancelled drop reported success: $(cat "$work/cancelled.json")"; return 1; }
-    grep -q cancelled "$work/cancelled.json" || it_fail "unexpected answer: $(cat "$work/cancelled.json")" || return 1
+    # Drop and cancel on one connection (only the connection that started a drop may cancel it).
+    /usr/bin/python3 - "$socket" "$src/big.bin" >"$work/cancelled.json" 2>&1 <<'PY' || { it_fail "cancel: $(cat "$work/cancelled.json")"; return 1; }
+import json, socket, sys, time
+sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+sock.connect(sys.argv[1])
+reader = sock.makefile("r")
+def send(i, method, params):
+    sock.sendall((json.dumps({"jsonrpc": "2.0", "id": i, "method": method, "params": params}) + "\n").encode())
+send(0, "helper.hello", {"proto": 1, "minProto": 1, "client": {"name": "itest", "version": "0", "kind": "cli"}})
+json.loads(reader.readline())
+send(1, "vm.files.drop", {"paths": [sys.argv[2]]})
+time.sleep(1)
+send(2, "vm.files.cancel", {})
+answers = {}
+while len(answers) < 2:
+    message = json.loads(reader.readline())
+    if "id" in message:
+        answers[message["id"]] = message
+print(json.dumps(answers))
+assert "result" in answers[2], answers[2]
+assert answers[1].get("error", {}).get("message") == "cancelled", answers[1]
+PY
     [[ $(it_agent_exec 'ls "/home/ubuntu/Desktop/VMPane Drops" | wc -l') == 1 ]] \
         || it_fail "the cancelled drop left a folder: $(it_agent_exec 'ls "/home/ubuntu/Desktop/VMPane Drops"')" || return 1
     echo "dnd: a cancelled drop stops and its folder is removed"

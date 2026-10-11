@@ -11,7 +11,15 @@ extension HelperController {
 
     /// The VM window became or stopped being the key window.
     public func windowFocusChanged(_ focused: Bool) async {
+        windowFocused = focused
         await clipboardBridge?.setFocused(focused)
+    }
+
+    /// The bridge goes with the VM: the next start makes a fresh one with that start's settings.
+    func clipboardFollowState(_ next: VMRunState) {
+        guard next == .stopped || next == .error, let bridge = clipboardBridge else { return }
+        clipboardBridge = nil
+        Task { await bridge.stop() }
     }
 
     /// The bridge for an agent that serves the clipboard, attached to `connection` (made on first use).
@@ -25,7 +33,12 @@ extension HelperController {
                 try await Self.pull(path, into: handle, sink: sink, on: connection)
             }
         clipboardBridge = bridge
-        Task { await bridge.attach(connection) }
+        let (mode, focused) = (config.clipboard.mode, windowFocused)
+        Task {
+            await bridge.attach(connection)
+            await bridge.setMode(mode)
+            await bridge.setFocused(focused)
+        }
         return bridge
     }
 

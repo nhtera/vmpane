@@ -152,3 +152,38 @@ private let base = "http://vm"
     #expect(await dav.curl(["-X", "DELETE", "\(root)/Reference/notes.txt"]).status == 403)
     #expect(await dav.curl(["-X", "MOVE", "-H", "Destination: \(root)/Reference/x", "\(root)/Projects/"]).status >= 400)
 }
+
+/// A stopped server's accept loop must end: the next run's listener often reuses its descriptor number, and the
+/// old loop (old token, old shares) would answer some of the new run's connections.
+@Test func aStoppedServerNeverAnswersTheNextRun() async throws {
+    let root = URL(fileURLWithPath: "/tmp/vp-dav-\(UUID().uuidString.prefix(8))")
+    try FileManager.default.createDirectory(at: root.appendingPathComponent("S"), withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try Data("x".utf8).write(to: root.appendingPathComponent("S/f"))
+    let jail = ["S": PathJail(root: root.appendingPathComponent("S"), readOnly: true)]
+    let (firstFD, _) = try WebDAVServer.loopbackListener()
+    let first = WebDAVServer(shares: jail, prefix: "/old")
+    first.start(listening: firstFD)
+    first.stop()
+    try await Task.sleep(for: .milliseconds(50))
+    let (secondFD, port) = try WebDAVServer.loopbackListener()
+    let second = WebDAVServer(shares: jail, prefix: "/new")
+    second.start(listening: secondFD)
+    defer { second.stop() }
+    for _ in 0..<20 {
+        let status = await withCheckedContinuation { done in
+            DispatchQueue.global().async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
+                process.arguments = ["-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "http://127.0.0.1:\(port)/new/S/f"]
+                let output = Pipe()
+                process.standardOutput = output
+                try? process.run()
+                let text = String(bytes: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                process.waitUntilExit()
+                done.resume(returning: text)
+            }
+        }
+        #expect(status == "200")
+    }
+}

@@ -108,6 +108,11 @@ public actor ClipboardBridge {
     private var lastApplied: Data?
     private var guestChangedWhileAway = false
     private var poller: Task<Void, Never>?
+    /// Bumped by every focus change: work started under an older focus does not start a poller.
+    private var focusGeneration = 0
+    /// A fetch from the guest is running; another change meanwhile is fetched once it ends.
+    private var fetching = false
+    private var fetchAgain = false
 
     /// `pull(connection, guestPath, into, sink)` copies a guest file into an open host file.
     public init(
@@ -130,6 +135,8 @@ public actor ClipboardBridge {
     /// The VM window became (or stopped being) the key window: sharing runs only while it is.
     public func setFocused(_ focused: Bool) async {
         self.focused = focused
+        focusGeneration += 1
+        let generation = focusGeneration
         poller?.cancel()
         poller = nil
         guard focused else { return }
@@ -138,6 +145,7 @@ public actor ClipboardBridge {
             await fetchFromGuest()
         }
         await offerToGuest()
+        guard generation == focusGeneration else { return }  // focus moved on meanwhile
         // macOS posts no pasteboard notification: look four times a second while focused.
         poller = Task { [weak self] in
             while !Task.isCancelled {
@@ -165,10 +173,11 @@ public actor ClipboardBridge {
 
     /// Sends the Mac's clipboard to the guest if it changed since last seen (and is not what the guest just gave).
     func offerToGuest() async {
+        // A change made while unfocused (or with sending off) stays unseen, so it is offered once allowed.
+        guard focused, mode.sendsToGuest, let connection else { return }
         let count = await pasteboard.changeCount()
         guard count != seenChangeCount else { return }
         seenChangeCount = count
-        guard focused, mode.sendsToGuest, let connection else { return }
         var content = await pasteboard.read()
         content.files = []  // files go to the guest by drag and drop (`vm.files.drop`), not the clipboard
         guard !content.isEmpty, content.fingerprint != lastApplied else { return }
@@ -181,6 +190,19 @@ public actor ClipboardBridge {
     }
 
     private func fetchFromGuest() async {
+        guard !fetching else {
+            fetchAgain = true
+            return
+        }
+        fetching = true
+        defer { fetching = false }
+        repeat {
+            fetchAgain = false
+            await fetchOnce()
+        } while fetchAgain && focused
+    }
+
+    private func fetchOnce() async {
         guard let connection else { return }
         do {
             var content = try await AgentClipboard.get(connection, types: [.text, .png, .files])

@@ -24,11 +24,12 @@ public struct GuestIPResolver: Sendable {
         self.macAddress = mac
     }
 
-    /// The guest's verified address, or nil. `hints` are addresses the guest's agent reported.
-    public func resolve(hints: [String] = []) async -> IPv4? {
+    /// The guest's verified address, or nil. `hints` are addresses the guest's agent reported. `refresh` skips
+    /// the ARP shortcut (an old entry may name the guest's previous address) and probes the candidates.
+    public func resolve(hints: [String] = [], refresh: Bool = false) async -> IPv4? {
         let subnets = subnets()
         guard !subnets.isEmpty else { return nil }
-        if let known = Self.verified(macAddress, among: nil, neighbours(), subnets) { return known }
+        if !refresh, let known = Self.verified(macAddress, among: nil, neighbours(), subnets) { return known }
         let candidates = Self.candidates(mac: macAddress, leases: leases(), hints: hints, subnets: subnets, now: now())
         guard !candidates.isEmpty else { return nil }
         for candidate in candidates { probe(candidate) }

@@ -87,7 +87,9 @@ extension HelperController {
         guard peer.hello.os == "windows", peer.hello.caps?.contains(AgentCap.exec) == true, let webdav else { return }
         webdavMapping?.cancel()
         let execs = agentExecs
-        let command = "net use Z: /delete /y >nul 2>&1 & net use Z: \(webdav.guestURL) /persistent:no"
+        // A Z: of the user's own stays; one from an earlier VMPane run (\\10.0.2.2@…) is replaced.
+        let command =
+            "(net use Z: 2>nul | find \"10.0.2.2@\" >nul && net use Z: /delete /y >nul 2>&1) & net use Z: \(webdav.guestURL) /persistent:no"
         webdavMapping = Task {
             while !Task.isCancelled, await connection.isOpen {
                 let result = try? await execs.run(

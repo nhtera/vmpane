@@ -17,3 +17,17 @@ import Testing
     #expect(items.filter { $0.source == nil }.map(\.path) == ["Album", "Album/2026"])
     #expect(skipped == ["Album/link"])
 }
+
+/// The drop folder path comes from the guest user's shell and steers a root chown: only a drop folder passes.
+@Test func onlyDropFoldersAreAccepted() {
+    #expect(HelperController.isDropFolder("/home/u/Desktop/VMPane Drops/2026-10-11 08.00.00", windows: false))
+    #expect(HelperController.isDropFolder(#"C:\Users\u\Desktop\VMPane Drops\2026-10-11 08.00.00"#, windows: true))
+    for bad in [
+        "/", "/etc", "/home/u/Desktop/VMPane Drops/../../..", "home/u/Desktop/VMPane Drops/x", "/x/Desktop/VMPane Drops/", "/a/b/Other/x",
+    ] {
+        #expect(!HelperController.isDropFolder(bad, windows: false), "\(bad)")
+    }
+    #expect(
+        HelperController.isNumericOwner("1000:1000") && !HelperController.isNumericOwner("root:root")
+            && !HelperController.isNumericOwner("0:0 /"))
+}
