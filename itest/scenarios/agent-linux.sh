@@ -1,7 +1,8 @@
 # Guest agent in a Linux VZ guest: installed from the read-only `vmpane-tools` share as a user would, then
 # over vsock: connects after boot (target < 10 s), exec round trip with identity and exit codes, 1 GiB push and
 # pull with matching SHA-256 (target ≥ 100 MB/s), the guest clock within 1 s after a live-snapshot restore, and
-# a disk snapshot of the running guest under the agent's file system freeze.
+# a disk snapshot of the running guest under the agent's file system freeze, and the session helper of a
+# logged-in user running `as: "user"` commands.
 # Needs an app built with the Linux guest tools (guest-tools/build-linux.sh) and ~4 GiB free.
 # Sourced by scripts/itest.sh with $APP set.
 
@@ -95,6 +96,17 @@ scenario_run() {
     out=$(it_agent_exec 'touch /root/after-thaw && echo writable') || it_fail "the guest stayed frozen" || return 1
     [[ $out == writable ]] || it_fail "the guest file system is not writable after the snapshot" || return 1
     echo "agent-linux: disk snapshot of the running guest (frozen, cloned, thawed)"
+
+    # 7. A user session: auto-login `ubuntu` on tty2 and switch to it (logind's foreground seat session); its
+    #    systemd user instance starts the session helper, and `as: "user"` runs as ubuntu.
+    it_agent_exec 'mkdir -p /etc/systemd/system/getty@tty2.service.d && printf "[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin ubuntu --noclear %%I \$TERM\n" >/etc/systemd/system/getty@tty2.service.d/autologin.conf && systemctl daemon-reload && systemctl restart getty@tty2 && chvt 2' >/dev/null \
+        || it_fail "cannot log a user in" || return 1
+    it_wait_for 60 bash -c "[[ \$(/usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' '$socket' agent.status | jq -r .session) == true ]]" \
+        || { it_agent_exec 'loginctl list-sessions --no-legend; for f in /run/systemd/sessions/[0-9]*; do case $f in *.ref) ;; *) grep -HE "^(UID|ACTIVE|STATE|TYPE)=" "$f";; esac; done; ls -l /run/vmpane-agent.sock; systemctl --global is-enabled vmpane-session.service; journalctl -u vmpane-agent -n 15 --no-pager; journalctl _UID=1000 -n 15 --no-pager' >&2
+             it_fail "the session helper did not connect after the login"; return 1; }
+    out=$(it_agent_exec --user 'id -un') || it_fail "exec as the user failed" || return 1
+    [[ $out == ubuntu ]] || it_fail "as user, id -un printed '$out'" || return 1
+    echo "agent-linux: session helper connected for the logged-in user; as:user runs as $out"
 
     it_rpc "$socket" vm.stop '{"mode": "force"}' >/dev/null
     it_rpc "$socket" helper.shutdown >/dev/null

@@ -290,9 +290,12 @@ impl SessionHub {
                 continue;
             };
             let uid = cred.uid();
+            // File reads: off the runtime thread, which every connection shares.
             let permitted = match allowed_uid {
                 Some(allowed) => uid == allowed,
-                None => crate::os::is_console_user(uid),
+                None => tokio::task::spawn_blocking(move || crate::os::is_console_user(uid))
+                    .await
+                    .unwrap_or(false),
             };
             // While one user's helper is connected, another user's cannot take its place (a second SSH login on a
             // server guest would otherwise receive the host's `as: "user"` commands).

@@ -133,13 +133,23 @@ extension HelperController {
         }
     }
 
+    /// From `hello`, with what changes over a connection (a user-session helper coming and going) asked live.
     private func agentStatus() async -> Result<JSONValue, RPCError> {
         let status = await agentHub.status
         guard let peer = status.peer else { return .success(["connected": false]) }
+        var caps = peer.hello.caps ?? []
+        var session = peer.hello.session ?? false
+        if let connection = await agentHub.connection,
+            let reply = try? await connection.call(AgentMethod.agentInfo, timeout: .seconds(5)),
+            case .success(let info) = RPCParams.decode(AgentInfo.self, from: reply.result)
+        {
+            caps = info.caps ?? caps
+            session = info.session ?? session
+        }
         return .success([
             "connected": true, "version": .string(peer.hello.agentVersion), "os": .string(peer.hello.os),
             "osVersion": .string(peer.hello.osVersion ?? ""), "proto": .int(Int64(peer.proto)),
-            "caps": .array((peer.hello.caps ?? []).map(JSONValue.string)), "session": .bool(peer.hello.session ?? false),
+            "caps": .array(caps.map(JSONValue.string)), "session": .bool(session),
         ])
     }
 

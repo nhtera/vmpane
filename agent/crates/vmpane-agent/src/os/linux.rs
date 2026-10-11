@@ -59,8 +59,13 @@ pub fn is_console_user(uid: u32) -> bool {
     let Ok(entries) = std::fs::read_dir("/run/systemd/sessions") else {
         return uid != 0;
     };
+    // Session state files only: logind keeps a `<id>.ref` FIFO beside each, and reading one blocks forever.
     let sessions: Vec<String> = entries
         .flatten()
+        .filter(|e| {
+            e.file_type().is_ok_and(|t| t.is_file())
+                && !e.file_name().to_string_lossy().contains('.')
+        })
         .filter_map(|e| std::fs::read_to_string(e.path()).ok())
         .collect();
     session_allows(&sessions, uid)
