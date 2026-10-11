@@ -1,0 +1,54 @@
+# Re-checks a published release from the outside, as a user's Mac would see it: the assets match SHA256SUMS, the
+# DMG passes Gatekeeper with its stapled notarization, every signature in the app verifies strictly, and the
+# Homebrew cask points at this DMG. Runs when a release is published, or by hand for any tag.
+name: release-verify
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (vX.Y.Z)
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: macos-15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Download the release
+        run: |
+          mkdir assets
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir assets
+          ls -l assets
+      - name: Checksums
+        working-directory: assets
+        run: shasum -a 256 -c SHA256SUMS
+      - name: Gatekeeper, notarization and signatures
+        working-directory: assets
+        run: |
+          dmg=$(ls VMPane-*.dmg)
+          xcrun stapler validate "$dmg"
+          spctl -a -vv -t open --context context:primary-signature "$dmg"
+          mkdir mnt
+          hdiutil attach -quiet -nobrowse -readonly -mountpoint mnt "$dmg"
+          codesign --verify --deep --strict --verbose=2 mnt/VMPane.app
+          spctl -a -vv mnt/VMPane.app
+          hdiutil detach -quiet mnt
+      - name: Homebrew cask
+        working-directory: assets
+        run: |
+          version=${TAG#v}
+          cask=$(gh api repos/nhtera/homebrew-tap/contents/Casks/vmpane.rb --jq .content | base64 -d)
+          want=$(shasum -a 256 VMPane-*.dmg | cut -d' ' -f1)
+          if grep -q "version \"$version\"" <<<"$cask"; then
+            grep -q "sha256 \"$want\"" <<<"$cask" || { echo "::error::the cask's sha256 is not this DMG's"; exit 1; }
+          else
+            echo "::warning::the cask is not at $version yet"
+          fi
