@@ -6,6 +6,9 @@ import VMPaneUI
 struct LibraryWindow: View {
     @Bindable var store: LibraryStore
     @State private var showingWizard = false
+    @State private var cloning: LibraryStore.Row?
+    @State private var cloneName = ""
+    @State private var deleting: LibraryStore.Row?
     @AppStorage("onboarded") private var onboarded = false
 
     var body: some View {
@@ -13,7 +16,17 @@ struct LibraryWindow: View {
             List(store.rows, selection: $store.selection) { row in
                 VMRowView(row: row)
                     .tag(row.id)
-                    .contextMenu { VMActionMenu(store: store, row: row) }
+                    .contextMenu {
+                        VMActionMenu(store: store, row: row)
+                        if !row.isRunning {
+                            Divider()
+                            Button("Clone…") {
+                                cloneName = "\(row.name) copy"
+                                cloning = row
+                            }
+                            Button("Delete…", role: .destructive) { deleting = row }
+                        }
+                    }
             }
             .navigationSplitViewColumnWidth(min: 220, ideal: 260)
             .overlay {
@@ -43,6 +56,22 @@ struct LibraryWindow: View {
             }
         }
         .sheet(isPresented: $showingWizard) { NewVMWizard(store: store) }
+        .alert("Clone “\(cloning?.name ?? "")”", isPresented: present($cloning)) {
+            TextField("Name", text: $cloneName)
+            Button("Clone") {
+                if let row = cloning { Task { await store.clone(row.id, name: cloneName) } }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The copy is a new machine with its own identity.")
+        }
+        .confirmationDialog("Delete “\(deleting?.name ?? "")”?", isPresented: present($deleting)) {
+            Button("Delete", role: .destructive) {
+                if let row = deleting { Task { await store.delete(row.id) } }
+            }
+        } message: {
+            Text("Its disks and snapshots are deleted too. This cannot be undone.")
+        }
         .sheet(isPresented: Binding(get: { !onboarded }, set: { if !$0 { onboarded = true } })) {
             OnboardingFlow { onboarded = true }
         }
@@ -63,6 +92,10 @@ struct LibraryWindow: View {
             Text(store.lastError ?? "")
         }
     }
+}
+
+private func present<T>(_ item: Binding<T?>) -> Binding<Bool> {
+    Binding(get: { item.wrappedValue != nil }, set: { if !$0 { item.wrappedValue = nil } })
 }
 
 /// One VM in the list.

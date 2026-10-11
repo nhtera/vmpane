@@ -19,6 +19,8 @@ public actor HelperController {
     var gracefulStopTimeout: Duration
     /// Whether the VM was last started without a window (restarts after a restore keep it).
     var lastStartHeadless = true
+    /// Whether the last start asked for no window (`vm.start {headless}`), for the helper's window logic.
+    public var startedHeadless: Bool { lastStartHeadless }
     /// The unattended Windows install this VM is going through, if any (`HelperController+WindowsInstall`).
     var windowsInstall: InstallState?
     var installReader: GuestLineReader?

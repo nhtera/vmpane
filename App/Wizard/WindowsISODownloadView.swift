@@ -53,7 +53,7 @@ struct WindowsISODownloadView: View {
 /// The web view's state: navigation stays on Microsoft's pages; the ISO response becomes a download.
 @MainActor
 @Observable
-final class ISOBrowser: NSObject, WKNavigationDelegate, WKDownloadDelegate {
+final class ISOBrowser: NSObject, WKNavigationDelegate, WKDownloadDelegate, WKUIDelegate {
     enum Download: Equatable {
         case idle
         case running(received: Int64, total: Int64?)
@@ -75,6 +75,7 @@ final class ISOBrowser: NSObject, WKNavigationDelegate, WKDownloadDelegate {
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
         webView.navigationDelegate = self
+        webView.uiDelegate = self
         if let page = Self.page { webView.load(URLRequest(url: page)) }
     }
 
@@ -117,6 +118,15 @@ final class ISOBrowser: NSObject, WKNavigationDelegate, WKDownloadDelegate {
             let total = progress.totalUnitCount > 0 ? progress.totalUnitCount : nil
             Task { @MainActor in self?.download = .running(received: received, total: total) }
         }
+    }
+
+    /// Links that open a new window (target=_blank) load here instead, through the same navigation rules.
+    func webView(
+        _ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction,
+        windowFeatures: WKWindowFeatures
+    ) -> WKWebView? {
+        webView.load(action.request)
+        return nil
     }
 
     // MARK: - Download

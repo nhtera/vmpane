@@ -154,3 +154,26 @@ final class LockedFlag: @unchecked Sendable {
     func set() { lock.withLock { flag = true } }
     var value: Bool { lock.withLock { flag } }
 }
+
+@Test @MainActor func clonesAndDeletesStoppedVMs() async throws {
+    let links = FakeLinks()
+    let fixture = try makeStore(links)
+    let (store, ops, root) = (fixture.store, fixture.ops, fixture.root)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let id = try ConfigStore.load(try ops.create(name: "Base", os: .linux, diskGiB: 8)).id
+    await store.reload()
+    await store.clone(id, name: "Base copy")
+    #expect(store.rows.map(\.name).sorted() == ["Base", "Base copy"])
+    await store.delete(id)
+    #expect(store.rows.map(\.name) == ["Base copy"])
+    #expect(store.lastError == nil)
+}
+
+@Test @MainActor func riskyShareFoldersAreFlagged() {
+    let home = URL(fileURLWithPath: "/Users/someone")
+    #expect(ShareWarning.reason(for: URL(fileURLWithPath: "/"), home: home) != nil)
+    #expect(ShareWarning.reason(for: home, home: home) != nil)
+    #expect(ShareWarning.reason(for: home.appendingPathComponent(".ssh"), home: home) != nil)
+    #expect(ShareWarning.reason(for: home.appendingPathComponent("Library/Keychains"), home: home) != nil)
+    #expect(ShareWarning.reason(for: home.appendingPathComponent("Projects/app"), home: home) == nil)
+}

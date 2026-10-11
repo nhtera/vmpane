@@ -10,6 +10,7 @@ struct NewVMWizard: View {
     @State private var creating = false
     @State private var progress: VMCreator.Progress?
     @State private var failure: String?
+    @State private var creation: Task<Void, Never>?
 
     init(store: LibraryStore) {
         self.store = store
@@ -56,9 +57,15 @@ struct NewVMWizard: View {
 
     private var footer: some View {
         HStack {
-            Button("Cancel", role: .cancel) { dismiss() }
-                .keyboardShortcut(.cancelAction)
-                .disabled(creating)
+            Button("Cancel", role: .cancel) {
+                // A running create (a download can take long) stops and removes what it made.
+                if let creation {
+                    creation.cancel()
+                } else {
+                    dismiss()
+                }
+            }
+            .keyboardShortcut(.cancelAction)
             Spacer()
             if let problem = wizard.problems(in: wizard.step).first, wizard.step != .os, !creating {
                 Text(problem).font(.caption).foregroundStyle(.secondary).lineLimit(2)
@@ -81,7 +88,8 @@ struct NewVMWizard: View {
         guard let request = wizard.request() else { return }
         creating = true
         let creator = store.makeCreator()
-        Task {
+        creation = Task {
+            defer { creation = nil }
             do {
                 let bundle = try await creator.create(request) { update in
                     Task { @MainActor in progress = update }
@@ -89,6 +97,10 @@ struct NewVMWizard: View {
                 wizard.clearSecrets()
                 dismiss()
                 await store.didCreate(bundle)
+            } catch is CancellationError {
+                creating = false
+            } catch let error as URLError where error.code == .cancelled {
+                creating = false
             } catch {
                 creating = false
                 failure = String(describing: error)

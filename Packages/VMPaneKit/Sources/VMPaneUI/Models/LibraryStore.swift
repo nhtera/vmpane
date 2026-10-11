@@ -42,6 +42,7 @@ public final class LibraryStore {
     @ObservationIgnored private let links: LiveVMLink
     @ObservationIgnored private let launch: @Sendable (VMBundle, Bool) async throws -> Void
     @ObservationIgnored private var watches: [UUID: Task<Void, Never>] = [:]
+    @ObservationIgnored private var watchTokens: [UUID: UUID] = [:]
 
     /// `launch(bundle, headless)` starts a VM's helper (the app's supervisor, via the runtime copy).
     public init(library: VMLibrary, links: LiveVMLink, launch: @escaping @Sendable (VMBundle, Bool) async throws -> Void) {
@@ -51,6 +52,33 @@ public final class LibraryStore {
     }
 
     public func row(_ id: UUID) -> Row? { rows.first { $0.id == id } }
+
+    /// A copy of a stopped VM, as a new machine, under `name`.
+    public func clone(_ id: UUID, name: String) async {
+        guard let row = row(id), !row.isRunning else { return }
+        let ops = LibraryOps(library: library, identity: .ui)
+        do {
+            let bundle = try VMBundle.open(row.bundleURL)
+            _ = try await Blocking.run { try ops.clone(bundle, name: name) }
+            await reload()
+        } catch {
+            lastError = "Cannot clone \(row.name): \(error)"
+        }
+    }
+
+    /// Deletes a stopped VM (its bundle, disks and snapshots).
+    public func delete(_ id: UUID) async {
+        guard let row = row(id), !row.isRunning else { return }
+        let ops = LibraryOps(library: library, identity: .ui)
+        do {
+            let bundle = try VMBundle.open(row.bundleURL)
+            try await Blocking.run { try ops.delete(bundle) }
+            if selection == id { selection = nil }
+            await reload()
+        } catch {
+            lastError = "Cannot delete \(row.name): \(error)"
+        }
+    }
 
     /// Creates VMs in this library (the wizard).
     public func makeCreator() -> VMCreator {
@@ -108,16 +136,20 @@ public final class LibraryStore {
     /// Follows the VM's helper while it runs.
     private func attach(_ id: UUID) {
         let links = links
+        let token = UUID()
+        watchTokens[id] = token
         watches[id] = Task { [weak self] in
-            guard let states = await links.watch(id) else {
+            if let states = await links.watch(id) {
+                for await state in states {
+                    self?.setState(state, for: id)
+                }
+                self?.setState(nil, for: id)
+            }
+            // Only this watch's own entry: a newer one may have replaced it meanwhile.
+            if self?.watchTokens[id] == token {
                 self?.watches[id] = nil
-                return
+                self?.watchTokens[id] = nil
             }
-            for await state in states {
-                self?.setState(state, for: id)
-            }
-            self?.setState(nil, for: id)
-            self?.watches[id] = nil
         }
     }
 

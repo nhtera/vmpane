@@ -31,7 +31,7 @@ public struct SettingsSheet: View {
                 Section("Display") {
                     row("display.widthPx") {
                         Picker("Resolution", selection: resolution) {
-                            ForEach(Self.resolutions, id: \.self) { size in Text("\(size.width) × \(size.height)").tag(size) }
+                            ForEach(resolutionChoices, id: \.self) { size in Text("\(size.width) × \(size.height)").tag(size) }
                         }
                     }
                     row("display.autoResize") { Toggle("Follow the window size", isOn: $model.draft.display.autoResize) }
@@ -54,6 +54,7 @@ public struct SettingsSheet: View {
                         row("network.0.mode") {
                             Picker("Network", selection: $model.draft.network[0].mode) {
                                 Text("Shared (NAT)").tag(NetworkConfig.Mode.nat)
+                                Text("Bridged").tag(NetworkConfig.Mode.bridged)
                                 Text("Off").tag(NetworkConfig.Mode.none)
                             }
                         }
@@ -115,6 +116,12 @@ public struct SettingsSheet: View {
         Size(width: 2560, height: 1600), Size(width: 1920, height: 1080), Size(width: 2560, height: 1440),
     ]
 
+    /// The presets, plus the VM's own size when it is not one of them (a picker without its value shows nothing).
+    private var resolutionChoices: [Size] {
+        let current = Size(width: model.draft.display.widthPx, height: model.draft.display.heightPx)
+        return Self.resolutions.contains(current) ? Self.resolutions : [current] + Self.resolutions
+    }
+
     private var resolution: Binding<Size> {
         Binding(
             get: { Size(width: model.draft.display.widthPx, height: model.draft.display.heightPx) },
@@ -160,11 +167,11 @@ struct SharedFoldersEditor: View {
     var body: some View {
         VStack(alignment: .leading) {
             Text("Shared folders")
-            ForEach(shares.indices, id: \.self) { index in
+            ForEach(shares, id: \.id) { share in
                 HStack {
-                    Label(shares[index].hostPath, systemImage: "folder").lineLimit(1).truncationMode(.middle)
+                    Label(share.hostPath, systemImage: "folder").lineLimit(1).truncationMode(.middle)
                     Spacer()
-                    Button("Remove", systemImage: "minus.circle") { shares.remove(at: index) }
+                    Button("Remove", systemImage: "minus.circle") { shares.removeAll { $0.id == share.id } }
                         .labelStyle(.iconOnly)
                         .buttonStyle(.borderless)
                 }
@@ -177,7 +184,7 @@ struct SharedFoldersEditor: View {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard panel.runModal() == .OK, let url = panel.url, ShareWarning.confirm(url) else { return }
         let id = "share-\((shares.compactMap { Int($0.id.split(separator: "-").last ?? "") }.max() ?? 0) + 1)"
         var name = url.lastPathComponent
         var suffix = 2

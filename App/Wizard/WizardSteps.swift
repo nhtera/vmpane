@@ -232,7 +232,7 @@ struct IntegrationsStep: View {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = true
         guard panel.runModal() == .OK else { return }
-        for url in panel.urls where !wizard.sharedFolders.contains(url) {
+        for url in panel.urls where !wizard.sharedFolders.contains(url) && ShareWarning.confirm(url) {
             wizard.sharedFolders.append(url)
         }
     }

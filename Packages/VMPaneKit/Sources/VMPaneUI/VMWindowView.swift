@@ -63,6 +63,7 @@ public enum VMWindowContent {
     public static func install(in window: NSWindow, display: NSView, model: HelperViewModel) {
         let hosting = NSHostingController(rootView: VMWindowView(display: display, model: model))
         hosting.sceneBridgingOptions = [.toolbars]
+        hosting.sizingOptions = []  // the window keeps its size and aspect; SwiftUI does not resize it
         let size = window.contentLayoutRect.size
         window.contentViewController = hosting
         window.setContentSize(size)

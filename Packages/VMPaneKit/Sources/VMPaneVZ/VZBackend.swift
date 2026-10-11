@@ -163,6 +163,11 @@ public final class VZBackend: VMBackend {
         display?.show()
     }
 
+    /// Takes the window off screen as the user sees it (it keeps rendering for capture and input).
+    @MainActor public func hideDisplay() {
+        display?.hide()
+    }
+
     public func screenshot(maxEdge: Int) async throws -> Screenshot {
         let capture = await MainActor.run { display?.capture(maxEdge: maxEdge) }
         guard let capture else { throw VZBackendError.captureUnavailable }

@@ -97,32 +97,7 @@ extension HelperController {
             return .failure(RPCError(.invalidState, "cannot \(request.rawValue) while \(state.rawValue)"))
         }
         do {
-            switch request {
-            case .start:
-                let headless = try RPCParams.decode(StartParams.self, from: params).get().headless ?? false
-                try await startVM(backend, headless: headless)
-            case .pause:
-                try await backend.pause()
-                transition(.paused)
-            case .resume:
-                try await backend.resume()
-                transition(.resumed)
-            case .suspend:
-                let discarded = pendingRestart
-                try await suspendVM(backend)
-                if discarded {
-                    return .success([
-                        "state": .string(state.rawValue),
-                        "message": "Saved settings change this VM's hardware, so the next start boots fresh instead of resuming.",
-                    ])
-                }
-            default:
-                let mode = try RPCParams.decode(StopParams.self, from: params).get().mode ?? .graceful
-                await writeThumbnail()  // the last picture of the running guest, for the library
-                transition(.stop)
-                try await backend.stop(mode)  // `.stopped` arrives as an event (graceful stops take a while)
-            }
-            return .success(["state": .string(state.rawValue)])
+            return .success(try await perform(request, backend, params))
         } catch let error as RPCError {
             return .failure(error)
         } catch let error as InsufficientSpace {
@@ -132,6 +107,37 @@ extension HelperController {
             if state == .starting || state == .stopping { transition(.failed, reason: String(describing: error)) }
             return .failure(RPCError(.internalError, String(describing: error)))
         }
+    }
+
+    /// Carries out an allowed lifecycle request; the result is the reply.
+    private func perform(_ request: HelperStateMachine.Event, _ backend: VMBackend, _ params: JSONValue?) async throws -> JSONValue {
+        switch request {
+        case .start:
+            let headless = try RPCParams.decode(StartParams.self, from: params).get().headless ?? false
+            try await startVM(backend, headless: headless)
+        case .pause:
+            try await backend.pause()
+            transition(.paused)
+        case .resume:
+            try await backend.resume()
+            transition(.resumed)
+        case .suspend:
+            await writeThumbnail()  // the last picture of the running guest, for the library
+            let discarded = pendingRestart
+            try await suspendVM(backend)
+            if discarded {
+                return [
+                    "state": .string(state.rawValue),
+                    "message": "Saved settings change this VM's hardware, so the next start boots fresh instead of resuming.",
+                ]
+            }
+        default:
+            let mode = try RPCParams.decode(StopParams.self, from: params).get().mode ?? .graceful
+            await writeThumbnail()  // the last picture of the running guest, for the library
+            transition(.stop)
+            try await backend.stop(mode)  // `.stopped` arrives as an event (graceful stops take a while)
+        }
+        return ["state": .string(state.rawValue)]
     }
 
     // MARK: - Start / suspend

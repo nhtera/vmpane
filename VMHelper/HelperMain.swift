@@ -19,6 +19,10 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
     private var showWindow: (@MainActor () -> Void)?
     /// The VM window's model: this helper's own control socket, as any client sees it.
     @MainActor private var windowModel: HelperViewModel?
+    /// Window delegates (a window does not retain its delegate).
+    @MainActor private var windowClosers: [ObjectIdentifier: WindowCloser] = [:]
+    /// The bundle this helper runs, once prepared.
+    private var prepared: PreparedBundle?
 
     static func main() {
         let arguments = HelperArguments(CommandLine.arguments)
@@ -92,6 +96,7 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
         if let request = ProcessInfo.processInfo.environment["VMPANE_TEST_WIN_INSTALL"] {
             prepared = Self.prepareWindowsInstall(prepared, request: URL(fileURLWithPath: request))
         }
+        self.prepared = prepared
         let controller = makeController(prepared, runtimeVersion: runtime, paths: paths)
         Task {
             do {
@@ -186,22 +191,31 @@ extension HelperDelegate {
     }
 
     /// Wraps a display window in the VM window's content (toolbar, overlays), once the model is there.
-    @MainActor fileprivate func dress(_ window: NSWindow, display: NSView) {
-        guard let windowModel else { return }
+    /// Wraps a display window in the VM window's content (toolbar, overlays) once the model is there, keeps its
+    /// frame across starts, and makes closing it follow the VM's close action instead of destroying it.
+    @MainActor fileprivate func dress(_ window: NSWindow, display: NSView, hide: @escaping @MainActor () -> Void) {
+        guard let windowModel, let controller else { return }
         VMWindowContent.install(in: window, display: display, model: windowModel)
+        let vmID = prepared?.config.id.uuidString ?? "vm"
+        window.setFrameAutosaveName("VMPane.vm.\(vmID)")
+        let closer = WindowCloser(model: windowModel, controller: controller, hide: hide)
+        windowClosers[ObjectIdentifier(window)] = closer
+        window.delegate = closer
     }
 
     /// Shows the VM's window when it starts (unless headless) or when `vm.display.show` asks for it.
     fileprivate func observeDisplay(_ controller: HelperController, backend: VZBackend, config: VMConfigV1) {
-        let headless = arguments.headless
         Task { @MainActor in
-            backend.onDisplayCreated = { [weak self] window, view in self?.dress(window, display: view) }
+            backend.onDisplayCreated = { [weak self] window, view in
+                self?.dress(window, display: view) { backend.hideDisplay() }
+            }
         }
         showWindow = { backend.showDisplay() }
         Task { @MainActor in
             var selfTested = false
             for await state in controller.stateChanges where state == .running {
-                if !headless { backend.showDisplay() }
+                // Each start says whether it wants a window (the library's "Start Without Window").
+                if !(await controller.startedHeadless) { backend.showDisplay() }
                 if !selfTested {
                     selfTested = true
                     Task { await Self.captureSelfTest(backend) }
@@ -331,7 +345,7 @@ extension HelperDelegate {
         Task { @MainActor in
             // The model connects right after the control socket is up; the SPICE window exists from launch.
             for _ in 0..<50 where windowModel == nil { try? await Task.sleep(for: .milliseconds(100)) }
-            dress(display.window, display: display.displayView)
+            dress(display.window, display: display.displayView) { display.window.orderOut(nil) }
         }
         let headless = arguments.headless
         let capture = ProcessInfo.processInfo.environment["VMPANE_TEST_SPICE_CAPTURE"].map { URL(fileURLWithPath: $0) }
@@ -346,7 +360,7 @@ extension HelperDelegate {
                         display.configure(display: current.display.fields, clipboard: current.clipboard.fields.mode)
                     }
                     display.connect(afterStart: state == .running)
-                    if !headless, !shown {
+                    if state == .running, !(await controller.startedHeadless), !shown {
                         shown = true
                         display.show()
                     }
@@ -370,20 +384,4 @@ extension HelperDelegate {
             if let png = await display.capturePNG() { try? png.write(to: output, options: .atomic) }
         }
     }
-}
-
-/// A menu item that runs a closure (the Dock menu has no responder chain to target).
-@MainActor
-private final class DockMenuItem: NSMenuItem {
-    private let run: @MainActor () -> Void
-
-    init(title: String, action: @escaping @MainActor () -> Void) {
-        run = action
-        super.init(title: title, action: #selector(fire), keyEquivalent: "")
-        target = self
-    }
-
-    required init(coder: NSCoder) { fatalError("not used") }
-
-    @objc private func fire() { run() }
 }
