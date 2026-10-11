@@ -176,18 +176,12 @@ public enum QEMUArgvBuilder {
     }
 
     /// `tcp:127.0.0.1:8080-:80`, built only from validated parts (Red Team #13).
-    static func hostForward(_ rule: Extensible<PortForwardConfig>) throws -> String {
-        guard isIPv4Literal(rule.hostAddress), (1...65535).contains(rule.hostPort), (1...65535).contains(rule.guestPort) else {
-            throw QEMUConfigError.invalidPortForward(id: rule.id)
+    static func hostForward(_ config: Extensible<PortForwardConfig>) throws -> String {
+        // slirp's host side here is IPv4.
+        guard let rule = try? PortRule(config.fields), rule.hostAddress != .loopbackV6 else {
+            throw QEMUConfigError.invalidPortForward(id: config.id)
         }
-        return "\(rule.proto.rawValue):\(rule.hostAddress):\(rule.hostPort)-:\(rule.guestPort)"
-    }
-
-    static func isIPv4Literal(_ text: String) -> Bool {
-        var address = in_addr()
-        let parts = text.split(separator: ".", omittingEmptySubsequences: false)
-        return parts.count == 4 && parts.allSatisfy { !$0.isEmpty && $0.allSatisfy(\.isASCII) && $0.allSatisfy(\.isNumber) }
-            && inet_pton(AF_INET, text, &address) == 1
+        return "\(rule.proto.rawValue):\(rule.hostAddress.rawValue):\(rule.hostPort)-:\(rule.guestPort)"
     }
 
     static func isValidMAC(_ mac: String) -> Bool {

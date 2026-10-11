@@ -31,6 +31,10 @@ extension HelperController {
             // Port forwards are host settings, but a QEMU guest's live in QEMU's NAT: the backend applies them too.
             let livePaths = accepted.filter { SettingsPatch.kind(of: $0) == .live || $0.hasPrefix("portForwards") }
             let live = running ? await backend?.applyLive(updated, paths: livePaths) ?? [] : []
+            // A running VZ VM's forwards are the helper's own listeners.
+            let forwardsLive =
+                running && backend?.kind == .vz && accepted.contains { $0.hasPrefix("portForwards") }
+                ? await applyForwards((try? PortRule.rules(updated.portForwards)) ?? []) : false
             var outcomes = rejected.mapValues { _ in JSONValue.string(SettingOutcome.rejected.rawValue) }
             var inEffect: [String] = []
             for path in accepted {
@@ -38,6 +42,7 @@ extension HelperController {
                     switch SettingsPatch.kind(of: path) {
                     // A running QEMU VM's forwards are in QEMU: in effect only if it took them.
                     case .host where path.hasPrefix("portForwards") && running && backend?.kind == .qemu: live.contains(path)
+                    case .host where path.hasPrefix("portForwards") && running && backend?.kind == .vz: forwardsLive
                     case .host: true
                     case .live: !running || live.contains(path)
                     default: !running
@@ -66,6 +71,28 @@ extension HelperController {
             case .immutable where path == "install" && SettingsPatch.value(at: path, in: merged) == nil:
                 saved = SettingsPatch.copy(path, from: merged, into: saved)
             case .immutable: rejected[path] = "cannot be changed"
+            case .host where path == "portForwards":
+                // One bad rule refuses the list: forwards are built only from rules that check out.
+                do {
+                    let rules = try CanonicalJSON.decoder().decode(
+                        [Extensible<PortForwardConfig>].self,
+                        from: CanonicalJSON.encoder().encode(SettingsPatch.value(at: path, in: merged) ?? .array([])))
+                    let wanted = try PortRule.rules(rules)
+                    let current =
+                        (try? CanonicalJSON.decoder().decode(
+                            [Extensible<PortForwardConfig>].self,
+                            from: CanonicalJSON.encoder().encode(SettingsPatch.value(at: path, in: old) ?? .array([]))))
+                        .flatMap { try? PortRule.rules($0) } ?? []
+                    if let busy = busyHostPort(wanted, current: current) {
+                        rejected[path] = busy
+                    } else {
+                        saved = SettingsPatch.copy(path, from: merged, into: saved)
+                    }
+                } catch let error as PortRule.Invalid {
+                    rejected[path] = error.description
+                } catch {
+                    rejected[path] = "not a list of port forwards"
+                }
             case .unknown: rejected[path] = "unknown setting"
             case .host, .live, .nextBoot: saved = SettingsPatch.copy(path, from: merged, into: saved)
             }

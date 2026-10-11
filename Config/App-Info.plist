@@ -21,6 +21,7 @@
       <key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>vmpane</string></array></dict>
     </dict>
   </array>
+  <key>NSLocalNetworkUsageDescription</key><string>VMPane connects to your virtual machines on this Mac’s virtual network to forward ports to them.</string>
   <key>CFBundleDocumentTypes</key>
   <array>
     <dict>

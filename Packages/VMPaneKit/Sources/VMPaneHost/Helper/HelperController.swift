@@ -31,6 +31,8 @@ public actor HelperController {
     let agentExecs = AgentExecs()
     var agentLink: UDSAgentLink?
     var agentTasks: [Task<Void, Never>] = []
+    /// A running VZ VM's port forwards (`HelperController+Ports`).
+    var portForwarder: PortForwarder?
     /// Refreshes `thumbnail.png` while the VM runs (`HelperController+Thumbnail`).
     var thumbnailTask: Task<Void, Never>?
     /// The config the running VM was started with, plus settings applied live since (nil before a start).
@@ -127,6 +129,7 @@ public actor HelperController {
             return await agentRequest(request.method, request.params, from: connection)
         case .eventsSubscribe?: return subscribe(request.params, connection)
         case .vmSettingsGet?: return RPCParams.encode(config)
+        case .vmPortsList?: return await portsList()
         case .vmSettingsApply?: return await applySettings(request.params)
         case .vmStart?, .vmPause?, .vmResume?, .vmSuspend?, .vmStop?:
             return await lifecycle(request.method, request.params)

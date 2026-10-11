@@ -9,6 +9,7 @@
   <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
   <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
   <key>LSMinimumSystemVersion</key><string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+  <key>NSLocalNetworkUsageDescription</key><string>VMPane connects to your virtual machines on this Mac’s virtual network to forward ports to them.</string>
   <key>NSMicrophoneUsageDescription</key><string>VMPane passes your microphone to the virtual machine when you enable audio input.</string>
 </dict>
 </plist>

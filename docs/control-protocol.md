@@ -56,7 +56,7 @@ denied.
 | `vm.install.cancel` | — (ends a Windows install; a running VM is ejected from its install discs and stopped) | `{state}` | uiOnly |
 | `vm.settings.get` | — | `config` | observe |
 | `vm.settings.apply` | `{patch}` (JSON merge patch over the config) | `{fields: {path: applied\|nextBoot\|rejected}, reasons?}` | admin; sensitive patch: uiOnly |
-| `vm.ports.list` | — | rules with resolved guest IP and bind status | observe |
+| `vm.ports.list` | — | `{rules: [{…rule, status: listening\|blocked\|failed\|inactive, reason?}]}` (`blocked`: macOS Local Network privacy) | observe |
 | `vm.clipboard.read` | `{types}` | `{items}` | control + clipboard.allowWithAgents |
 | `vm.clipboard.write` | `{items}` | `{}` | control + clipboard.allowWithAgents |
 | `agent.status` | — | `{connected, version, os}` | observe |

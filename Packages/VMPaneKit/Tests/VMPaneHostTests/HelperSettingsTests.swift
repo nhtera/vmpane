@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Testing
 import VMPaneControl
@@ -67,4 +68,67 @@ import VMPaneCore
     let saved = try ConfigStore.load(helper.bundle)
     #expect(saved.install == nil && saved.removable.isEmpty)
     await helper.tearDown()
+}
+
+@Test func portForwardListsAreCheckedBeforeTheyAreSaved() async throws {
+    let helper = try await Harness.make()
+    func rule(_ id: String, _ address: String, _ port: Int) -> JSONValue {
+        [
+            "id": .string(id), "proto": "tcp", "hostAddress": .string(address), "hostPort": .int(Int64(port)), "guestPort": 22,
+            "origin": "user",
+        ]
+    }
+    let bad = try await helper.client.call(
+        "vm.settings.apply", params: ["patch": ["portForwards": [rule("ssh", "127.0.0.1", 2222), rule("x", "10.0.0.1,y", 2223)]]])
+    #expect(bad["fields"] == ["portForwards": "rejected"])
+    #expect(bad["reasons"]?["portForwards"]?.stringValue?.contains("port forward x") == true)
+    let clash = try await helper.client.call(
+        "vm.settings.apply", params: ["patch": ["portForwards": [rule("a", "127.0.0.1", 2222), rule("b", "0.0.0.0", 2222)]]])
+    #expect(clash["fields"] == ["portForwards": "rejected"])
+    #expect(try ConfigStore.load(helper.bundle).portForwards.isEmpty)
+    let good = try await helper.client.call("vm.settings.apply", params: ["patch": ["portForwards": [rule("ssh", "127.0.0.1", 2222)]]])
+    #expect(good["fields"] == ["portForwards": "applied"])
+    #expect(try ConfigStore.load(helper.bundle).portForwards.map(\.id) == ["ssh"])
+    await helper.tearDown()
+}
+
+/// A VZ VM's forwards are the helper's own listeners: up while it runs, changed live, gone when it stops.
+@Test func vzForwardsListenWhileTheVMRuns() async throws {
+    let helper = try await Harness.make()
+    let port = Int64(UInt16.random(in: 40000...60000))
+    let rule: JSONValue = [
+        "id": "web", "proto": "tcp", "hostAddress": "127.0.0.1", "hostPort": .int(port), "guestPort": 80, "origin": "user",
+    ]
+    _ = try await helper.client.call("vm.settings.apply", params: ["patch": ["portForwards": [rule]]])
+    #expect(firstStatus(try await helper.client.call("vm.ports.list")) == "inactive")
+    _ = try await helper.client.call("vm.start")
+    #expect(try await helper.waitForState("running"))
+    var listed = try await helper.client.call("vm.ports.list")
+    for _ in 0..<50 where firstStatus(listed) != "listening" {
+        try await Task.sleep(for: .milliseconds(20))
+        listed = try await helper.client.call("vm.ports.list")
+    }
+    #expect(firstStatus(listed) == "listening")
+    // A port another program listens on (all interfaces, like a dev server) is refused before it is saved.
+    let other = try Sockets.bound("0.0.0.0", UInt16(port + 2), stream: true)
+    defer { close(other) }
+    let clash: JSONValue = [
+        "id": "web2", "proto": "tcp", "hostAddress": "127.0.0.1", "hostPort": .int(port + 2), "guestPort": 81, "origin": "user",
+    ]
+    let refused = try await helper.client.call("vm.settings.apply", params: ["patch": ["portForwards": [rule, clash]]])
+    #expect(refused["fields"] == ["portForwards": "rejected"])
+    let moved: JSONValue = [
+        "id": "web", "proto": "tcp", "hostAddress": "127.0.0.1", "hostPort": .int(port + 1), "guestPort": 80, "origin": "user",
+    ]
+    let changed = try await helper.client.call("vm.settings.apply", params: ["patch": ["portForwards": [moved]]])
+    #expect(changed["fields"] == ["portForwards": "applied"])
+    _ = try await helper.client.call("vm.stop", params: ["mode": "force"])
+    #expect(try await helper.waitForState("stopped"))
+    #expect(firstStatus(try await helper.client.call("vm.ports.list")) == "inactive")
+    await helper.tearDown()
+}
+
+private func firstStatus(_ listed: JSONValue) -> JSONValue? {
+    guard case .array(let rules)? = listed["rules"] else { return nil }
+    return rules.first?["status"]
 }

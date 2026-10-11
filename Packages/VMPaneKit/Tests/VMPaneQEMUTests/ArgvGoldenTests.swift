@@ -93,7 +93,7 @@ private func expectGolden(_ name: String, _ args: [String], layout: QEMULayout, 
     config.disks.append(Extensible(DiskConfig(id: "data", file: "current/data.img", format: .raw, sizeGiB: 32, bus: .virtio)))
     config.portForwards = [
         Extensible(PortForwardConfig(id: "rdp", proto: .tcp, hostAddress: "127.0.0.1", hostPort: 13389, guestPort: 3389, origin: .user)),
-        Extensible(PortForwardConfig(id: "dns", proto: .udp, hostAddress: "0.0.0.0", hostPort: 5353, guestPort: 53, origin: .agent)),
+        Extensible(PortForwardConfig(id: "dns", proto: .udp, hostAddress: "0.0.0.0", hostPort: 5353, guestPort: 53, origin: .user)),
     ]
     try withBundle(config) { layout in
         try expectGolden("windows-tools", try QEMUArgvBuilder.arguments(config, layout: layout, fileExists: allExist), layout: layout)
