@@ -111,3 +111,30 @@ private func eventually(_ condition: @MainActor () -> Bool) async -> Bool {
     #expect(!model.hasChanges, "the applied draft is the new baseline")
     #expect(model.original.cpu.count == 4)
 }
+
+@Test @MainActor func snapshotsListNewestFirstAndActionsReachTheHelper() async throws {
+    let channel = FakeChannel()
+    let older = UUID()
+    let newer = UUID()
+    func meta(_ id: UUID, _ name: String, _ date: String, _ kind: String) -> JSONValue {
+        [
+            "schemaVersion": 1, "id": .string(id.uuidString), "name": .string(name), "createdAt": .string(date), "kind": .string(kind),
+            "generationId": .string(UUID().uuidString), "deviceSetHash": "h", "hostBuild": "24G419", "backendVersion": "0.1.0",
+            "origin": "user", "sizeBytes": 4096,
+        ]
+    }
+    channel.answer(
+        "vm.snapshot.list",
+        .success([meta(older, "Before update", "2026-10-01T10:00:00Z", "disk"), meta(newer, "Clean", "2026-10-11T10:00:00Z", "live")]))
+    let model = SnapshotsModel(channel: channel)
+    await model.reload()
+    #expect(model.snapshots.map(\.name) == ["Clean", "Before update"])
+    #expect(SnapshotsModel.restoreWarning(model.snapshots[0]).contains("running state"))
+    await model.take(name: "x", running: false)
+    #expect(channel.params(of: "vm.snapshot.create") == ["name": "x", "kind": "disk"])
+    await model.restore(older)
+    #expect(channel.params(of: "vm.snapshot.restore") == ["id": .string(older.uuidString)])
+    channel.answer("vm.snapshot.delete", .failure(RPCError(.invalidParams, "no snapshot")))
+    await model.delete(newer)
+    #expect(model.lastError == "no snapshot")
+}

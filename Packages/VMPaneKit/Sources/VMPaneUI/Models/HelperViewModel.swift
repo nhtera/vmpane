@@ -144,6 +144,8 @@ public final class HelperViewModel {
         }
     }
 
+    public func snapshotsModel() -> SnapshotsModel { SnapshotsModel(channel: channel) }
+
     /// The settings sheet's model, with the helper's current config.
     public func loadSettings() async -> SettingsModel? {
         do {

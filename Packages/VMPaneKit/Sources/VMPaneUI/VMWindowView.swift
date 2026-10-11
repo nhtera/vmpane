@@ -8,6 +8,7 @@ public struct VMWindowView: View {
     let display: NSView
     @Bindable var model: HelperViewModel
     @State private var settings: SettingsModel?
+    @State private var snapshots: SnapshotsModel?
 
     public init(display: NSView, model: HelperViewModel) {
         self.display = display
@@ -31,6 +32,10 @@ public struct VMWindowView: View {
         .toolbar {
             VMToolbar(model: model)
             ToolbarItem(placement: .primaryAction) {
+                Button("Snapshots", systemImage: "clock.arrow.circlepath") { snapshots = model.snapshotsModel() }
+                    .help("Take, restore and delete snapshots")
+            }
+            ToolbarItem(placement: .primaryAction) {
                 Button("Settings", systemImage: "slider.horizontal.3") {
                     Task { settings = await model.loadSettings() }
                 }
@@ -40,6 +45,9 @@ public struct VMWindowView: View {
         }
         .sheet(isPresented: Binding(get: { settings != nil }, set: { if !$0 { settings = nil } })) {
             if let settings { SettingsSheet(model: settings) }
+        }
+        .sheet(isPresented: Binding(get: { snapshots != nil }, set: { if !$0 { snapshots = nil } })) {
+            if let snapshots { SnapshotsSheet(model: snapshots, running: model.state == .running || model.state == .paused) }
         }
         .alert("The VM could not do that", isPresented: errorShown) {
             Button("OK", role: .cancel) {}
