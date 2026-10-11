@@ -92,3 +92,22 @@ private func eventually(_ condition: @MainActor () -> Bool) async -> Bool {
     #expect(try Data(contentsOf: saved) == png)
     #expect(saved.lastPathComponent.hasPrefix("VM Screenshot "))
 }
+
+@Test @MainActor func settingsSendOnePatchAndReportEachField() async throws {
+    let channel = FakeChannel()
+    var config = VMConfigV1(VMConfigFields.new(name: "VM", os: .linux, macAddress: MachineIdentity.randomMACAddress()))
+    config.cpu.count = 2
+    let model = SettingsModel(config: config, channel: channel)
+    #expect(!model.hasChanges)
+    model.draft.cpu.count = 4
+    model.draft.name = "Renamed"
+    #expect(model.changedPaths == ["cpu.count", "name"])
+    #expect(SettingsModel.kind(of: "name") == .host)
+    channel.answer("vm.settings.apply", .success(["fields": ["cpu.count": "nextBoot", "name": "applied"]]))
+    await model.apply()
+    #expect(channel.params(of: "vm.settings.apply") == ["patch": ["cpu": ["count": 4], "name": "Renamed"]])
+    #expect(model.outcomes == ["cpu.count": .nextBoot, "name": .applied])
+    #expect(model.needsRestart)
+    #expect(!model.hasChanges, "the applied draft is the new baseline")
+    #expect(model.original.cpu.count == 4)
+}

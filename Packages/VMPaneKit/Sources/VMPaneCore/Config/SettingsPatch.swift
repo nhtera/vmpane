@@ -41,6 +41,23 @@ public enum SettingsPatch {
         return .object(result)
     }
 
+    /// The RFC 7386 merge patch that turns `old` into `new` (nil when they are equal): changed keys with their
+    /// new value, removed keys as `null`, nested objects as nested patches; arrays and scalars whole.
+    public static func makePatch(from old: JSONValue, to new: JSONValue) -> JSONValue? {
+        guard old != new else { return nil }
+        guard case .object(let before) = old, case .object(let after) = new else { return new }
+        var patch: [String: JSONValue] = [:]
+        for key in Set(before.keys).union(after.keys) {
+            switch (before[key], after[key]) {
+            case (_?, nil): patch[key] = .null
+            case (nil, let value?): patch[key] = value
+            case (let was?, let now?): if let nested = makePatch(from: was, to: now) { patch[key] = nested }
+            case (nil, nil): break
+            }
+        }
+        return .object(patch)
+    }
+
     /// The setting paths that differ between `old` and `new`, sorted.
     public static func changedPaths(_ old: JSONValue, _ new: JSONValue) -> [String] {
         var paths: [String] = []

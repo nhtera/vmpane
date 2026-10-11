@@ -7,6 +7,7 @@ import VMPaneCore
 public struct VMWindowView: View {
     let display: NSView
     @Bindable var model: HelperViewModel
+    @State private var settings: SettingsModel?
 
     public init(display: NSView, model: HelperViewModel) {
         self.display = display
@@ -27,7 +28,19 @@ public struct VMWindowView: View {
                 StoppedOverlay(model: model)
             }
         }
-        .toolbar { VMToolbar(model: model) }
+        .toolbar {
+            VMToolbar(model: model)
+            ToolbarItem(placement: .primaryAction) {
+                Button("Settings", systemImage: "slider.horizontal.3") {
+                    Task { settings = await model.loadSettings() }
+                }
+                .help("Change this VM's settings")
+                .keyboardShortcut(",", modifiers: .command)
+            }
+        }
+        .sheet(isPresented: Binding(get: { settings != nil }, set: { if !$0 { settings = nil } })) {
+            if let settings { SettingsSheet(model: settings) }
+        }
         .alert("The VM could not do that", isPresented: errorShown) {
             Button("OK", role: .cancel) {}
         } message: {

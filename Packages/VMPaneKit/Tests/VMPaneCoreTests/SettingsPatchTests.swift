@@ -52,3 +52,12 @@ import Testing
     result = SettingsPatch.copy("ui.icon", from: source, into: result)  // absent in source: removed
     #expect(result == ["cpu": ["count": 4], "network": [["mode": "none"]], "ui": ["closeAction": "stop"]])
 }
+
+@Test func makePatchIsTheInverseOfMerge() {
+    let old: JSONValue = ["name": "a", "cpu": ["count": 2], "shares": [["id": "s1"]], "gone": true, "same": ["x": 1]]
+    let new: JSONValue = ["name": "b", "cpu": ["count": 4], "shares": [], "added": ["k": "v"], "same": ["x": 1]]
+    let patch = SettingsPatch.makePatch(from: old, to: new)
+    #expect(patch == ["name": "b", "cpu": ["count": 4], "shares": [], "gone": nil, "added": ["k": "v"]])
+    #expect(SettingsPatch.merge(old, patch ?? [:]) == new)
+    #expect(SettingsPatch.makePatch(from: old, to: old) == nil)
+}

@@ -144,6 +144,16 @@ public final class HelperViewModel {
         }
     }
 
+    /// The settings sheet's model, with the helper's current config.
+    public func loadSettings() async -> SettingsModel? {
+        do {
+            return try await SettingsModel.load(channel)
+        } catch {
+            lastError = "Cannot read the settings: \(error)"
+            return nil
+        }
+    }
+
     static func snapshotName(now: Date = Date()) -> String { "Snapshot \(stamp(now))" }
 
     static func stamp(_ now: Date = Date()) -> String {
