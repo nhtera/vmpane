@@ -46,18 +46,20 @@ public struct QEMUProcesses: Sendable {
     }
 
     /// Starts swtpm on the VM's TPM state and waits until its control socket exists. swtpm cannot escape
-    /// commas in option values, so it runs in the aux directory and gets the state directory by relative path.
+    /// commas in option values and its socket path must fit `sun_path`, so it runs in the run directory and gets
+    /// both by relative path: the state directory through the `tpmstate` link.
     public func startSwtpm() async throws -> (ProcessRecord, ChildExitWatcher) {
         try FileManager.default.createDirectory(
             at: layout.tpmState, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         try? FileManager.default.removeItem(at: layout.tpmSocket)
+        try? FileManager.default.removeItem(at: layout.tpmStateLink)
+        try FileManager.default.createSymbolicLink(at: layout.tpmStateLink, withDestinationURL: layout.tpmState)
         let arguments = [
-            "socket", "--tpm2", "--tpmstate", "dir=\(layout.tpmState.lastPathComponent),mode=0600",
-            "--ctrl", "type=unixio,path=\(layout.tpmSocket.path),mode=0600", "--terminate",
+            "socket", "--tpm2", "--tpmstate", "dir=\(layout.tpmStateLink.lastPathComponent),mode=0600",
+            "--ctrl", "type=unixio,path=\(layout.socketArgument(layout.tpmSocket)),mode=0600", "--terminate",
         ]
         let (record, watcher) = try launch(
-            .swtpm, layout.installation.swtpm, arguments, log: layout.swtpmLog,
-            workingDirectory: layout.tpmState.deletingLastPathComponent())
+            .swtpm, layout.installation.swtpm, arguments, log: layout.swtpmLog, workingDirectory: layout.runDirectory)
         try await waitFor("the TPM socket", watcher: watcher, program: "swtpm", log: layout.swtpmLog) {
             FileManager.default.fileExists(atPath: layout.tpmSocket.path)
         }

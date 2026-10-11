@@ -173,14 +173,19 @@ private func expectGolden(_ name: String, _ args: [String], layout: QEMULayout, 
     }
 }
 
-@Test func socketPathsMustFitSunPath() throws {
+@Test func socketsTooLongForSunPathAreGivenByName() throws {
     let config = try windowsConfig()
     try withBundle(config) { layout in
         var long = layout
-        long.runDirectory = URL(fileURLWithPath: "/" + String(repeating: "r", count: 92), isDirectory: true)
-        #expect(throws: QEMUConfigError.socketPathTooLong(long.spiceSocket.path)) {
-            try QEMUArgvBuilder.arguments(config, layout: long, fileExists: allExist)
-        }
+        long.runDirectory = URL(fileURLWithPath: "/" + String(repeating: "r", count: 96), isDirectory: true)
+        let args = try QEMUArgvBuilder.arguments(config, layout: long, fileExists: allExist)
+        // QEMU runs in the run directory, so the names reach the same sockets.
+        #expect(args.contains("unix:qmp.sock,server=on,wait=off"))
+        #expect(args.contains { $0.contains("addr=spice.sock,") })
+        #expect(args.contains("socket,id=agent,path=agent.sock,server=on,wait=off"))
+        #expect(args.contains("socket,id=chrtpm,path=tpm.sock"))
+        // Paths that fit stay absolute (the golden files).
+        #expect(layout.socketArgument(layout.qmpSocket) == layout.qmpSocket.path)
     }
 }
 

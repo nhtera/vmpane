@@ -58,6 +58,15 @@ public struct QEMULayout: Sendable, Equatable {
     public var spiceSocket: URL { runDirectory.appendingPathComponent("spice.sock") }
     /// The VMPane guest agent's virtio-serial port (Phase 07).
     public var agentSocket: URL { runDirectory.appendingPathComponent("agent.sock") }
+    /// swtpm's state directory as swtpm is given it, from `runDirectory` (it cannot escape commas in a path).
+    public var tpmStateLink: URL { runDirectory.appendingPathComponent("tpmstate") }
+
+    /// A socket of `runDirectory` as QEMU and swtpm are given it: its full path, or its name when the full path
+    /// does not fit `sun_path` (both run with `runDirectory` as their working directory; the helper's own
+    /// connections fall back the same way, see `UnixSocketAddress`).
+    public func socketArgument(_ socket: URL) -> String {
+        socket.path.utf8.count <= QEMUArgvBuilder.maxSocketPathLength ? socket.path : socket.lastPathComponent
+    }
 
     public var qemuLog: URL { logs.appendingPathComponent("qemu.log") }
     public var swtpmLog: URL { logs.appendingPathComponent("swtpm.log") }
@@ -79,6 +88,6 @@ public struct QEMULayout: Sendable, Equatable {
         return layout
     }
 
-    /// Unix sockets QEMU or swtpm bind; each must fit `sun_path`.
+    /// Unix sockets QEMU or swtpm bind (see `socketArgument`).
     public var sockets: [URL] { [qmpSocket, tpmSocket, spiceSocket, agentSocket] }
 }

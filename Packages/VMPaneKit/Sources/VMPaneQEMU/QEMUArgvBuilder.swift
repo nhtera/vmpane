@@ -10,8 +10,6 @@ public enum QEMUConfigError: Error, Equatable, Sendable, CustomStringConvertible
     case bridgedNetworkingUnavailable
     /// A port forward that is not a literal IPv4 host address, ports 1…65535.
     case invalidPortForward(id: String)
-    /// A Unix socket path longer than `sun_path` allows.
-    case socketPathTooLong(String)
     case missingFile(String)
     /// The QEMU sandbox reads only the VM's bundle and the QEMU runtime: media elsewhere must be copied in first.
     case mediaOutsideBundle(String)
@@ -25,7 +23,6 @@ public enum QEMUConfigError: Error, Equatable, Sendable, CustomStringConvertible
         case .invalidMACAddress(let mac): "invalid MAC address \(mac)"
         case .bridgedNetworkingUnavailable: "bridged networking is not available for Windows VMs"
         case .invalidPortForward(let id): "port forward \(id) needs a literal IPv4 host address and ports 1–65535"
-        case .socketPathTooLong(let path): "socket path too long: \(path)"
         case .missingFile(let path): "missing file \(path)"
         case .mediaOutsideBundle(let path): "\(path) is outside the VM: Windows VMs use media inside their bundle"
         case .secureBootRequired: "Windows VMs run with Secure Boot on"
@@ -48,9 +45,6 @@ public enum QEMUArgvBuilder {
         guard let profile = QEMUDeviceProfile.for(config.os) else { throw QEMUConfigError.unsupportedGuest(config.os) }
         guard let qemu = config.qemu else { throw QEMUConfigError.missingQEMUSettings }
         guard qemu.secureBoot else { throw QEMUConfigError.secureBootRequired }
-        for socket in layout.sockets where socket.path.utf8.count > maxSocketPathLength {
-            throw QEMUConfigError.socketPathTooLong(socket.path)
-        }
 
         var args: [String] = [
             "-nodefaults", "-no-user-config",
@@ -71,7 +65,7 @@ public enum QEMUArgvBuilder {
 
         if qemu.tpm {
             args += [
-                "-chardev", "socket,id=chrtpm,path=\(path(layout.tpmSocket))",
+                "-chardev", "socket,id=chrtpm,path=\(escape(layout.socketArgument(layout.tpmSocket)))",
                 "-tpmdev", "emulator,id=tpm0,chardev=chrtpm",
                 "-device", profile.tpmDevice,
             ]
@@ -85,13 +79,14 @@ public enum QEMUArgvBuilder {
 
         // SPICE: display, input, clipboard (vdagent) over a Unix socket in the 0700 run directory, so the
         // socket's permissions are the access control. No compression or video streams on a local socket.
+        let spice = escape(layout.socketArgument(layout.spiceSocket))
         args += [
             "-spice",
-            "unix=on,addr=\(path(layout.spiceSocket)),disable-ticketing=on,image-compression=off,streaming-video=off",
+            "unix=on,addr=\(spice),disable-ticketing=on,image-compression=off,streaming-video=off",
             "-device", "virtio-serial-pci,id=vser",
             "-chardev", "spicevmc,id=vdagent,name=vdagent",
             "-device", "virtserialport,bus=vser.0,chardev=vdagent,name=com.redhat.spice.0",
-            "-chardev", "socket,id=agent,path=\(path(layout.agentSocket)),server=on,wait=off",
+            "-chardev", "socket,id=agent,path=\(escape(layout.socketArgument(layout.agentSocket))),server=on,wait=off",
             "-device", "virtserialport,bus=vser.0,chardev=agent,name=app.vmpane.agent.0",
         ]
 
@@ -103,7 +98,7 @@ public enum QEMUArgvBuilder {
         if config.memory.balloon { args += ["-device", "virtio-balloon-pci"] }
         args += ["-device", "pvpanic-pci"]
 
-        args += ["-qmp", "unix:\(path(layout.qmpSocket)),server=on,wait=off"]
+        args += ["-qmp", "unix:\(escape(layout.socketArgument(layout.qmpSocket))),server=on,wait=off"]
         // Restoring: paused (-S) until the state is loaded and the backend continues it.
         if incoming { args += ["-S", "-incoming", "defer"] }
         return args

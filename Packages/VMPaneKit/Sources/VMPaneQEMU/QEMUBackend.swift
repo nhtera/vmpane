@@ -21,7 +21,8 @@ public final class QEMUBackend: VMBackend {
     public let events: AsyncStream<BackendEvent>
 
     let session: QEMUSession
-    /// QEMU's SPICE socket (`run/<sid>/spice.sock`), for the helper's display.
+    /// QEMU's SPICE socket (`run/<sid>/spice.sock`) for the helper's display, or a short link to it in this
+    /// user's temporary directory when its path does not fit `sun_path` (the SPICE client connects by path).
     public let displaySocket: URL
 
     /// When the guest is paused for a full disk: below `pauseBelow` free bytes on the bundle's volume, and it
@@ -51,9 +52,19 @@ public final class QEMUBackend: VMBackend {
     ) {
         let (stream, continuation) = AsyncStream.makeStream(of: BackendEvent.self)
         events = stream
-        displaySocket = processes.layout.spiceSocket
+        displaySocket = Self.connectablePath(processes.layout.spiceSocket)
         session = QEMUSession(
             config: config, processes: processes, space: space, resolveInstallation: resolveInstallation, events: continuation)
+    }
+
+    /// `socket`, or a link to it in the (per-user, private) temporary directory when its path is too long.
+    static func connectablePath(_ socket: URL, temporary: URL = FileManager.default.temporaryDirectory) -> URL {
+        guard socket.path.utf8.count > QEMUArgvBuilder.maxSocketPathLength else { return socket }
+        let name = "vmpane-\(socket.deletingLastPathComponent().lastPathComponent)-\(socket.lastPathComponent)"
+        let link = temporary.appendingPathComponent(name)
+        try? FileManager.default.removeItem(at: link)
+        guard (try? FileManager.default.createSymbolicLink(at: link, withDestinationURL: socket)) != nil else { return socket }
+        return link
     }
 
     public func start(_ options: StartOptions) async throws { try await session.start(options) }
