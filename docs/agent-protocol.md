@@ -90,7 +90,8 @@ Host → guest requests unless noted. A method whose cap the agent did not adver
 | `file.pull` | file | `{path, maxBytes}` → `{size, stream}` (guest stream of exactly `size` bytes) |
 | `file.stat` / `file.mkdirTemp` | file | `{path}` → `{kind, size, mode, mtimeUnixNanos}` / `{prefix}` → `{path}` |
 | `session.reveal` | reveal | `{path}` → `{}`: selects it in Finder / Explorer / the file manager (user-session helper) |
-| `clipboard.get/set`, `display.set` | clipboard / display | not implemented yet (macOS guest clipboard, display path C) |
+| `clipboard.get` / `clipboard.set` | clipboard | `{types}` → `{items}` / `{items}` → `{}`: text and PNG on streams (≤ 32 MiB), file lists inline; macOS guests (user-session helper) |
+| `display.set` | display | not implemented yet (Windows display path C) |
 | `clipboard.changed` (guest → host) | — | `{types, seq}`, at most 10/s |
 | `time.set` | time | `{unixNanos}` → `{}` |
 | `power.shutdown` | power | `{reboot, force}` → `{}` (answered first) |
@@ -134,7 +135,10 @@ this same protocol, with the daemon in the host's role.
 
 The daemon relays to the current helper, mapping exec and stream ids both ways:
 - `exec.start {as: "user"}` and its `exec.signal`, stdin and output;
-- `session.reveal`.
+- `session.reveal`;
+- `clipboard.get` / `clipboard.set` with their streams (macOS);
+- the helper's `clipboard.changed`, which goes on to the host. The helper polls the pasteboard every 250 ms and
+  does not report its own `clipboard.set`.
 
 Without a helper these answer `noSession`. The `session` flag in `agent.info` says whether a helper is
 connected now.

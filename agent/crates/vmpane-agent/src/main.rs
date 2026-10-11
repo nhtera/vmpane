@@ -11,6 +11,7 @@
 #![deny(unsafe_code)]
 
 mod agent;
+mod clipboard;
 mod connection;
 mod dispatch;
 mod exec;

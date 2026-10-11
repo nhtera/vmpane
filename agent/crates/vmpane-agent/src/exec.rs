@@ -387,7 +387,7 @@ async fn start_in_session(conn: &Arc<Conn>, params: ExecStartParams) -> Result<R
 }
 
 /// Copies a helper stream onto a host stream, ending it the way the helper ended its own.
-async fn relay_output(helper: Option<mpsc::Receiver<Incoming>>, out: OutStream) {
+pub(crate) async fn relay_output(helper: Option<mpsc::Receiver<Incoming>>, out: OutStream) {
     let Some(mut helper) = helper else {
         let _ = out.finish(StreamStatus::Error).await;
         return;

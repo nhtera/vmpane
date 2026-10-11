@@ -620,3 +620,91 @@ async fn user_execs_run_in_the_session_helper() {
     assert_eq!(exited["signal"], "disconnected");
     wait_for_session(&mut host, false).await;
 }
+
+/// macOS guests: the clipboard through the daemon and the session helper, on a private named pasteboard.
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn clipboard_round_trips_through_the_session_helper() {
+    let mut host = Host::start_with_sessions().await;
+    let dir = host.dir.clone();
+    let board = format!("app.vmpane.test.{}", std::process::id());
+    let mut cmd = tokio::process::Command::new(env!("CARGO_BIN_EXE_vmpane-agent"));
+    cmd.args([
+        "session",
+        "--socket",
+        &dir.join("session.sock").display().to_string(),
+        "--once",
+    ])
+    .env("VMPANE_TEST_PASTEBOARD", &board)
+    .stderr(Stdio::null())
+    .kill_on_drop(true);
+    let _helper = cmd.spawn().unwrap();
+    wait_for_session(&mut host, true).await;
+    let caps = host.call("agent.info", json!({})).await.unwrap()["caps"].clone();
+    assert!(caps.as_array().unwrap().contains(&json!("clipboard")));
+
+    // Set text and a file list; the text travels on a host stream.
+    let text = "clipboard é😀 through two hops";
+    let id = host
+        .request(
+            "clipboard.set",
+            json!({"items": [
+                {"type": "text", "stream": 1, "size": text.len()},
+                {"type": "files", "files": ["/tmp/a.txt", "/tmp/b c.txt"]},
+            ]}),
+        )
+        .await;
+    host.send_frame(Frame::Chunk {
+        stream: 1,
+        data: Bytes::copy_from_slice(text.as_bytes()),
+    })
+    .await;
+    host.send_frame(Frame::End {
+        stream: 1,
+        status: StreamStatus::Ok,
+    })
+    .await;
+    host.response(id).await.unwrap();
+
+    let got = host
+        .call("clipboard.get", json!({"types": ["text", "files", "png"]}))
+        .await
+        .unwrap();
+    let items = got["items"].as_array().unwrap();
+    let text_item = items.iter().find(|i| i["type"] == "text").unwrap();
+    let stream = text_item["stream"].as_u64().unwrap() as u32;
+    assert_eq!(stream % 2, 0);
+    assert_eq!(host.until_ended(stream).await, StreamStatus::Ok);
+    assert_eq!(host.streams.remove(&stream).unwrap(), text.as_bytes());
+    let files = items.iter().find(|i| i["type"] == "files").unwrap();
+    assert_eq!(files["files"], json!(["/tmp/a.txt", "/tmp/b c.txt"]));
+    assert!(items.iter().all(|i| i["type"] != "png"));
+
+    // A change by someone else is reported; our own set was not.
+    assert!(
+        !host
+            .notifications
+            .iter()
+            .any(|(m, _)| m == "clipboard.changed")
+    );
+    let script = format!(
+        "import AppKit; let pb = NSPasteboard(name: NSPasteboard.Name(\"{board}\")); pb.clearContents(); pb.setString(\"from elsewhere\", forType: .string)"
+    );
+    let status = std::process::Command::new("/usr/bin/swift")
+        .args(["-e", &script])
+        .status()
+        .unwrap();
+    assert!(status.success());
+    for _ in 0..40 {
+        if host
+            .notifications
+            .iter()
+            .any(|(m, p)| m == "clipboard.changed" && p["types"] == json!(["text"]))
+        {
+            return;
+        }
+        let _ =
+            tokio::time::timeout(Duration::from_millis(250), host.next_frame_into_state()).await;
+    }
+    panic!("no clipboard.changed after an outside change");
+}

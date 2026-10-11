@@ -1,11 +1,14 @@
 //! Routes host requests to their handlers, after the cap check.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use tokio::sync::mpsc;
 use vmpane_agent_proto::error::ErrorCode;
 use vmpane_agent_proto::jsonrpc::{ErrorObject, Request};
-use vmpane_agent_proto::methods::{Empty, FilePushParams, PathParams, cap, method};
+use vmpane_agent_proto::methods::{
+    ClipboardContents, Empty, FilePushParams, PathParams, cap, method,
+};
 
 use crate::agent::Role;
 use crate::connection::{Conn, Incoming, Reply};
@@ -30,26 +33,50 @@ fn required_cap(name: &str) -> Option<&'static str> {
     })
 }
 
-/// Registers the host streams a request names, synchronously, before the reader reads their chunks.
-pub fn accept_streams(
-    conn: &Conn,
-    request: &Request,
-) -> Result<Option<mpsc::Receiver<Incoming>>, ErrorObject> {
-    if request.method != method::FILE_PUSH || !conn.agent.has_cap(cap::FILE) {
-        return Ok(None);
+/// Streams the host named in a request, by id, registered before the reader moves on to their chunks.
+pub type Inbound = HashMap<u32, mpsc::Receiver<Incoming>>;
+
+/// Registers the host streams a request names (`file.push`, `clipboard.set`), synchronously.
+pub fn accept_streams(conn: &Conn, request: &Request) -> Result<Inbound, ErrorObject> {
+    let ids: Vec<u32> = match request.method.as_str() {
+        method::FILE_PUSH if conn.agent.role == Role::Daemon && conn.agent.has_cap(cap::FILE) => {
+            vec![request.decode_params::<FilePushParams>()?.stream]
+        }
+        method::CLIPBOARD_SET if crate::clipboard::SUPPORTED => {
+            let contents: ClipboardContents = request.decode_params()?;
+            contents
+                .items
+                .iter()
+                .filter_map(|item| item.stream)
+                .collect()
+        }
+        _ => return Ok(Inbound::new()),
+    };
+    let mut inbound = Inbound::new();
+    for id in ids {
+        match conn.accept_host_stream(id) {
+            Ok(rx) => {
+                inbound.insert(id, rx);
+            }
+            Err(err) => {
+                for id in inbound.keys() {
+                    conn.close_inbound(*id);
+                }
+                return Err(err);
+            }
+        }
     }
-    let params: FilePushParams = request.decode_params()?;
-    conn.accept_host_stream(params.stream).map(Some)
+    Ok(inbound)
 }
 
 pub async fn handle(
     conn: &Arc<Conn>,
     request: &Request,
-    inbound: Option<mpsc::Receiver<Incoming>>,
+    mut inbound: Inbound,
 ) -> Result<Reply, ErrorObject> {
     let name = request.method.as_str();
     if conn.agent.role == Role::Session {
-        return handle_in_session(conn, request).await;
+        return handle_in_session(conn, request, inbound).await;
     }
     if let Some(needed) = required_cap(name)
         && !conn.agent.has_cap(needed)
@@ -65,10 +92,11 @@ pub async fn handle(
         method::EXEC_START => exec::start(conn, request.decode_params()?).await,
         method::EXEC_SIGNAL => exec::signal(conn, request.decode_params()?),
         method::FILE_PUSH => {
-            let inbound = inbound.ok_or_else(|| {
+            let params: FilePushParams = request.decode_params()?;
+            let inbound = inbound.remove(&params.stream).ok_or_else(|| {
                 ErrorObject::new(ErrorCode::InternalError, "stream not registered")
             })?;
-            files::push(conn, request.decode_params()?, inbound).await
+            files::push(conn, params, inbound).await
         }
         method::FILE_PULL => files::pull(conn, request.decode_params()?).await,
         method::FILE_STAT => files::stat(request.decode_params()?).await,
@@ -92,9 +120,13 @@ pub async fn handle(
                 then: None,
             })
         }
-        method::CLIPBOARD_GET | method::CLIPBOARD_SET | method::DISPLAY_SET => Err(
-            ErrorObject::new(ErrorCode::NoSession, "no user session helper is connected"),
-        ),
+        method::CLIPBOARD_GET | method::CLIPBOARD_SET => {
+            crate::clipboard::relay(conn, request, inbound).await
+        }
+        method::DISPLAY_SET => Err(ErrorObject::new(
+            ErrorCode::NoSession,
+            "no user session helper is connected",
+        )),
         method::HELLO => Err(ErrorObject::new(
             ErrorCode::InvalidRequest,
             "hello is sent by the agent",
@@ -107,8 +139,18 @@ pub async fn handle(
 }
 
 /// What a user-session helper serves the daemon: processes as its user, and revealing files in its desktop.
-async fn handle_in_session(conn: &Arc<Conn>, request: &Request) -> Result<Reply, ErrorObject> {
+async fn handle_in_session(
+    conn: &Arc<Conn>,
+    request: &Request,
+    inbound: Inbound,
+) -> Result<Reply, ErrorObject> {
     match request.method.as_str() {
+        method::CLIPBOARD_GET if crate::clipboard::SUPPORTED => {
+            crate::clipboard::get(conn, request.decode_params()?).await
+        }
+        method::CLIPBOARD_SET if crate::clipboard::SUPPORTED => {
+            crate::clipboard::set(conn, request.decode_params()?, inbound).await
+        }
         method::AGENT_PING => Reply::ok(&Empty {}),
         method::AGENT_INFO => Reply::ok(&conn.agent.info(conn.proto)),
         method::EXEC_START => exec::start(conn, request.decode_params()?).await,

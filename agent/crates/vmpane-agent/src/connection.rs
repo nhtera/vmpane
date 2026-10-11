@@ -28,7 +28,7 @@ use vmpane_agent_proto::methods::Empty;
 use vmpane_agent_proto::methods::{HelloParams, HelloResult, method};
 use vmpane_agent_proto::{MIN_PROTO, PROTO};
 
-use crate::agent::Agent;
+use crate::agent::{Agent, Role};
 use crate::transport::BoxIo;
 use crate::{dispatch, exec};
 
@@ -392,6 +392,14 @@ pub async fn run(agent: Arc<Agent>, io: BoxIo, token: Option<String>) -> Result<
         execs: exec::Registry::default(),
     });
     let mut tasks = JoinSet::new();
+    // The daemon relays its session helper's notifications here; a session helper watches its clipboard.
+    let watcher = match agent.role {
+        Role::Daemon => {
+            agent.session.set_host(Some(conn.out.clone()));
+            None
+        }
+        Role::Session => crate::clipboard::watch(&conn),
+    };
     let heartbeat = heartbeat(conn.out.clone(), epoch, busy_since);
     tokio::pin!(heartbeat);
     let outcome = loop {
@@ -417,6 +425,12 @@ pub async fn run(agent: Arc<Agent>, io: BoxIo, token: Option<String>) -> Result<
         }
     };
     tasks.abort_all();
+    if let Some(watcher) = watcher {
+        watcher.abort();
+    }
+    if agent.role == Role::Daemon {
+        agent.session.set_host(None);
+    }
     conn.execs.kill_all();
     agent.freeze.thaw_on_disconnect().await;
     writer_task.abort();

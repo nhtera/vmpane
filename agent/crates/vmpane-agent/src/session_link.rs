@@ -41,6 +41,9 @@ type Reply = oneshot::Sender<Result<CallResult, ErrorObject>>;
 #[derive(Default)]
 struct LinkState {
     next_id: i64,
+    /// Daemon-allocated stream ids toward the helper (only `clipboard.set` names them, on macOS).
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    next_stream: u32,
     pending: HashMap<i64, (StreamNames, Reply)>,
     inbound: HashMap<u32, mpsc::Sender<Incoming>>,
     exit_waiters: HashMap<u32, oneshot::Sender<ExecExited>>,
@@ -67,6 +70,17 @@ impl SessionLink {
         params: Value,
         names: StreamNames,
     ) -> Result<CallResult, ErrorObject> {
+        let pending = self.start(name, params, names).await?;
+        self.finish(pending).await
+    }
+
+    /// Queues a request (data sent on its streams afterwards follows it); `finish` waits for the answer.
+    pub async fn start(
+        &self,
+        name: &str,
+        params: Value,
+        names: StreamNames,
+    ) -> Result<Pending, ErrorObject> {
         let (tx, rx) = oneshot::channel();
         let id = {
             let mut state = self.state();
@@ -87,6 +101,11 @@ impl SessionLink {
             self.state().pending.remove(&id);
             return Err(gone());
         }
+        Ok(Pending { id, rx })
+    }
+
+    pub async fn finish(&self, pending: Pending) -> Result<CallResult, ErrorObject> {
+        let Pending { id, rx } = pending;
         match tokio::time::timeout(CALL_TIMEOUT, rx).await {
             Ok(Ok(result)) => result,
             Ok(Err(_)) => Err(gone()),
@@ -98,6 +117,14 @@ impl SessionLink {
                 ))
             }
         }
+    }
+
+    /// A new daemon-allocated (odd) stream id to name in a request to the helper (`clipboard.set`).
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    pub fn open_outbound(&self) -> u32 {
+        let mut state = self.state();
+        state.next_stream = state.next_stream.wrapping_add(2) | 1;
+        state.next_stream
     }
 
     pub async fn send(&self, stream: u32, data: Bytes) -> bool {
@@ -200,10 +227,19 @@ fn gone() -> ErrorObject {
     ErrorObject::new(ErrorCode::NoSession, "the user session helper went away")
 }
 
-/// The current session helper, if one is connected.
+/// A request on its way to the helper.
+pub struct Pending {
+    id: i64,
+    rx: Reply2,
+}
+
+type Reply2 = oneshot::Receiver<Result<CallResult, ErrorObject>>;
+
+/// The current session helper, if one is connected, and the host connection its notifications go to.
 #[derive(Default)]
 pub struct SessionHub {
     current: Mutex<Option<Arc<SessionLink>>>,
+    host: Mutex<Option<Outbox>>,
 }
 
 impl SessionHub {
@@ -216,6 +252,15 @@ impl SessionHub {
 
     pub fn connected(&self) -> bool {
         self.current().is_some()
+    }
+
+    /// The host connection (daemon), for relaying the helper's `clipboard.changed`.
+    pub fn set_host(&self, out: Option<Outbox>) {
+        *self.host.lock().unwrap_or_else(|p| p.into_inner()) = out;
+    }
+
+    fn host(&self) -> Option<Outbox> {
+        self.host.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 
     fn set(&self, link: Option<Arc<SessionLink>>) {
@@ -314,7 +359,7 @@ impl SessionHub {
         }
         tracing::info!("session helper connected");
         self.set(Some(Arc::clone(&link)));
-        let outcome = read_loop(&link, &mut reader, &mut decoder, &mut buf).await;
+        let outcome = read_loop(&self, &link, &mut reader, &mut decoder, &mut buf).await;
         link.close();
         writer.task.abort();
         let mut current = self.current.lock().unwrap_or_else(|p| p.into_inner());
@@ -342,6 +387,7 @@ fn bind(path: &Path) -> std::io::Result<tokio::net::UnixListener> {
 }
 
 async fn read_loop<R: AsyncRead + Unpin>(
+    hub: &SessionHub,
     link: &SessionLink,
     reader: &mut R,
     decoder: &mut FrameDecoder,
@@ -359,6 +405,11 @@ async fn read_loop<R: AsyncRead + Unpin>(
                 Message::Notification(n) if n.method == method::EXEC_EXITED => {
                     if let Ok(exited) = n.decode_params::<ExecExited>() {
                         link.note_exit(exited);
+                    }
+                }
+                Message::Notification(n) if n.method == method::CLIPBOARD_CHANGED => {
+                    if let Some(host) = hub.host() {
+                        let _ = host.message(n).await;
                     }
                 }
                 Message::Notification(_) => {}

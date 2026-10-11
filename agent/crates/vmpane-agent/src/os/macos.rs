@@ -1,5 +1,7 @@
 //! macOS guests.
 
+pub mod clipboard;
+
 use std::os::fd::{FromRawFd, OwnedFd};
 use std::process::Command;
 use std::time::SystemTime;
