@@ -121,6 +121,11 @@ struct VMDetailView: View {
 
     var body: some View {
         Form {
+            if let thumbnail = row.thumbnail {
+                Section {
+                    ThumbnailView(url: thumbnail, date: row.thumbnailDate)
+                }
+            }
             Section {
                 LabeledContent("Name", value: row.name)
                 LabeledContent("System", value: OSBadge.name(row.os))
@@ -154,5 +159,25 @@ struct VMDetailView: View {
 
     private func act(_ action: LibraryStore.Action) {
         Task { await store.perform(action, on: row.id) }
+    }
+}
+
+/// The helper's last picture of the guest; reloaded when it changes.
+private struct ThumbnailView: View {
+    let url: URL
+    let date: Date?
+    @State private var image: NSImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image).resizable().scaledToFit().frame(maxHeight: 200)
+            } else {
+                Color.clear.frame(height: 1)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityLabel("Last picture of the VM's screen")
+        .task(id: date) { image = await Task.detached { NSImage(contentsOf: url) }.value }
     }
 }

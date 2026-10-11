@@ -29,6 +29,8 @@ public actor HelperController {
     let agentExecs = AgentExecs()
     var agentLink: UDSAgentLink?
     var agentTasks: [Task<Void, Never>] = []
+    /// Refreshes `thumbnail.png` while the VM runs (`HelperController+Thumbnail`).
+    var thumbnailTask: Task<Void, Never>?
     /// The config the running VM was started with, plus settings applied live since (nil before a start).
     var runningConfig: VMConfigV1?
     /// Whether the Mac is locked (replaced in tests).

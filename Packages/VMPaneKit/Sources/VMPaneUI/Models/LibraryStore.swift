@@ -20,6 +20,9 @@ public final class LibraryStore {
         public var diskBytes: UInt64?
         /// Why the bundle cannot be read, if it cannot.
         public var error: String?
+        /// The helper's last picture of the guest (`thumbnail.png`), and when it was taken.
+        public var thumbnail: URL?
+        public var thumbnailDate: Date?
 
         public var isRunning: Bool { state.map { ![.stopped, .error].contains($0) } ?? false }
     }
@@ -87,9 +90,18 @@ public final class LibraryStore {
             attach(row.id)
         }
         let urls = rows.map { ($0.id, $0.bundleURL) }
-        let sizes = await Blocking.run { urls.map { ($0.0, Self.allocatedBytes($0.1)) } }
-        for (id, size) in sizes {
-            if let index = rows.firstIndex(where: { $0.id == id }) { rows[index].diskBytes = size }
+        let measured = await Blocking.run {
+            urls.map { id, url in
+                let thumbnail = url.appendingPathComponent("thumbnail.png")
+                let date = (try? thumbnail.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+                return (id, Self.allocatedBytes(url), date.map { _ in thumbnail }, date)
+            }
+        }
+        for (id, size, thumbnail, date) in measured {
+            guard let index = rows.firstIndex(where: { $0.id == id }) else { continue }
+            rows[index].diskBytes = size
+            rows[index].thumbnail = thumbnail
+            rows[index].thumbnailDate = date
         }
     }
 

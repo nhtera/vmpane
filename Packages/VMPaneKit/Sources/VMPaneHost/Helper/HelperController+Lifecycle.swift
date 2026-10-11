@@ -64,6 +64,7 @@ extension HelperController {
             let previous = state
             state = next
             agentFollowState(from: previous, to: next)
+            thumbnailsFollowState(next)
             stateContinuation.yield(next)
             server?.broadcast(
                 topic: "vm", method: ControlNotification.vmStateChanged.rawValue,
@@ -117,6 +118,7 @@ extension HelperController {
                 }
             default:
                 let mode = try RPCParams.decode(StopParams.self, from: params).get().mode ?? .graceful
+                await writeThumbnail()  // the last picture of the running guest, for the library
                 transition(.stop)
                 try await backend.stop(mode)  // `.stopped` arrives as an event (graceful stops take a while)
             }

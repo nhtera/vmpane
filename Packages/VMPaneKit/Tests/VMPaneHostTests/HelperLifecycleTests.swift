@@ -358,3 +358,13 @@ func installing(_ config: inout VMConfigV1) {
     #expect(try helper.bundle.tryLock(retryingFor: 1) != nil)
     try? FileManager.default.removeItem(at: helper.root)
 }
+
+@Test func stoppingLeavesAThumbnailForTheLibrary() async throws {
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.start")
+    _ = try await helper.client.call("vm.stop", params: ["mode": "graceful"])
+    #expect(try await helper.waitForState("stopped"))
+    let thumbnail = helper.bundle.url.appendingPathComponent("thumbnail.png")
+    #expect(try Data(contentsOf: thumbnail) == Data([0x89, 0x50, 0x4E, 0x47]))  // ScriptedBackend's screenshot
+    await helper.tearDown()
+}
