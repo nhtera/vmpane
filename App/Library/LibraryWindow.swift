@@ -5,6 +5,7 @@ import VMPaneUI
 /// The VM library: running and stopped VMs on the left, the selected one's details and actions on the right.
 struct LibraryWindow: View {
     @Bindable var store: LibraryStore
+    @State private var showingWizard = false
 
     var body: some View {
         NavigationSplitView {
@@ -16,9 +17,13 @@ struct LibraryWindow: View {
             .navigationSplitViewColumnWidth(min: 220, ideal: 260)
             .overlay {
                 if store.rows.isEmpty {
-                    ContentUnavailableView(
-                        "No Virtual Machines", systemImage: "square.stack.3d.up",
-                        description: Text("Create a VM to get started."))
+                    ContentUnavailableView {
+                        Label("No Virtual Machines", systemImage: "square.stack.3d.up")
+                    } description: {
+                        Text("Create a VM to get started.")
+                    } actions: {
+                        Button("New VM…") { showingWizard = true }
+                    }
                 }
             }
         } detail: {
@@ -29,6 +34,14 @@ struct LibraryWindow: View {
             }
         }
         .navigationTitle("VMPane")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("New VM", systemImage: "plus") { showingWizard = true }
+                    .help("Create a virtual machine")
+                    .keyboardShortcut("n", modifiers: .command)
+            }
+        }
+        .sheet(isPresented: $showingWizard) { NewVMWizard(store: store) }
         .task {
             await store.reload()
             // The library changes from outside too (the CLI, Finder): look again now and then.

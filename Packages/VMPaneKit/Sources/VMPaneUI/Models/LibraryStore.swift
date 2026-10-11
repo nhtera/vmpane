@@ -49,6 +49,19 @@ public final class LibraryStore {
 
     public func row(_ id: UUID) -> Row? { rows.first { $0.id == id } }
 
+    /// Creates VMs in this library (the wizard).
+    public func makeCreator() -> VMCreator {
+        VMCreator(ops: LibraryOps(library: library, identity: .ui))
+    }
+
+    /// A VM the wizard just made: listed, selected, and started (which begins its install).
+    public func didCreate(_ bundle: VMBundle) async {
+        await reload()
+        guard let id = rows.first(where: { $0.bundleURL.standardizedFileURL == bundle.url.standardizedFileURL })?.id else { return }
+        selection = id
+        await perform(.start(headless: false), on: id)
+    }
+
     /// Re-reads the library (bundles added, moved or removed), attaches to helpers that started since, and
     /// measures disk usage in the background.
     public func reload() async {
