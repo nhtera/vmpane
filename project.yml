@@ -88,6 +88,8 @@ targets:
         product: VMPaneCore
       - package: VMPaneKit
         product: VMPaneUI
+      - package: VMPaneKit
+        product: VMPaneMCP
       # Helper app and CLI are embedded in Contents/Helpers (not MacOS/: case-insensitive collision with VMPane).
       - target: VMPaneVM
         embed: true

@@ -96,6 +96,13 @@ public final class AuditLog: @unchecked Sendable {
         }
     }
 
+    /// The newest `limit` entries, newest first (unreadable lines skipped).
+    public func recent(limit: Int) -> [AuditEntry] {
+        guard let data = try? Data(contentsOf: url) else { return [] }
+        let lines = data.split(separator: 0x0A).suffix(limit)
+        return lines.reversed().compactMap { try? JSONDecoder().decode(AuditEntry.self, from: Data($0)) }
+    }
+
     /// mcp-audit.jsonl → .1 → … → .5 (the oldest dropped).
     private func rotate() {
         let fm = FileManager.default

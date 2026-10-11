@@ -200,6 +200,7 @@ struct VMDetailView: View {
             if let error = row.error {
                 Section("Problem") { Text(error).foregroundStyle(.red) }
             }
+            AgentActivityView(bundle: row.bundleURL)
         }
         .formStyle(.grouped)
         .navigationTitle(row.name)

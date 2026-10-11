@@ -13,7 +13,13 @@ struct VMPaneApp: App {
                 .frame(minWidth: 640, minHeight: 400)
         }
         Settings {
-            PreferencesView(paths: appDelegate.supervisor.paths)
+            TabView {
+                PreferencesView(paths: appDelegate.supervisor.paths)
+                    .tabItem { Label("General", systemImage: "gearshape") }
+                AgentsPreferences(paths: appDelegate.supervisor.paths, killSwitch: appDelegate.killSwitch)
+                    .tabItem { Label("AI Agents", systemImage: "sparkles") }
+            }
+            .frame(width: 520)
         }
         MenuBarExtra("VMPane", systemImage: "square.stack.3d.up") {
             MenuBarExtraView(store: appDelegate.library, killSwitch: appDelegate.killSwitch)

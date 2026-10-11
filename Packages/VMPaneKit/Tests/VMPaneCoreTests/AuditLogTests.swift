@@ -18,6 +18,7 @@ private func temporaryLog(maxBytes: Int = AuditLog.maxBytes) -> AuditLog {
     let first = try JSONDecoder().decode(AuditEntry.self, from: Data(lines[0].utf8))
     #expect(first.method == "agent.exec" && first.tool == "vm_exec" && first.result == "ok" && first.timestamp.hasSuffix("Z"))
     #expect(lines[1].contains(#""reason":"needs admin""#))
+    #expect(log.recent(limit: 5).map(\.method) == ["vm.stop", "agent.exec"], "newest first")
     let mode = try FileManager.default.attributesOfItem(atPath: log.url.path)[.posixPermissions] as? Int
     #expect(mode == 0o600)
 }
