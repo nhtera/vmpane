@@ -47,10 +47,11 @@ scenario_run() {
     head -c 1073741824 /dev/zero >"$src/big.bin"
     # Drop and cancel on one connection (only the connection that started a drop may cancel it).
     /usr/bin/python3 - "$socket" "$src/big.bin" >"$work/cancelled.json" 2>&1 <<'PY' || { it_fail "cancel: $(cat "$work/cancelled.json")"; return 1; }
-import json, socket, sys, time
-sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-sock.connect(sys.argv[1])
-reader = sock.makefile("r")
+import json, os, sys, time
+sys.path.insert(0, os.path.join(os.environ["VMPANE_ROOT"], "itest/lib"))
+from helper_socket import HelperConnection
+sock = HelperConnection(sys.argv[1])
+reader = sock
 def send(i, method, params):
     sock.sendall((json.dumps({"jsonrpc": "2.0", "id": i, "method": method, "params": params}) + "\n").encode())
 send(0, "helper.hello", {"proto": 1, "minProto": 1, "client": {"name": "itest", "version": "0", "kind": "cli"}})

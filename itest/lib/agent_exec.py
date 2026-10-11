@@ -7,8 +7,11 @@ code; 128+n after a signal, 124 on a guest timeout, 125 when the request failed.
 """
 import base64
 import json
-import socket
+import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from helper_socket import HelperConnection  # noqa: E402
 
 
 def main():
@@ -22,9 +25,8 @@ def main():
         elif flag == "--timeout-ms":
             params["timeoutMs"] = int(args.pop(0))
     params["shell"] = " ".join(args)
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-        sock.connect(path)
-        file = sock.makefile("r")
+    with HelperConnection(path) as sock:
+        file = sock
 
         def send(request_id, method, request_params):
             message = {"jsonrpc": "2.0", "id": request_id, "method": method, "params": request_params}

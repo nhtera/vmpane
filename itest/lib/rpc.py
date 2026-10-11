@@ -6,10 +6,13 @@ Prints the result as JSON (exit 0) or the error (exit 1). With --repeat, prints 
 round-trip time in milliseconds of N calls instead.
 """
 import json
-import socket
+import os
 import statistics
 import sys
-import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from helper_socket import HelperConnection  # noqa: E402
+import time  # noqa: E402
 
 
 def call(sock, file, request_id, method, params):
@@ -29,9 +32,8 @@ def main():
         del args[index:index + 2]
     path, method = args[0], args[1]
     params = json.loads(args[2]) if len(args) > 2 else None
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-        sock.connect(path)
-        file = sock.makefile("r")
+    with HelperConnection(path) as sock:
+        file = sock
         hello = call(sock, file, 0, "helper.hello",
                      {"proto": 1, "minProto": 1, "client": {"name": "itest", "version": "0", "kind": "cli"}})
         if "error" in hello:

@@ -31,9 +31,9 @@ scenario_run() {
     local info latency
     info=$(it_rpc "$run/$sid.sock" vm.info) || it_fail "vm.info failed: $info" || return 1
     [[ $(jq -r .state <<<"$info") == stopped ]] || it_fail "unexpected state: $info" || return 1
-    # The documented debugging path: one line through nc, which half-closes after sending.
-    nc -U "$run/$sid.sock" <<<'{"jsonrpc":"2.0","id":1,"method":"vm.info"}' | jq -e '.result.state == "stopped"' >/dev/null \
-        || it_fail "vm.info through nc -U got no answer" || return 1
+    # One line through a client that half-closes after sending (like the documented `nc -U` debugging path).
+    "$VMPANE_ITEST_BRIDGE" "$run/$sid.sock" <<<'{"jsonrpc":"2.0","id":1,"method":"vm.info"}' | jq -e '.result.state == "stopped"' >/dev/null \
+        || it_fail "vm.info after a half-close got no answer" || return 1
     latency=$(it_rpc "$run/$sid.sock" vm.info --repeat 20)
     echo "vm.info median ${latency} ms"
     awk -v l="$latency" 'BEGIN { exit !(l < 50) }' || it_fail "vm.info took ${latency} ms (limit 50)" || return 1

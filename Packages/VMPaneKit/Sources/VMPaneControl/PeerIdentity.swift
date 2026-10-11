@@ -22,6 +22,19 @@ public enum PeerIdentity {
         guard let code = guestCode(auditToken), SecCodeCheckValidity(code, [], nil) == errSecSuccess else { return nil }
         var staticCode: SecStaticCode?
         guard SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode else { return nil }
+        return signingInfo(staticCode)
+    }
+
+    /// This process's own signing identifier and team (nil when unsigned).
+    public static func selfIdentity() -> CodeIdentity? {
+        var code: SecCode?
+        guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return nil }
+        var staticCode: SecStaticCode?
+        guard SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode else { return nil }
+        return signingInfo(staticCode)
+    }
+
+    static func signingInfo(_ staticCode: SecStaticCode) -> CodeIdentity? {
         var info: CFDictionary?
         guard SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
             let dictionary = info as? [String: Any]

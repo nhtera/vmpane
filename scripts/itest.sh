@@ -22,6 +22,15 @@ while (($#)); do
     esac
 done
 
+# The itests' way into helpers (signed app.vmpane.mac.itest, honoured only by ad hoc helpers; itest/bridge).
+bridge=build/itest-bridge/vmpane-itest-bridge
+if [[ ! -x $bridge || itest/bridge/main.swift -nt $bridge ]]; then
+    mkdir -p "$(dirname "$bridge")"
+    swiftc -O -o "$bridge" itest/bridge/main.swift
+    codesign -s - -f -i app.vmpane.mac.itest "$bridge" 2>/dev/null
+fi
+export VMPANE_ITEST_BRIDGE=$root/$bridge
+
 if [[ "$(uname -m)" != arm64 ]]; then
     echo "error: itests need an Apple-silicon Mac" >&2
     exit 1
