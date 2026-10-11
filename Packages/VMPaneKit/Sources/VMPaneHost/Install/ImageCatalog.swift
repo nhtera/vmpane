@@ -11,6 +11,9 @@ public struct ImageCatalog: Codable, Sendable, Equatable {
         public var url: URL
         public var sha256: String
         public var sizeBytes: Int64
+
+        /// The name with its version once ("macOS Sequoia 15.6.1" already carries it; "Ubuntu" does not).
+        public var title: String { name.hasSuffix(version) ? name : "\(name) \(version)" }
     }
 
     public var schemaVersion: Int

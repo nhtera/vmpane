@@ -18,6 +18,22 @@ import VMPaneCore
     #expect(try ImageCatalog.macOS().images.first?.build == "24G90")
 }
 
+@Test func catalogTitlesNameTheVersionOnceAndTheCacheKnowsWhatItHas() throws {
+    let mac = try #require(try ImageCatalog.macOS().images.first)
+    #expect(mac.title.components(separatedBy: mac.version).count == 2)  // "macOS Sequoia 15.6.1", not "… 15.6.1 15.6.1"
+    var ubuntu = mac
+    (ubuntu.name, ubuntu.version) = ("Ubuntu Server", "24.04")
+    #expect(ubuntu.title == "Ubuntu Server 24.04")
+
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("vp-cache-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let cache = ImageCache(directory: dir)
+    #expect(!cache.has(mac))
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    try Data().write(to: cache.file(for: mac))
+    #expect(cache.has(mac))
+}
+
 /// Serves `StubServer.body` for https://stub.test/file, honouring Range; optionally drops the connection
 /// after `cutAfter` bytes, or ignores Range.
 final class StubServer: URLProtocol, @unchecked Sendable {

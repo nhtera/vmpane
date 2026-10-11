@@ -20,6 +20,11 @@ public struct ImageCache: Sendable {
         directory.appendingPathComponent(image.url.lastPathComponent)
     }
 
+    /// Whether `image` was downloaded already (its checksum is verified when it is used).
+    public func has(_ image: ImageCatalog.Image) -> Bool {
+        FileManager.default.fileExists(atPath: file(for: image).path)
+    }
+
     /// The verified local copy, downloading (or resuming) it when needed.
     public func ensure(
         _ image: ImageCatalog.Image, session: URLSession = .shared,

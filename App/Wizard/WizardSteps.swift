@@ -90,6 +90,15 @@ struct SourceStep: View {
         }
     }
 
+    /// Whether a catalog image is in VMPane's download cache already.
+    static func isCached(_ source: WizardModel.Source?) -> Bool {
+        switch source {
+        case .macCatalog(let image)?: ImageCache.ipsw.has(image)
+        case .linuxCatalog(let image)?: ImageCache.iso.has(image)
+        default: false
+        }
+    }
+
     private func catalogRow(_ image: ImageCatalog.Image, _ source: WizardModel.Source) -> some View {
         Button {
             wizard.source = source
@@ -97,9 +106,12 @@ struct SourceStep: View {
             HStack {
                 Image(systemName: wizard.source == source ? "largecircle.fill.circle" : "circle")
                 VStack(alignment: .leading) {
-                    Text("\(image.name) \(image.version)")
-                    Text(ByteCountFormatter.string(fromByteCount: image.sizeBytes, countStyle: .file) + " download")
-                        .font(.caption).foregroundStyle(.secondary)
+                    Text(image.title)
+                    Text(
+                        Self.isCached(source)
+                            ? "Downloaded" : ByteCountFormatter.string(fromByteCount: image.sizeBytes, countStyle: .file) + " download"
+                    )
+                    .font(.caption).foregroundStyle(.secondary)
                 }
             }
             .contentShape(Rectangle())
@@ -259,7 +271,8 @@ struct SummaryStep: View {
 
     private var installer: String {
         switch wizard.source {
-        case .macCatalog(let image)?, .linuxCatalog(let image)?: "\(image.name) \(image.version) (download)"
+        case .macCatalog(let image)?, .linuxCatalog(let image)?:
+            image.title + (SourceStep.isCached(wizard.source) ? "" : " (download)")
         case .macRestoreImage(let url)?, .linuxISO(let url)?, .windowsISO(let url)?: url.lastPathComponent
         case nil: "—"
         }
