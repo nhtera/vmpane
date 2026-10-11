@@ -128,7 +128,7 @@ private func withTemp(_ body: (URL) throws -> Void) throws {
     try body(dir)
 }
 
-@Test func macOSGuestNeedsInstallFilesOrARestoreImage() throws {
+@Test func macOSGuestInstallsUntilTheInstallFinished() throws {
     var config = VMConfigV1(VMConfigFields.new(name: "M", os: .macos, macAddress: "52:54:00:12:34:57"))
     try withBundle(config) { bundle in
         #expect(throws: VZPlanError.notInstalled) {
@@ -143,6 +143,15 @@ private func withTemp(_ body: (URL) throws -> Void) throws {
                 == .mac(aux: VZMacAux(directory: bundle.auxDirectory), installFrom: URL(fileURLWithPath: "/ipsw/UniversalMac.ipsw")))
         #expect(installing.spiceClipboard == false)
         #expect(installing.rosetta == false)
+        // Stopped half-way: the platform files exist but the source is still set, so the install starts again.
+        let interrupted = try VZPlanBuilder.plan(config, bundle: bundle, fileExists: allExist)
+        #expect(
+            interrupted.platform
+                == .mac(aux: VZMacAux(directory: bundle.auxDirectory), installFrom: URL(fileURLWithPath: "/ipsw/UniversalMac.ipsw")))
+        #expect(throws: VZPlanError.notInstalled) {
+            try VZPlanBuilder.plan(config, bundle: bundle, fileExists: { !$0.path.hasPrefix("/ipsw/") })
+        }
+        config.install = nil  // what `VZBackend.installed` saves after the install
         let installed = try VZPlanBuilder.plan(config, bundle: bundle, fileExists: allExist)
         #expect(installed.platform == .mac(aux: VZMacAux(directory: bundle.auxDirectory), installFrom: nil))
     }

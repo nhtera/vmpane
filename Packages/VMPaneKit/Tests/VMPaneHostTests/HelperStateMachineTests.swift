@@ -54,6 +54,8 @@ final class ScriptedBackend: VMBackend, @unchecked Sendable {
     /// Live settings this backend applies (`applyLive`); the config of the last start.
     var livePaths: Set<String> = []
     private(set) var lastStartConfig: VMConfigV1?
+    /// How long a start takes before the VM runs (a macOS install takes minutes); nil: at once.
+    var startDelay: Duration?
 
     init(kind: BackendKind = .vz) {
         self.kind = kind
@@ -77,6 +79,7 @@ final class ScriptedBackend: VMBackend, @unchecked Sendable {
     func start(_ options: StartOptions) async throws {
         try record(options.stateDirectory == nil ? "start" : "start.resume")
         lock.withLock { lastStartConfig = options.config }
+        if let startDelay { try await Task.sleep(for: startDelay) }
         continuation.yield(.started)
     }
     func pause() async throws { try record("pause"); continuation.yield(.paused) }

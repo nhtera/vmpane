@@ -199,6 +199,14 @@ private func makePrepared(_ dir: URL) throws -> (VMBundle, VMPanePaths) {
         try Data("abc  vmpane-agent\n".utf8).write(to: sums)
         let withTools = RuntimeStore.version(app: app, appVersion: "1.2")
         #expect(withTools.contains("-q") && withTools.contains("-t"))
+        // So is the helper's code: a rebuild under the same version gets its own copy.
+        let helperBinary = app.appendingPathComponent("Contents/Helpers/VMPaneVM.app/Contents/MacOS/VMPaneVM")
+        try FileManager.default.createDirectory(at: helperBinary.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("build 1".utf8).write(to: helperBinary)
+        let built = RuntimeStore.version(app: app, appVersion: "1.2")
+        #expect(built.contains("-h") && built != withTools)
+        try Data("build 2, longer".utf8).write(to: helperBinary)
+        #expect(RuntimeStore.version(app: app, appVersion: "1.2") != built)
         #expect(RuntimeStore.helperItems(app: app).map(\.path).contains("GuestTools"))
 
         let paths = VMPanePaths(root: dir.appendingPathComponent("support"))

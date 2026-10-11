@@ -76,6 +76,8 @@ public actor HelperController {
     var isSessionLocked: @Sendable () -> Bool = SessionLock.isLocked
     /// Refuses RAM-state saves without room for them (replaced in tests, which must not depend on this Mac's disk).
     var checkSpace: @Sendable (_ memoryBytes: UInt64, _ at: URL) throws -> Void = { try SpaceGuard.check(memoryBytes: $0, at: $1) }
+    /// How long `vm.start` waits on a macOS install before replying that it is under way (shorter in tests).
+    var installReplyAfter: Duration = .seconds(15)
     let afterStart: (@Sendable (VMConfigV1) -> VMConfigV1?)?
     /// Config changes once the VM has stopped (e.g. detaching a finished Linux install's media).
     let afterStop: (@Sendable (VMConfigV1) -> VMConfigV1?)?

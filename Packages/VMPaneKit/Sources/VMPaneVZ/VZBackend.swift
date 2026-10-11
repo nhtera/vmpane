@@ -53,6 +53,8 @@ public final class VZBackend: VMBackend {
             try SpaceGuard.require(Self.macInstallBytes, at: aux.auxiliaryStorage)
             try await runner.prepareMacInstall(restoreImage: image, aux: aux)
             try await create(plan)
+            // The window (and its progress overlay) shows now: the VM counts as running only after the install.
+            if !options.headless { await showDisplay() }
             try await runner.install(restoreImage: image)
             // The installer leaves the VM running the installed system; start it only if it did not.
             if try await runner.state != .running { try await runner.start() }

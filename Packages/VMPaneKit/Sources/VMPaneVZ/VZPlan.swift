@@ -148,13 +148,16 @@ public enum VZPlanBuilder {
                 nestedVirtualization: config.vz?.nestedVirtualization ?? false)
         case .macos:
             let aux = VZMacAux(directory: bundle.auxDirectory)
-            if [aux.hardwareModel, aux.machineIdentifier, aux.auxiliaryStorage].allSatisfy(fileExists) {
-                return .mac(aux: aux, installFrom: nil)
+            // The install source is dropped only once macOS installed (`VZBackend.installed`): while it is set, an
+            // install was never finished (e.g. stopped half-way) and starts again, whatever platform files exist.
+            if let image = config.install?.restoreImage {
+                guard fileExists(URL(fileURLWithPath: image)) else { throw VZPlanError.notInstalled }
+                return .mac(aux: aux, installFrom: URL(fileURLWithPath: image))
             }
-            guard let image = config.install?.restoreImage, fileExists(URL(fileURLWithPath: image)) else {
+            guard [aux.hardwareModel, aux.machineIdentifier, aux.auxiliaryStorage].allSatisfy(fileExists) else {
                 throw VZPlanError.notInstalled
             }
-            return .mac(aux: aux, installFrom: URL(fileURLWithPath: image))
+            return .mac(aux: aux, installFrom: nil)
         case .windows:
             throw VZPlanError.unsupportedGuest(config.os)
         }

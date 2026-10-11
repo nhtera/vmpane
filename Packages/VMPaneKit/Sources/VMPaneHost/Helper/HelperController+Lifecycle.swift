@@ -99,6 +99,30 @@ extension HelperController {
         guard HelperStateMachine.allowedRequests(in: state).contains(request) else {
             return .failure(RPCError(.invalidState, "cannot \(request.rawValue) while \(state.rawValue)"))
         }
+        guard request == .start, isInstallingMacOS else { return await carryOut(request, backend, params) }
+        // A macOS install runs inside the start, for many minutes: reply once it is under way (a refusal, e.g. for
+        // space, still comes back as the reply), so the app, vmpane and agents do not time out. The state stays
+        // `starting`; install events report the progress, and a failure later is a `failed` state change.
+        let start = Task { await self.carryOut(request, backend, params) }
+        let wait = installReplyAfter
+        return await withTaskGroup(of: Result<JSONValue, RPCError>?.self) { group in
+            group.addTask { await start.value }
+            group.addTask {
+                try? await Task.sleep(for: wait)
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()  // stops waiting, not the start
+            return first ?? .success(["state": .string(VMRunState.starting.rawValue), "installing": true])
+        }
+    }
+
+    /// A macOS VM whose install has not finished (`VZBackend.installed` drops the source once it has).
+    var isInstallingMacOS: Bool { config.os == .macos && config.install?.restoreImage != nil }
+
+    private func carryOut(
+        _ request: HelperStateMachine.Event, _ backend: VMBackend, _ params: JSONValue?
+    ) async -> Result<JSONValue, RPCError> {
         do {
             return .success(try await perform(request, backend, params))
         } catch let error as RPCError {

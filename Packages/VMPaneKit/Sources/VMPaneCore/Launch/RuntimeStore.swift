@@ -25,18 +25,36 @@ public struct RuntimeStore: Sendable {
         }
     }
 
-    /// The `runtime/` directory name for `app`: its version, plus the identity of its QEMU bundle (`-q…`) and
-    /// of its Linux and macOS guest tools (`-t…`, `-m…`) when it has them, so a rebuild under the same app version (every Debug
-    /// build) gets a fresh copy.
+    /// The `runtime/` directory name for `app`: its version, plus the identity of its QEMU bundle (`-q…`), of its
+    /// Linux and macOS guest tools (`-t…`, `-m…`) when it has them, and of the helper's code (`-h…`), so a rebuild
+    /// under the same app version (every Debug build, a re-spun release) gets a fresh copy.
     public static func version(app: URL, appVersion: String) -> String {
         let resources = app.appendingPathComponent("Contents/Resources", isDirectory: true)
         var version = appVersion
         let manifests = [("q", "qemu/MANIFEST.json"), ("t", "GuestTools/linux/SHA256SUMS"), ("m", "GuestTools/macos/SHA256SUMS")]
         for (tag, manifest) in manifests {
             guard let data = try? Data(contentsOf: resources.appendingPathComponent(manifest)) else { continue }
-            version += "-\(tag)" + SHA256.hash(data: data).prefix(4).map { String(format: "%02x", $0) }.joined()
+            version += "-\(tag)" + shortHash(data)
         }
+        if let code = helperCodeStamp(app: app) { version += "-h" + shortHash(Data(code.utf8)) }
         return version
+    }
+
+    /// The helper's executables (`VMPaneVM.app/Contents/MacOS`: the binary and, in Debug builds, its debug dylib)
+    /// by name, size and modification date: cheap to read at every launch, and changed by any rebuild.
+    static func helperCodeStamp(app: URL) -> String? {
+        let code = app.appendingPathComponent("Contents/Helpers/VMPaneVM.app/Contents/MacOS", isDirectory: true)
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: code.path), !names.isEmpty else { return nil }
+        return names.sorted().map { name in
+            let attributes = (try? FileManager.default.attributesOfItem(atPath: code.appendingPathComponent(name).path)) ?? [:]
+            let size = (attributes[.size] as? NSNumber)?.int64Value ?? 0
+            let modified = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+            return "\(name):\(size):\(modified)"
+        }.joined(separator: "\n")
+    }
+
+    private static func shortHash(_ data: Data) -> String {
+        SHA256.hash(data: data).prefix(4).map { String(format: "%02x", $0) }.joined()
     }
 
     /// The runtime version a helper runs from (`runtime/<version>/VMPaneVM.app`), or nil when it does not run

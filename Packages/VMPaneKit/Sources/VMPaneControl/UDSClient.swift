@@ -2,9 +2,16 @@ import Darwin
 import Foundation
 import VMPaneCore
 
-public enum ControlClientError: Error, Equatable, Sendable {
+public enum ControlClientError: Error, Equatable, Sendable, CustomStringConvertible {
     case connectionClosed
     case timedOut(method: String)
+
+    public var description: String {
+        switch self {
+        case .connectionClosed: "The VM's helper closed the connection (it stopped or restarted)."
+        case .timedOut(let method): "The VM did not answer in time (\(method))."
+        }
+    }
 }
 
 /// JSON-RPC client for a helper's control socket (used by the app, the CLI and the MCP server).
