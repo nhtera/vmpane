@@ -44,16 +44,6 @@ final class HelperSupervisor {
 
     /// Starts the helper for `bundle` (its own process, Dock tile and window).
     func launch(_ bundle: VMBundle, headless: Bool) throws {
-        let runtime = try RuntimeStore(paths: paths)
-            .ensure(
-                version: RuntimeStore.version(app: Bundle.main.bundleURL, appVersion: VMPane.version),
-                items: RuntimeStore.helperItems(app: Bundle.main.bundleURL)
-            )
-            .appendingPathComponent("VMPaneVM.app", isDirectory: true)
-        let config = try ConfigStore.load(bundle)
-        try LaunchCoordinator.checkMacOSGuestLimit(starting: config.os, paths: paths) { record in
-            (try? VMBundle.open(URL(fileURLWithPath: record.bundlePath))).flatMap { try? ConfigStore.load($0).os }
-        }
-        try LaunchCoordinator.launchHelper(runtimeHelper: runtime, bundle: bundle, headless: headless)
+        try LaunchCoordinator.launch(bundle, app: Bundle.main.bundleURL, appVersion: VMPane.version, paths: paths, headless: headless)
     }
 }

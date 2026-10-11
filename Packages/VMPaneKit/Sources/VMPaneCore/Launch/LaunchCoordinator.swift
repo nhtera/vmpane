@@ -129,6 +129,32 @@ public enum LaunchCoordinator {
         if running >= macOSGuestLimit { throw LaunchError.tooManyMacOSGuests(limit: macOSGuestLimit) }
     }
 
+    /// Starts the helper for `bundle` from the app at `app` (the app itself, or the CLI inside it): the runtime
+    /// copy is brought up to date, the two-macOS-guests limit checked, then the helper launched.
+    public static func launch(_ bundle: VMBundle, app: URL, appVersion: String, paths: VMPanePaths, headless: Bool) throws {
+        let runtime = try RuntimeStore(paths: paths)
+            .ensure(
+                version: RuntimeStore.version(app: app, appVersion: appVersion),
+                items: RuntimeStore.helperItems(app: app)
+            )
+            .appendingPathComponent("VMPaneVM.app", isDirectory: true)
+        let config = try ConfigStore.load(bundle)
+        try checkMacOSGuestLimit(starting: config.os, paths: paths) { record in
+            (try? VMBundle.open(URL(fileURLWithPath: record.bundlePath))).flatMap { try? ConfigStore.load($0).os }
+        }
+        try launchHelper(runtimeHelper: runtime, bundle: bundle, headless: headless)
+    }
+
+    /// The `.app` containing `executable` (symlinks resolved), e.g. VMPane.app for its Contents/Helpers/vmpane.
+    public static func enclosingApp(of executable: URL) -> URL? {
+        var url = executable.resolvingSymlinksInPath()
+        while url.path != "/" {
+            url.deleteLastPathComponent()
+            if url.pathExtension == "app" { return url }
+        }
+        return nil
+    }
+
     /// Launches a helper for `bundle` from the runtime copy, as its own app instance (own Dock tile).
     /// (posix_spawn, not Foundation's `Process`, which forks and briefly copies every descriptor.)
     public static func launchHelper(runtimeHelper: URL, bundle: VMBundle, headless: Bool) throws {
