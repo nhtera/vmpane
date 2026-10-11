@@ -10,6 +10,8 @@
 #   VMPANE-POINTER-DEVICE <path> max=<x>,<y>     each absolute pointing device, at boot
 #   VMPANE-POINTER button=<n> down=<0|1> x=<abs> y=<abs>   each mouse button event, with the position
 # Typing VMPANE-REBOOT or VMPANE-POWEROFF on tty1 reboots or powers off the guest (a guest-initiated stop).
+# Typing VMPANE-INSTALL-AGENT runs the guest agent's installer from the `vmpane-tools` share, as a user would
+# (sudo /mnt/vmpane-tools/install.sh), and prints   VMPANE-AGENT-INSTALLED rc=<exit code>
 # on the serial console (logs/serial.log). The first boot runs here, through VMPane's own helper, so
 # cloud-init's one-time work is done before scenarios clone it.
 # Usage: build-golden-linux.sh <bundle path>   (needs $APP and $VMPANE_ROOT; uses a throwaway support dir)
@@ -135,6 +137,11 @@ write_files:
           VMPANE-REBOOT) systemctl reboot ;;
           VMPANE-POWEROFF) systemctl poweroff ;;
           VMPANE-PROBE) /usr/local/bin/vmpane-itest-probe ;;
+          VMPANE-INSTALL-AGENT)
+            mkdir -p /mnt/vmpane-tools
+            mountpoint -q /mnt/vmpane-tools || mount -t virtiofs vmpane-tools /mnt/vmpane-tools
+            /mnt/vmpane-tools/install.sh > /dev/hvc0 2>&1
+            echo "VMPANE-AGENT-INSTALLED rc=$?" > /dev/hvc0 ;;
         esac
       done
   - path: /etc/systemd/system/vmpane-itest-typed.service

@@ -45,8 +45,10 @@ public enum BackendFactory {
                     config = updated
                 }
             }
-            let plan = try VZPlanBuilder.plan(config, bundle: bundle)
-            let backend = VZBackend(plan: plan, title: config.name, replan: { try VZPlanBuilder.plan($0, bundle: bundle) })
+            let tools = guestTools(for: config.os, runtime: runtime)
+            let plan = try VZPlanBuilder.plan(config, bundle: bundle, guestTools: tools)
+            let backend = VZBackend(
+                plan: plan, title: config.name, replan: { try VZPlanBuilder.plan($0, bundle: bundle, guestTools: tools) })
             return Made(
                 backend: backend, config: config, afterStart: { VZBackend.installed($0, bundle: bundle) },
                 afterStop: { LinuxInstall.finished($0, bundle: bundle) })
@@ -58,6 +60,20 @@ public enum BackendFactory {
                 backend: qemuBackend(prepared, config: config, qemu: runtime.appendingPathComponent("qemu", isDirectory: true)),
                 config: config)
         }
+    }
+
+    /// The runtime copy's guest tools for `os` (`GuestTools/linux`, `GuestTools/macos`), if the app has them.
+    static func guestTools(for os: GuestOS, runtime: URL?) -> URL? {
+        let name: String
+        switch os {
+        case .linux: name = "linux"
+        case .macos: name = "macos"
+        case .windows: return nil  // on the guest-tools ISO instead
+        }
+        guard let tools = runtime?.appendingPathComponent("GuestTools/\(name)", isDirectory: true),
+            FileManager.default.fileExists(atPath: tools.appendingPathComponent("SHA256SUMS").path)
+        else { return nil }
+        return tools
     }
 
     /// QEMU and swtpm as recorded children of this helper, holding the bundle lock, in `run/<sid>/`.

@@ -8,6 +8,8 @@ public enum AgentMethod {
     public static let hello = "hello"
     public static let agentInfo = "agent.info"
     public static let agentPing = "agent.ping"
+    /// Guest → host every few seconds (`vmpane-agent-proto::limits::HEARTBEAT_SECONDS`); ignored by the host.
+    public static let agentHeartbeat = "agent.heartbeat"
     public static let execStart = "exec.start"
     public static let execSignal = "exec.signal"
     public static let execExited = "exec.exited"
@@ -28,7 +30,7 @@ public enum AgentMethod {
     public static let fsThaw = "fs.thaw"
 
     /// Methods the guest may send. Anything else from the guest is a protocol violation.
-    public static let fromGuest: Set<String> = [hello, execExited, clipboardChanged]
+    public static let fromGuest: Set<String> = [hello, agentHeartbeat, execExited, clipboardChanged]
 }
 
 public enum AgentCap {

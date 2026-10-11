@@ -787,6 +787,13 @@
     "maxString": 65536
   },
   "methods": {
+    "agent.heartbeat": {
+      "direction": "guestToHost",
+      "kind": "notification",
+      "params": {
+        "$ref": "#/$defs/Empty"
+      }
+    },
     "agent.info": {
       "direction": "hostToGuest",
       "kind": "request",

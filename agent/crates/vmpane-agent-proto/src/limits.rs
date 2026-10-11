@@ -18,6 +18,8 @@ pub const MAX_STRING: usize = 64 << 10;
 pub const MAX_CLIPBOARD_BYTES: u64 = 32 << 20;
 /// `clipboard.changed` notifications the host accepts per second before it drops the connection.
 pub const MAX_CLIPBOARD_CHANGED_PER_SECOND: u32 = 10;
+/// Seconds between `agent.heartbeat` notifications.
+pub const HEARTBEAT_SECONDS: u64 = 5;
 /// `fs.freeze` thaws by itself after this long when the request gives no timeout.
 pub const FREEZE_DEFAULT_TIMEOUT_MS: u64 = 10_000;
 /// Longest `fs.freeze` timeout the agent accepts.

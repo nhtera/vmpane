@@ -16,6 +16,9 @@ pub mod method {
     pub const HELLO: &str = "hello";
     pub const AGENT_INFO: &str = "agent.info";
     pub const AGENT_PING: &str = "agent.ping";
+    /// guest → host notification every few seconds: a write on a connection the host no longer has (after a
+    /// VZ snapshot restore the guest's vsock socket survives, the host's does not) fails, so the agent reconnects.
+    pub const AGENT_HEARTBEAT: &str = "agent.heartbeat";
     pub const EXEC_START: &str = "exec.start";
     pub const EXEC_SIGNAL: &str = "exec.signal";
     /// guest → host notification.

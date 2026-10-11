@@ -20,7 +20,8 @@ use tokio::task::JoinSet;
 use vmpane_agent_proto::error::ErrorCode;
 use vmpane_agent_proto::frame::{Frame, FrameDecoder, StreamStatus, is_host_stream};
 use vmpane_agent_proto::jsonrpc::{ErrorObject, Id, Message, Request, Response, encode_value};
-use vmpane_agent_proto::limits::{MAX_CHUNK, MAX_OPEN_STREAMS};
+use vmpane_agent_proto::limits::{HEARTBEAT_SECONDS, MAX_CHUNK, MAX_OPEN_STREAMS};
+use vmpane_agent_proto::methods::Empty;
 use vmpane_agent_proto::methods::{HelloParams, HelloResult, method};
 use vmpane_agent_proto::{MIN_PROTO, PROTO};
 
@@ -359,6 +360,8 @@ pub async fn run(agent: Arc<Agent>, io: BoxIo, token: Option<String>) -> Result<
         execs: exec::Registry::default(),
     });
     let mut tasks = JoinSet::new();
+    let heartbeat = heartbeat(conn.out.clone());
+    tokio::pin!(heartbeat);
     let outcome = loop {
         tokio::select! {
             frame = next_frame(&mut reader, &mut decoder, &mut buf) => match frame {
@@ -371,6 +374,7 @@ pub async fn run(agent: Arc<Agent>, io: BoxIo, token: Option<String>) -> Result<
                 Err(err) => break Err(err),
             },
             Some(_) = tasks.join_next(), if !tasks.is_empty() => {}
+            () = &mut heartbeat => break Err(ConnError::Protocol("the connection stopped taking writes".into())),
             done = &mut writer_task => {
                 break match done {
                     Ok(Ok(())) => Ok(()),
@@ -385,6 +389,20 @@ pub async fn run(agent: Arc<Agent>, io: BoxIo, token: Option<String>) -> Result<
     agent.freeze.thaw_on_disconnect().await;
     writer_task.abort();
     outcome
+}
+
+/// Sends `agent.heartbeat` every few seconds; returns when one cannot be queued in time (a dead connection the
+/// writer is stuck on, or a closed one). A failing write ends the connection through the writer task.
+async fn heartbeat(out: Outbox) {
+    let period = Duration::from_secs(HEARTBEAT_SECONDS);
+    loop {
+        tokio::time::sleep(period).await;
+        match tokio::time::timeout(3 * period, out.notify(method::AGENT_HEARTBEAT, &Empty {})).await
+        {
+            Ok(Ok(())) => {}
+            _ => return,
+        }
+    }
 }
 
 fn closed() -> ConnError {

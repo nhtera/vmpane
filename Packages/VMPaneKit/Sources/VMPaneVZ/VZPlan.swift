@@ -67,9 +67,13 @@ public struct VZPlan: Sendable, Equatable {
     public var pixelsPerInch: Int
     /// Guest serial console (hvc0) is appended here.
     public var serialLog: URL
+    /// The guest tools for this guest OS (agent and installer), shared read-only: tag `vmpane-tools` on Linux,
+    /// `vmpane-tools` under the automount share on macOS. Nil when the app has none.
+    public var guestTools: URL?
 
     public static let sharesTag = "vmpane-shares"
     public static let rosettaTag = "rosetta"
+    public static let guestToolsTag = "vmpane-tools"
 }
 
 public enum VZPlanError: Error, Equatable, Sendable {
@@ -86,7 +90,7 @@ public enum VZPlanError: Error, Equatable, Sendable {
 /// Maps a VM's config to a `VZPlan`.
 public enum VZPlanBuilder {
     public static func plan(
-        _ config: VMConfigV1, bundle: VMBundle,
+        _ config: VMConfigV1, bundle: VMBundle, guestTools: URL? = nil,
         fileExists: (URL) -> Bool = {
             FileManager.default.fileExists(atPath: $0.path)
         }
@@ -130,7 +134,8 @@ public enum VZPlanBuilder {
             shares: config.shares.map { .init(name: $0.name, url: URL(fileURLWithPath: $0.hostPath), readOnly: $0.readOnly) },
             rosetta: config.os == .linux && (config.vz?.rosetta ?? false),
             pixelsPerInch: config.display.ppi,
-            serialLog: bundle.logsDirectory.appendingPathComponent("serial.log"))
+            serialLog: bundle.logsDirectory.appendingPathComponent("serial.log"),
+            guestTools: guestTools)
     }
 
     private static func platformPlan(_ config: VMConfigV1, bundle: VMBundle, fileExists: (URL) -> Bool) throws -> VZPlan.Platform {

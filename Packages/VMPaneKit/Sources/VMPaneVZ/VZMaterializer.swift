@@ -143,15 +143,22 @@ public enum VZMaterializer {
 
     private static func directoryShares(_ plan: VZPlan) -> [VZDirectorySharingDeviceConfiguration] {
         var devices: [VZDirectorySharingDeviceConfiguration] = []
-        if !plan.shares.isEmpty {
-            var isMac = false
-            if case .mac = plan.platform { isMac = true }
+        var isMac = false
+        if case .mac = plan.platform { isMac = true }
+        var directories: [String: VZSharedDirectory] = [:]
+        for share in plan.shares { directories[share.name] = VZSharedDirectory(url: share.url, readOnly: share.readOnly) }
+        // macOS guests see the tools in the automount share; Linux guests mount their own tag.
+        if isMac, let tools = plan.guestTools { directories[VZPlan.guestToolsTag] = VZSharedDirectory(url: tools, readOnly: true) }
+        if !directories.isEmpty {
             // macOS guests mount the automount tag by themselves (under /Volumes/My Shared Files).
             let device = VZVirtioFileSystemDeviceConfiguration(
                 tag: isMac ? VZVirtioFileSystemDeviceConfiguration.macOSGuestAutomountTag : VZPlan.sharesTag)
-            var directories: [String: VZSharedDirectory] = [:]
-            for share in plan.shares { directories[share.name] = VZSharedDirectory(url: share.url, readOnly: share.readOnly) }
             device.share = VZMultipleDirectoryShare(directories: directories)
+            devices.append(device)
+        }
+        if !isMac, let tools = plan.guestTools {
+            let device = VZVirtioFileSystemDeviceConfiguration(tag: VZPlan.guestToolsTag)
+            device.share = VZSingleDirectoryShare(directory: VZSharedDirectory(url: tools, readOnly: true))
             devices.append(device)
         }
         if plan.rosetta, VZLinuxRosettaDirectoryShare.availability == .installed, let rosetta = try? VZLinuxRosettaDirectoryShare() {

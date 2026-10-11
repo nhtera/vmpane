@@ -93,3 +93,21 @@ func helperPushesAndPullsFilesThroughTheAgent() async throws {
     #expect(try await helper.client.call("agent.status") == ["connected": false])
     await helper.tearDown()
 }
+
+/// A macOS agent only syncs (nothing frozen): a disk snapshot of the running VM is refused, and nothing is left
+/// frozen or half-made.
+@Test(.enabled(if: agentBuilt, "build the agent: cd agent && cargo build"))
+func runningDiskSnapshotNeedsARealFreeze() async throws {
+    let (helper, agent) = try await helperWithAgent()
+    _ = try await helper.client.call("vm.start", params: ["headless": true])
+    #expect(try await helper.waitForState("running"))
+    do {
+        _ = try await helper.client.call("vm.snapshot.create", params: ["name": "d", "kind": "disk"])
+        Issue.record("a disk snapshot without a freeze succeeded")
+    } catch let error as RPCError {
+        #expect(error.knownCode == .unsupportedLive)
+    }
+    #expect(try await helper.client.call("vm.snapshot.list") == [])
+    agent.cleanUp()
+    await helper.tearDown()
+}

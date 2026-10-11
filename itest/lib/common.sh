@@ -86,7 +86,7 @@ it_socket() { echo "$VMPANE_SUPPORT_DIR/run/$(it_sid "$1").sock"; }
 # The golden Linux bundle (Ubuntu cloud image, cloud-init done, prints markers on the serial console).
 # Built once into ~/VMPaneItest/linux-base.vmpane; scenarios clone it.
 # Bump when the golden's guest setup changes: an older golden is rebuilt.
-IT_GOLDEN_LINUX_VERSION=4
+IT_GOLDEN_LINUX_VERSION=5
 it_golden_linux() {
     local golden="$HOME/VMPaneItest/linux-base.vmpane"
     if [[ $(cat "$golden/.ready" 2>/dev/null) == "$IT_GOLDEN_LINUX_VERSION" ]]; then echo "$golden"; return 0; fi

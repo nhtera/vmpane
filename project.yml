@@ -46,6 +46,13 @@ targets:
           app="$TARGET_BUILD_DIR/$WRAPPER_NAME"
           frameworks="$app/Contents/Helpers/VMPaneVM.app/Contents/Frameworks"
           rm -rf "$app/Contents/Helpers/qemu" "$app/Contents/Resources/qemu" "$frameworks" "$app/Contents/Resources/GuestTools"
+          # The Linux guest tools (agent, installer; guest-tools/build-linux.sh), shared read-only with VZ Linux guests.
+          if [[ -f "$SRCROOT/build/guest-tools/linux/SHA256SUMS" ]]; then
+            mkdir -p "$app/Contents/Resources/GuestTools"
+            ditto "$SRCROOT/build/guest-tools/linux" "$app/Contents/Resources/GuestTools/linux"
+          else
+            echo "warning: no Linux guest tools in build/guest-tools/linux (guest-tools/build-linux.sh); Linux guests get no agent"
+          fi
           if [[ ! -x "$bundle/bin/qemu-system-aarch64" ]]; then
             echo "warning: no QEMU bundle at $bundle (qemu/scripts/package.sh); Windows guests will not run"
             exit 0

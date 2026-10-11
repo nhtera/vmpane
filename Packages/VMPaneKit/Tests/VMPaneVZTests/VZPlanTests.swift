@@ -96,6 +96,26 @@ private func allExist(_ url: URL) -> Bool { true }
         #expect(configuration.networkDevices.count == 1)
         #expect(configuration.socketDevices.count == 1)
         #expect(FileManager.default.fileExists(atPath: bundle.auxDirectory.appendingPathComponent("efi_vars.fd").path))
+        let tags = configuration.directorySharingDevices.compactMap { ($0 as? VZVirtioFileSystemDeviceConfiguration)?.tag }
+        #expect(!tags.contains(VZPlan.guestToolsTag))  // an app without guest tools
+    }
+}
+
+/// Linux guests get the tools on their own read-only tag, next to (not inside) the user's shares.
+@Test func linuxGuestToolsAreAReadOnlyShareOfTheirOwn() throws {
+    try withTemp { dir in
+        let bundle = try VMBundle.create(at: dir.appendingPathComponent("M.vmpane"), config: linuxConfig())
+        try DiskImage.createRaw(at: bundle.currentDirectory.appendingPathComponent("disk.img"), sizeBytes: 1 << 30)
+        let tools = dir.appendingPathComponent("GuestTools/linux", isDirectory: true)
+        try FileManager.default.createDirectory(at: tools, withIntermediateDirectories: true)
+        let plan = try VZPlanBuilder.plan(try ConfigStore.load(bundle), bundle: bundle, guestTools: tools)
+        let configuration = try VZMaterializer.configuration(plan, serialLog: nil)
+        let devices = configuration.directorySharingDevices.compactMap { $0 as? VZVirtioFileSystemDeviceConfiguration }
+            .filter { $0.tag != VZPlan.rosettaTag }
+        #expect(devices.map(\.tag) == [VZPlan.guestToolsTag])
+        let share = try #require(devices.first?.share as? VZSingleDirectoryShare)
+        #expect(share.directory.isReadOnly)
+        #expect(share.directory.url == tools)
     }
 }
 

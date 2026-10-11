@@ -193,6 +193,13 @@ private func makePrepared(_ dir: URL) throws -> (VMBundle, VMPanePaths) {
         #expect(first.hasPrefix("1.2-q") && first.count == "1.2-q".count + 8)
         try Data("{\"a\":2}".utf8).write(to: manifest)
         #expect(RuntimeStore.version(app: app, appVersion: "1.2") != first)
+        // The Linux guest tools are part of the identity too.
+        let sums = app.appendingPathComponent("Contents/Resources/GuestTools/linux/SHA256SUMS")
+        try FileManager.default.createDirectory(at: sums.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("abc  vmpane-agent\n".utf8).write(to: sums)
+        let withTools = RuntimeStore.version(app: app, appVersion: "1.2")
+        #expect(withTools.contains("-q") && withTools.contains("-t"))
+        #expect(RuntimeStore.helperItems(app: app).map(\.path).contains("GuestTools"))
 
         let paths = VMPanePaths(root: dir.appendingPathComponent("support"))
         let store = RuntimeStore(paths: paths)

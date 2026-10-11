@@ -25,12 +25,17 @@ public struct RuntimeStore: Sendable {
         }
     }
 
-    /// The `runtime/` directory name for `app`: its version, plus the identity of its QEMU bundle when it has
-    /// one, so a rebuilt QEMU under the same app version (every Debug build) gets a fresh copy.
+    /// The `runtime/` directory name for `app`: its version, plus the identity of its QEMU bundle (`-q…`) and
+    /// of its Linux guest tools (`-t…`) when it has them, so a rebuild under the same app version (every Debug
+    /// build) gets a fresh copy.
     public static func version(app: URL, appVersion: String) -> String {
-        let manifest = app.appendingPathComponent("Contents/Resources/qemu/MANIFEST.json")
-        guard let data = try? Data(contentsOf: manifest) else { return appVersion }
-        return "\(appVersion)-q" + SHA256.hash(data: data).prefix(4).map { String(format: "%02x", $0) }.joined()
+        let resources = app.appendingPathComponent("Contents/Resources", isDirectory: true)
+        var version = appVersion
+        for (tag, manifest) in [("q", "qemu/MANIFEST.json"), ("t", "GuestTools/linux/SHA256SUMS")] {
+            guard let data = try? Data(contentsOf: resources.appendingPathComponent(manifest)) else { continue }
+            version += "-\(tag)" + SHA256.hash(data: data).prefix(4).map { String(format: "%02x", $0) }.joined()
+        }
+        return version
     }
 
     /// The runtime version a helper runs from (`runtime/<version>/VMPaneVM.app`), or nil when it does not run
@@ -41,8 +46,9 @@ public struct RuntimeStore: Sendable {
         return parent.lastPathComponent
     }
 
-    /// What a helper runs, from the app bundle: the helper app, and QEMU (`qemu/bin`, `qemu/lib` from
-    /// `Contents/Helpers/qemu`, `qemu/share` from `Contents/Resources/qemu/share`) when the app has it.
+    /// What a helper runs, from the app bundle: the helper app, QEMU (`qemu/bin`, `qemu/lib` from
+    /// `Contents/Helpers/qemu`, `qemu/share` from `Contents/Resources/qemu/share`) and the guest tools
+    /// (`GuestTools` from `Contents/Resources/GuestTools`) when the app has them.
     public static func helperItems(app: URL) -> [Item] {
         let contents = app.appendingPathComponent("Contents", isDirectory: true)
         let qemu = contents.appendingPathComponent("Helpers/qemu", isDirectory: true)
@@ -51,6 +57,7 @@ public struct RuntimeStore: Sendable {
             Item(source: qemu.appendingPathComponent("bin", isDirectory: true), path: "qemu/bin"),
             Item(source: qemu.appendingPathComponent("lib", isDirectory: true), path: "qemu/lib"),
             Item(source: contents.appendingPathComponent("Resources/qemu/share", isDirectory: true), path: "qemu/share"),
+            Item(source: contents.appendingPathComponent("Resources/GuestTools", isDirectory: true), path: "GuestTools"),
         ]
         return candidates.enumerated().filter { index, item in
             index == 0 || FileManager.default.fileExists(atPath: item.source.path)

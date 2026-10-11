@@ -1,0 +1,12 @@
+[Unit]
+Description=VMPane guest agent
+Documentation=https://github.com/nhtera/vmpane
+After=local-fs.target
+
+[Service]
+ExecStart=/usr/local/bin/vmpane-agent
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

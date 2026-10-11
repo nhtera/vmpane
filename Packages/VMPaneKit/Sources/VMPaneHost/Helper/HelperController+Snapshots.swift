@@ -2,8 +2,8 @@ import Foundation
 import VMPaneControl
 import VMPaneCore
 
-/// Snapshot requests. Disk snapshots need the VM stopped (a running guest's file systems are only
-/// consistent with the agent's fs freeze, Phase 07). Live snapshots pause the VM, save its RAM state as
+/// Snapshot requests. Disk snapshots need the VM stopped, or a running guest whose agent can freeze its file
+/// systems (Linux). Live snapshots pause the VM, save its RAM state as
 /// `current/state/suspend.*`, commit it with the disks, and resume; any failure resumes the VM.
 extension HelperController {
     private struct CreateParams: Decodable {
@@ -57,6 +57,7 @@ extension HelperController {
         let context = snapshotContext
         switch kind {
         case .disk:
+            if state == .running { return try await frozenDiskSnapshot(store, name: name, origin: origin, context: context) }
             guard state == .stopped else {
                 throw RPCError(.unsupportedLive, "a disk snapshot needs the VM stopped; take a live snapshot instead")
             }
@@ -70,6 +71,34 @@ extension HelperController {
             }
             return try await liveSnapshot(backend, name: name, origin: origin, context: context)
         }
+    }
+
+    /// A disk snapshot of a running guest: its file systems frozen by the agent (which flushes them) while the
+    /// disks are cloned, then thawed. The agent thaws by itself if this never gets to thaw (timeout, disconnect).
+    /// Without an agent that can freeze (macOS guests only sync; Windows has no freeze), the VM must be stopped.
+    private func frozenDiskSnapshot(
+        _ store: SnapshotStore, name: String, origin: SnapshotMeta.Origin, context: SnapshotContext
+    ) async throws -> SnapshotMeta {
+        let refusal = RPCError(
+            .unsupportedLive,
+            "a disk snapshot of a running VM needs the guest agent's file system freeze; stop the VM or take a live snapshot")
+        guard let connection = await agentHub.connection, let peer = await agentHub.status.peer,
+            peer.hello.caps?.contains(AgentCap.freeze) == true
+        else { throw refusal }
+        let freeze = try await connection.call(
+            AgentMethod.fsFreeze, RPCParams.encode(AgentFsFreezeParams(timeoutMs: 10_000)).get(), timeout: .seconds(15))
+        let frozen = (try? RPCParams.decode(AgentFsFreezeResult.self, from: freeze.result).get().frozen) ?? []
+        guard !frozen.isEmpty else {
+            _ = try? await connection.call(AgentMethod.fsThaw)
+            throw refusal
+        }
+        let created = await Blocking.run { Result { try store.create(name: name, kind: .disk, origin: origin, context: context) } }
+        do {
+            _ = try await connection.call(AgentMethod.fsThaw, timeout: .seconds(15))
+        } catch {
+            Self.log.error("thawing the guest after a snapshot failed: \(String(describing: error), privacy: .public)")
+        }
+        return try created.get()
     }
 
     private func liveSnapshot(

@@ -47,7 +47,7 @@ extension AgentConnection {
             if request.method == AgentMethod.clipboardChanged && !allowClipboardNotice() {
                 return close(.violation("clipboard.changed faster than \(AgentLimits.maxClipboardChangedPerSecond)/s"))
             }
-            notificationContinuation.yield(request)
+            if request.method != AgentMethod.agentHeartbeat { notificationContinuation.yield(request) }
         case .request(let request):
             close(.violation("the guest may not send \(request.method)"))
         case .response(let response):

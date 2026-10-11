@@ -56,6 +56,7 @@ pub fn protocol_document() -> Value {
         hello,
         request::<Empty, AgentInfo>(&mut g, method::AGENT_INFO, None),
         request::<Empty, Empty>(&mut g, method::AGENT_PING, None),
+        notification::<Empty>(&mut g, method::AGENT_HEARTBEAT),
         request::<ExecStartParams, ExecStartResult>(&mut g, method::EXEC_START, Some(cap::EXEC)),
         request::<ExecSignalParams, Empty>(&mut g, method::EXEC_SIGNAL, Some(cap::EXEC)),
         notification::<ExecExited>(&mut g, method::EXEC_EXITED),
