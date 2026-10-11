@@ -16,18 +16,19 @@ struct Harness {
 
     static func make(
         memoryMiB: Int = 64, closeAction: UIConfig.CloseAction = .keepRunning,
-        afterStop: (@Sendable (VMConfigV1) -> VMConfigV1?)? = nil, configure: (inout VMConfigV1) -> Void = { _ in }
+        afterStop: (@Sendable (VMConfigV1) -> VMConfigV1?)? = nil, os: GuestOS = .linux,
+        configure: (inout VMConfigV1) -> Void = { _ in }
     ) async throws -> Harness {
         let root = URL(fileURLWithPath: "/tmp/vp-l-\(UUID().uuidString.prefix(8))", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let paths = VMPanePaths(root: root.appendingPathComponent("s"))
-        var config = VMConfigV1(VMConfigFields.new(name: "L", os: .linux, macAddress: MachineIdentity.randomMACAddress()))
+        var config = VMConfigV1(VMConfigFields.new(name: "L", os: os, macAddress: MachineIdentity.randomMACAddress()))
         config.memory.mib = memoryMiB
         config.ui.closeAction = closeAction
         configure(&config)
         let bundle = try VMBundle.create(at: root.appendingPathComponent("L.vmpane"), config: config)
         let prepared = try LaunchCoordinator.prepareBundle(bundle, paths: paths, runtimeVersion: "t")
-        let backend = ScriptedBackend()
+        let backend = ScriptedBackend(kind: config.backend)
         let controller = HelperController(
             prepared: prepared, runtimeVersion: "t", backend: backend, afterStop: afterStop
         ) {}

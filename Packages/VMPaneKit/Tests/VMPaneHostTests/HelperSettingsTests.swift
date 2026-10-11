@@ -132,3 +132,44 @@ private func firstStatus(_ listed: JSONValue) -> JSONValue? {
     guard case .array(let rules)? = listed["rules"] else { return nil }
     return rules.first?["status"]
 }
+
+/// A Windows VM's shares are a WebDAV server on 127.0.0.1 under a per-run token while it runs; share changes
+/// apply live; stopping ends it.
+@Test func windowsSharesAreServedOverWebDAVWhileTheVMRuns() async throws {
+    let helper = try await Harness.make(os: .windows)
+    let folder = helper.root.appendingPathComponent("Shared")
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    try Data("hi".utf8).write(to: folder.appendingPathComponent("a.txt"))
+    _ = try await helper.client.call("vm.start")
+    #expect(try await helper.waitForState("running"))
+    let webdav = try #require(await helper.controller.webdav)
+    #expect(webdav.token.count == 32 && webdav.guestURL.hasPrefix("http://10.0.2.2:\(webdav.port)/"))
+    let share: JSONValue = ["id": "s1", "name": "Shared", "hostPath": .string(folder.path), "readOnly": false]
+    let applied = try await helper.client.call("vm.settings.apply", params: ["patch": ["shares": [share]]])
+    #expect(applied["fields"] == ["shares": "applied"])
+    let base = "http://127.0.0.1:\(webdav.port)"
+    #expect(await httpGet("\(base)/\(webdav.token)/Shared/a.txt") == "hi")
+    #expect(await httpGet("\(base)/Shared/a.txt") == nil, "nothing without the token")
+    _ = try await helper.client.call("vm.stop", params: ["mode": "force"])
+    #expect(try await helper.waitForState("stopped"))
+    #expect(await helper.controller.webdav == nil)
+    #expect(await httpGet("\(base)/\(webdav.token)/Shared/a.txt") == nil, "the server is gone")
+    await helper.tearDown()
+}
+
+/// The body of a 200 answer, or nil.
+private func httpGet(_ url: String) async -> String? {
+    await withCheckedContinuation { done in
+        DispatchQueue.global().async {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
+            process.arguments = ["-sf", "--max-time", "5", url]
+            let output = Pipe()
+            process.standardOutput = output
+            try? process.run()
+            let data = output.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            done.resume(returning: process.terminationStatus == 0 ? String(bytes: data, encoding: .utf8) : nil)
+        }
+    }
+}

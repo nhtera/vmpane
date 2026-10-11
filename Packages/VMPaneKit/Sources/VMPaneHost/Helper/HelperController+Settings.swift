@@ -30,7 +30,9 @@ extension HelperController {
 
             // Port forwards are host settings, but a QEMU guest's live in QEMU's NAT: the backend applies them too.
             let livePaths = accepted.filter { SettingsPatch.kind(of: $0) == .live || $0.hasPrefix("portForwards") }
-            let live = running ? await backend?.applyLive(updated, paths: livePaths) ?? [] : []
+            var live = running ? await backend?.applyLive(updated, paths: livePaths) ?? [] : []
+            // A running Windows VM's shares are the helper's WebDAV server.
+            if accepted.contains("shares"), updateWebDAVShares(updated.shares) { live.insert("shares") }
             // A running VZ VM's forwards are the helper's own listeners.
             let forwardsLive =
                 running && backend?.kind == .vz && accepted.contains { $0.hasPrefix("portForwards") }

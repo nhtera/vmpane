@@ -50,6 +50,7 @@ extension HelperController {
             }
             Task { await Self.syncClock(connection, peer: peer) }
             Task { await self.mountShares(connection, peer: peer) }
+            mapSharesDrive(connection, peer: peer)
             broadcastAgent(connected: true)
         case .disconnected:
             let bridge = clipboardBridge

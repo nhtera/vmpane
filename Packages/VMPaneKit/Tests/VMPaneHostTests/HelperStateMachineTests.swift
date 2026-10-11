@@ -40,7 +40,7 @@ func transitionTableIsExhaustive(state: VMRunState) {
 
 /// A backend that follows a script, for helper tests without a hypervisor.
 final class ScriptedBackend: VMBackend, @unchecked Sendable {
-    let kind = BackendKind.vz
+    let kind: BackendKind
     let capabilities: LiveCapabilities = [.pause, .suspend, .liveSnapshot, .screenshot, .input]
     let events: AsyncStream<BackendEvent>
     private let continuation: AsyncStream<BackendEvent>.Continuation
@@ -55,7 +55,8 @@ final class ScriptedBackend: VMBackend, @unchecked Sendable {
     var livePaths: Set<String> = []
     private(set) var lastStartConfig: VMConfigV1?
 
-    init() {
+    init(kind: BackendKind = .vz) {
+        self.kind = kind
         (events, continuation) = AsyncStream.makeStream(of: BackendEvent.self)
         (agentSockets, agentContinuation) = AsyncStream.makeStream(of: Int32.self)
     }

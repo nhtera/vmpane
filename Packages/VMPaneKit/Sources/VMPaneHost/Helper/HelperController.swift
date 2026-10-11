@@ -35,6 +35,9 @@ public actor HelperController {
     /// helper app provides for it.
     var clipboardBridge: ClipboardBridge?
     var hostPasteboard: HostPasteboard?
+    /// A running Windows VM's shared folders over WebDAV (`HelperController+Shares`), and the drive mapping task.
+    var webdav: SharesWebDAV?
+    var webdavMapping: Task<Void, Never>?
     /// The file drop in progress (`vm.files.cancel` stops it).
     var dropTask: Task<Result<JSONValue, RPCError>, Never>?
     /// A running VZ VM's port forwards (`HelperController+Ports`).

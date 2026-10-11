@@ -4,7 +4,8 @@
 #   1. drivers: every INF under drivers\ (virtio-win ARM64 w11, the set that passed Gate 00 S2), with pnputil;
 #      viogpudo is installed while ramfb is the only display (VMPane adds virtio-gpu afterwards);
 #   2. reports "VMPANE-INSTALL firstLogon" on the VMPane agent port (it exists once vioserial is installed);
-#   3. spice-vdagent (clipboard, display resize) and the VMPane agent, when the disc has them;
+#   3. spice-vdagent (clipboard, display resize) and the VMPane agent, when the disc has them; the WebClient
+#      service for shared folders;
 #   4. unattended: checks the install's password is gone from Windows (Setup's answer copies, the auto-logon
 #      password; the unattend removed them before running this script) and, only then,
 #   5. reports "VMPANE-INSTALL toolsInstalled" and shuts Windows down: VMPane restarts it with its network and
@@ -71,6 +72,13 @@ foreach ($msi in @(Get-ChildItem -Path $root -Filter '*.msi' -Recurse -ErrorActi
     $process = Start-Process -FilePath msiexec.exe -ArgumentList @('/i', "`"$($msi.FullName)`"", '/qn', '/norestart') -Wait -PassThru
     Log ("installer {0}: exit {1}" -f $msi.Name, $process.ExitCode)
 }
+
+# Shared folders come as a WebDAV drive (VMPane maps it at logon through the agent): the WebClient service
+# starts with Windows, and files over its 50 MB default may travel (up to 4 GB, WebClient's ceiling).
+Set-Service -Name WebClient -StartupType Automatic -ErrorAction SilentlyContinue
+Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\WebClient\Parameters' -Name FileSizeLimitInBytes `
+    -Type DWord -Value 0xFFFFFFFF -ErrorAction SilentlyContinue
+Log ("WebClient: {0}" -f (Get-Service -Name WebClient -ErrorAction SilentlyContinue).StartType)
 
 # The MSI installs the agent service without starting it: during an unattended install this script still needs
 # the agent port (a single-open device) for its reports, and the service starts with the restart that follows.
