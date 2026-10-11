@@ -41,8 +41,9 @@ install -m 0644 "$here/vmpane-agent.service" "$unit"
 install -d -m 0755 "$(dirname "$user_unit")"
 install -m 0644 "$here/vmpane-session.service" "$user_unit"
 systemctl daemon-reload
-systemctl enable vmpane-agent.service >/dev/null 2>&1
-systemctl restart vmpane-agent.service
 # Starts with each user's next login; running helpers of an older version are refused and restart themselves.
 systemctl --global enable vmpane-session.service >/dev/null 2>&1
+systemctl enable vmpane-agent.service >/dev/null 2>&1
+# Last: run by the agent itself (an update through exec), the restart ends this script.
+systemctl restart vmpane-agent.service
 echo "VMPane agent installed: $("$bin" --version)"

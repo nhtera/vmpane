@@ -146,6 +146,9 @@ connected now.
 The socket is world-writable. Who may stay:
 - the peer's uid must own the active console session: logind's foreground seat session on Linux (any active
   session on a guest without seats), the owner of `/dev/console` on macOS;
+- while one user's helper is connected, another user's is refused;
+- on Windows the service launches the helper itself, as the console user, on a named pipe with a random name.
+  Only SYSTEM and that user may open the pipe, and only the launched process id is served;
 - the helper must be the daemon's own version. On a mismatch, after a guest-tools update, the daemon refuses
   its `hello`, the helper exits 0, and its service manager starts the installed binary.
 

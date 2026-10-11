@@ -8,7 +8,8 @@ use std::time::Duration;
 
 use tokio::sync::{mpsc, oneshot};
 use windows_service::service::{
-    ServiceControl, ServiceControlAccept, ServiceExitCode, ServiceState, ServiceStatus, ServiceType,
+    ServiceControl, ServiceControlAccept, ServiceExitCode, ServiceState, ServiceStatus,
+    ServiceType, SessionChangeReason,
 };
 use windows_service::service_control_handler::{self, ServiceControlHandlerResult};
 use windows_service::{define_windows_service, service_dispatcher};
@@ -47,8 +48,17 @@ fn service_main(_args: Vec<OsString>) {
             }
             ServiceControlHandlerResult::NoError
         }
-        ServiceControl::SessionChange(_) => {
-            let _ = session_tx.send(());
+        ServiceControl::SessionChange(change) => {
+            // Who is at the console changed; a lock, an unlock or a remote session does not move the helper.
+            if matches!(
+                change.reason,
+                SessionChangeReason::ConsoleConnect
+                    | SessionChangeReason::ConsoleDisconnect
+                    | SessionChangeReason::SessionLogon
+                    | SessionChangeReason::SessionLogoff
+            ) {
+                let _ = session_tx.send(());
+            }
             ServiceControlHandlerResult::NoError
         }
         ServiceControl::Interrogate => ServiceControlHandlerResult::NoError,

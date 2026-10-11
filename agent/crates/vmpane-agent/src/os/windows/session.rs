@@ -61,9 +61,9 @@ impl Drop for Helper {
     }
 }
 
-/// Starts `exe session --socket <pipe>` as the user logged in to `session`, on its interactive desktop.
+/// Starts `exe session --once --socket <pipe>` (it exits when the service closes the pipe) as the user logged in to `session`, on its interactive desktop.
 pub fn launch(session: u32, exe: &Path, pipe: &str) -> std::io::Result<Helper> {
-    let mut command: Vec<u16> = format!("\"{}\" session --socket \"{pipe}\"", exe.display())
+    let mut command: Vec<u16> = format!("\"{}\" session --once --socket \"{pipe}\"", exe.display())
         .encode_utf16()
         .chain([0])
         .collect();
@@ -124,4 +124,82 @@ pub fn pipe_client_pid(pipe: &tokio::net::windows::named_pipe::NamedPipeServer) 
     // SAFETY: the pipe handle is open for the duration of the call.
     unsafe { GetNamedPipeClientProcessId(HANDLE(pipe.as_raw_handle()), &mut pid) }.ok()?;
     Some(pid)
+}
+
+/// The string SID of the user logged in to `session`.
+pub fn user_sid(session: u32) -> std::io::Result<String> {
+    use windows::Win32::Foundation::{HLOCAL, LocalFree};
+    use windows::Win32::Security::Authorization::ConvertSidToStringSidW;
+    use windows::Win32::Security::{GetTokenInformation, TOKEN_USER, TokenUser};
+    // SAFETY: the token and buffers live across the calls; the string is freed with LocalFree once.
+    unsafe {
+        let mut token = HANDLE::default();
+        WTSQueryUserToken(session, &mut token).map_err(std::io::Error::other)?;
+        let mut needed = 0u32;
+        let _ = GetTokenInformation(token, TokenUser, None, 0, &mut needed);
+        let mut buffer = vec![0u64; (needed as usize).div_ceil(8).max(1)];
+        let read = GetTokenInformation(
+            token,
+            TokenUser,
+            Some(buffer.as_mut_ptr().cast()),
+            needed,
+            &mut needed,
+        );
+        let _ = CloseHandle(token);
+        read.map_err(std::io::Error::other)?;
+        let user = &*buffer.as_ptr().cast::<TOKEN_USER>();
+        let mut text = PWSTR::null();
+        ConvertSidToStringSidW(user.User.Sid, &mut text).map_err(std::io::Error::other)?;
+        let sid = text.to_string().map_err(std::io::Error::other);
+        let _ = LocalFree(Some(HLOCAL(text.0.cast())));
+        sid
+    }
+}
+
+/// A pipe server that only SYSTEM and the user `sid` may open (read and write), as the first instance of its
+/// name: the default descriptor would let the user only read, and anyone connect first.
+pub fn create_pipe(
+    name: &str,
+    sid: &str,
+) -> std::io::Result<tokio::net::windows::named_pipe::NamedPipeServer> {
+    use windows::Win32::Foundation::{HLOCAL, LocalFree};
+    use windows::Win32::Security::Authorization::{
+        ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
+    };
+    use windows::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
+    use windows::core::HSTRING;
+    let sddl = HSTRING::from(format!("D:P(A;;GA;;;SY)(A;;GRGW;;;{sid})"));
+    // SAFETY: the descriptor lives until LocalFree, after the pipe was created from it.
+    unsafe {
+        let mut descriptor = PSECURITY_DESCRIPTOR::default();
+        ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            &sddl,
+            SDDL_REVISION_1,
+            &mut descriptor,
+            None,
+        )
+        .map_err(std::io::Error::other)?;
+        let mut attributes = SECURITY_ATTRIBUTES {
+            nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+            lpSecurityDescriptor: descriptor.0,
+            bInheritHandle: false.into(),
+        };
+        let server = tokio::net::windows::named_pipe::ServerOptions::new()
+            .first_pipe_instance(true)
+            .reject_remote_clients(true)
+            .create_with_security_attributes_raw(name, (&raw mut attributes).cast());
+        let _ = LocalFree(Some(HLOCAL(descriptor.0)));
+        server
+    }
+}
+
+/// 16 random bytes as hex: pipe names nobody can take ahead.
+pub fn random_hex() -> String {
+    use windows::Win32::Security::Cryptography::{
+        BCRYPT_USE_SYSTEM_PREFERRED_RNG, BCryptGenRandom,
+    };
+    let mut bytes = [0u8; 16];
+    // SAFETY: the buffer is valid for its length.
+    let _ = unsafe { BCryptGenRandom(None, &mut bytes, BCRYPT_USE_SYSTEM_PREFERRED_RNG) };
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }

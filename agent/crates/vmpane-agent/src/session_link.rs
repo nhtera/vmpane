@@ -53,6 +53,9 @@ struct LinkState {
 
 /// One connected session helper.
 pub struct SessionLink {
+    /// The helper's user (Unix); the Windows helper is the one the service launched.
+    #[cfg_attr(not(unix), allow(dead_code))]
+    uid: Option<u32>,
     out: Outbox,
     state: Mutex<LinkState>,
 }
@@ -214,7 +217,9 @@ impl SessionLink {
             }
         };
         let Some(tx) = tx else {
-            return Err(format!("data on unknown stream {stream}"));
+            // Its relay ended (the host went away mid-exec): drop the rest instead of the helper's connection.
+            tracing::debug!(stream, "helper data for a stream nobody reads; dropped");
+            return Ok(());
         };
         if tx.send(item).await.is_err() {
             self.state().inbound.remove(&stream);
@@ -289,6 +294,19 @@ impl SessionHub {
                 Some(allowed) => uid == allowed,
                 None => crate::os::is_console_user(uid),
             };
+            // While one user's helper is connected, another user's cannot take its place (a second SSH login on a
+            // server guest would otherwise receive the host's `as: "user"` commands).
+            let other_user = self
+                .current()
+                .and_then(|link| link.uid)
+                .is_some_and(|current| current != uid);
+            if other_user {
+                tracing::warn!(
+                    uid,
+                    "refused a second user's session helper while another is connected"
+                );
+                continue;
+            }
             if !permitted {
                 tracing::warn!(
                     uid,
@@ -299,16 +317,21 @@ impl SessionHub {
             let hub = Arc::clone(&self);
             tokio::spawn(async move {
                 tracing::info!(uid, "session helper connecting");
-                hub.serve(stream).await
+                hub.serve(stream, Some(uid)).await
             });
         }
     }
 
     /// Runs one helper connection (already admitted) through `hello` to its end.
-    pub async fn serve<S: AsyncRead + AsyncWrite + Send + 'static>(self: Arc<Self>, stream: S) {
+    pub async fn serve<S: AsyncRead + AsyncWrite + Send + 'static>(
+        self: Arc<Self>,
+        stream: S,
+        uid: Option<u32>,
+    ) {
         let (mut reader, writer) = tokio::io::split(stream);
         let writer = spawn_writer(writer);
         let link = Arc::new(SessionLink {
+            uid,
             out: writer.out.clone(),
             state: Mutex::default(),
         });
@@ -342,7 +365,9 @@ impl SessionHub {
                 .message(Response::error(Some(hello.id), error))
                 .await;
             drop(link);
-            let _ = writer.task.await;
+            let crate::connection::Writer { out, task, .. } = writer;
+            drop(out);
+            let _ = task.await;
             return;
         }
         let result = HelloResult {
@@ -432,29 +457,24 @@ impl SessionHub {
     /// with a fresh named pipe whose only accepted client is the launched process. Session changes (logon,
     /// logoff, console switch) end the current helper and start over.
     pub async fn supervise(self: Arc<Self>, mut changes: mpsc::UnboundedReceiver<()>) {
-        use tokio::net::windows::named_pipe::ServerOptions;
-
         use crate::os::session;
 
         let Ok(exe) = std::env::current_exe() else {
             return;
         };
-        let mut attempt = 0u64;
         loop {
             let Some(console) = session::console_session() else {
                 pause_or_change(&mut changes).await;
                 continue;
             };
-            attempt += 1;
-            let pipe = format!(r"\\.\pipe\vmpane-agent-{}-{attempt}", std::process::id());
-            let server = match ServerOptions::new()
-                .first_pipe_instance(true)
-                .reject_remote_clients(true)
-                .create(&pipe)
+            let pipe = format!(r"\\.\pipe\vmpane-agent-{}", session::random_hex());
+            let server = match session::user_sid(console)
+                .and_then(|sid| session::create_pipe(&pipe, &sid))
             {
                 Ok(server) => server,
                 Err(err) => {
-                    tracing::warn!(%err, "cannot create the session helper's pipe");
+                    // Nobody logged in to the console session yet: try again on the next session change.
+                    tracing::debug!(%err, console, "cannot prepare the session helper's pipe");
                     pause_or_change(&mut changes).await;
                     continue;
                 }
@@ -478,7 +498,7 @@ impl SessionHub {
                     tokio::task::spawn_blocking(move || helper.wait())
                 };
                 tokio::select! {
-                    () = Arc::clone(&self).serve(server) => {}
+                    () = Arc::clone(&self).serve(server, None) => {}
                     _ = changes.recv() => {}
                     _ = exited => {}
                 }

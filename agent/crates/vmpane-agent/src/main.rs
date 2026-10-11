@@ -39,9 +39,10 @@ use crate::agent::{Agent, Role};
 use crate::connection::ConnError;
 use crate::transport::Endpoint;
 
-/// Reconnect delays: 1 s doubling to 30 s; back to 1 s after a connection that lasted.
+/// Reconnect delays: 1 s doubling to 10 s (a virtio-serial port fails fast until the host attaches, and the agent
+/// should connect within 10 s of it); back to 1 s after a connection that lasted.
 const BACKOFF_MIN: Duration = Duration::from_secs(1);
-const BACKOFF_MAX: Duration = Duration::from_secs(30);
+const BACKOFF_MAX: Duration = Duration::from_secs(10);
 const STABLE_CONNECTION: Duration = Duration::from_secs(10);
 /// After the host refused our protocol versions, ask again only rarely (an update may follow).
 const REFUSED_DELAY: Duration = Duration::from_secs(300);
@@ -180,7 +181,7 @@ fn run(
             return ExitCode::FAILURE;
         }
     };
-    runtime.block_on(async {
+    let code = runtime.block_on(async {
         let agent = Arc::new(Agent::new(args.role));
         #[cfg(unix)]
         if args.role == Role::Daemon {
@@ -201,7 +202,10 @@ fn run(
                 ExitCode::SUCCESS
             }
         }
-    })
+    });
+    // Blocking work (a process wait, a pending device read) must not hold up a stop.
+    runtime.shutdown_timeout(Duration::from_secs(2));
+    code
 }
 
 async fn stop_signal() {
