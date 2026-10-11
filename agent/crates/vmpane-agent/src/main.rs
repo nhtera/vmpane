@@ -7,6 +7,7 @@
 //!   spec: auto (default) | vsock[:cid:port] | serial[:path] | tcp:host:port | unix:path
 //!   --once: exit when the first connection ends (tests)
 //!   --session-uid <uid>: accept session helpers of this uid instead of the console user's (tests)
+//!   --service: run as the Windows service (the MSI installs it so), logging to %ProgramData%\VMPane
 #![deny(unsafe_code)]
 
 mod agent;
@@ -24,7 +25,9 @@ mod session_link;
 mod timesync;
 mod transport;
 
+use std::future::Future;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -44,6 +47,9 @@ const REFUSED_DELAY: Duration = Duration::from_secs(300);
 
 struct Args {
     role: Role,
+    /// Run under the Windows service control manager.
+    #[cfg_attr(not(windows), allow(dead_code))]
+    service: bool,
     specs: Vec<String>,
     token_file: PathBuf,
     session_socket: PathBuf,
@@ -76,6 +82,7 @@ fn default_session_socket() -> PathBuf {
 fn parse_args() -> Result<Option<Args>, String> {
     let mut args = Args {
         role: Role::Daemon,
+        service: false,
         specs: Vec::new(),
         token_file: default_token_file(),
         session_socket: default_session_socket(),
@@ -102,6 +109,7 @@ fn parse_args() -> Result<Option<Args>, String> {
                 args.token_file = it.next().ok_or("--token-file needs a path")?.into()
             }
             "--once" => args.once = true,
+            "--service" => args.service = true,
             "--verbose" => args.verbose = true,
             "--version" => {
                 println!(
@@ -126,10 +134,40 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    log::init(args.verbose);
-    let stale = os::thaw_stale();
-    if !stale.is_empty() {
-        tracing::warn!(?stale, "thawed file systems a previous agent left frozen");
+    #[cfg(windows)]
+    if args.service {
+        // Started by the service control manager: stop and session changes come from its handler.
+        log::init(args.verbose, Some(log::service_log_path()));
+        let started = os::service::run(move |signals| {
+            let os::service::Signals { stop, sessions } = signals;
+            let stop = Box::pin(async move {
+                let _ = stop.await;
+            });
+            run(args, stop, Some(sessions));
+        });
+        return if started {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::FAILURE
+        };
+    }
+    log::init(args.verbose, None);
+    run(args, Box::pin(stop_signal()), None)
+}
+
+/// Session changes, which restart the user-session helper (Windows service only).
+type SessionChanges = Option<tokio::sync::mpsc::UnboundedReceiver<()>>;
+
+fn run(
+    args: Args,
+    stop: Pin<Box<dyn Future<Output = ()> + Send>>,
+    sessions: SessionChanges,
+) -> ExitCode {
+    if args.role == Role::Daemon {
+        let stale = os::thaw_stale();
+        if !stale.is_empty() {
+            tracing::warn!(?stale, "thawed file systems a previous agent left frozen");
+        }
     }
     let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -148,9 +186,15 @@ fn main() -> ExitCode {
             let hub = Arc::clone(&agent.session);
             tokio::spawn(hub.listen(args.session_socket.clone(), args.session_uid));
         }
+        #[cfg(windows)]
+        if let Some(changes) = sessions {
+            tokio::spawn(Arc::clone(&agent.session).supervise(changes));
+        }
+        #[cfg(not(windows))]
+        let _ = sessions;
         tokio::select! {
             code = serve(Arc::clone(&agent), args) => code,
-            () = stop_signal() => {
+            () = stop => {
                 agent.freeze.thaw_on_disconnect().await;
                 tracing::info!("stopping");
                 ExitCode::SUCCESS
@@ -183,7 +227,7 @@ async fn stop_signal() {
 
 async fn serve(agent: Arc<Agent>, args: Args) -> ExitCode {
     let endpoints: Vec<Endpoint> = if args.role == Role::Session {
-        vec![Endpoint::Unix(args.session_socket.clone())]
+        vec![Endpoint::session(&args.session_socket)]
     } else if args.specs.is_empty() || args.specs.iter().any(|s| s == "auto") {
         Endpoint::auto(&args.token_file)
     } else {

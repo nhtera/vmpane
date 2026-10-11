@@ -35,6 +35,9 @@ pub enum Endpoint {
         token_file: PathBuf,
     },
     Unix(PathBuf),
+    /// A named pipe (the Windows session helper's link to the service).
+    #[cfg(windows)]
+    Pipe(String),
 }
 
 impl Endpoint {
@@ -92,6 +95,18 @@ impl Endpoint {
         }
     }
 
+    /// Where a session helper reaches its daemon: a Unix socket, or on Windows the named pipe it was given.
+    pub fn session(path: &std::path::Path) -> Endpoint {
+        #[cfg(windows)]
+        {
+            Endpoint::Pipe(path.to_string_lossy().into_owned())
+        }
+        #[cfg(not(windows))]
+        {
+            Endpoint::Unix(path.to_owned())
+        }
+    }
+
     pub fn needs_token(&self) -> bool {
         matches!(self, Endpoint::Tcp { .. })
     }
@@ -108,6 +123,10 @@ impl Endpoint {
             Endpoint::Unix(path) => unix::connect(path).await,
             #[cfg(not(unix))]
             Endpoint::Unix(_) => Err(std::io::ErrorKind::Unsupported.into()),
+            #[cfg(windows)]
+            Endpoint::Pipe(name) => Ok(Box::new(
+                tokio::net::windows::named_pipe::ClientOptions::new().open(name)?,
+            )),
         }
     }
 }
@@ -119,6 +138,8 @@ impl std::fmt::Display for Endpoint {
             Endpoint::Serial(path) => write!(f, "serial:{}", path.display()),
             Endpoint::Tcp { addr, .. } => write!(f, "tcp:{addr}"),
             Endpoint::Unix(path) => write!(f, "unix:{}", path.display()),
+            #[cfg(windows)]
+            Endpoint::Pipe(name) => write!(f, "pipe:{name}"),
         }
     }
 }

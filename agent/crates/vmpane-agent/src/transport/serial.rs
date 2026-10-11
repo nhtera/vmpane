@@ -1,11 +1,15 @@
-//! virtio-serial port (QEMU guests). A port opens only once, so reads and writes go through two handles to
-//! the same open file (a dup), each with its own blocking worker: a read waiting for the host never holds up
-//! a write.
+//! virtio-serial port (QEMU guests). A port opens only once, so on Linux reads and writes go through two
+//! handles to the same open file (a dup), each with its own blocking worker: a read waiting for the host never
+//! holds up a write. Windows serializes synchronous I/O per file object, so there the port is overlapped
+//! (`os::windows::serial`).
 
 use std::path::{Path, PathBuf};
+#[cfg(not(windows))]
 use std::pin::Pin;
+#[cfg(not(windows))]
 use std::task::{Context, Poll};
 
+#[cfg(not(windows))]
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 use super::BoxIo;
@@ -24,6 +28,12 @@ pub fn default_path() -> PathBuf {
     }
 }
 
+#[cfg(windows)]
+pub async fn open(path: &Path) -> std::io::Result<BoxIo> {
+    crate::os::serial::open(path).await
+}
+
+#[cfg(not(windows))]
 pub async fn open(path: &Path) -> std::io::Result<BoxIo> {
     let path = path.to_owned();
     let (reader, writer) = tokio::task::spawn_blocking(move || -> std::io::Result<_> {
@@ -39,11 +49,13 @@ pub async fn open(path: &Path) -> std::io::Result<BoxIo> {
     }))
 }
 
+#[cfg(not(windows))]
 struct SerialPort {
     reader: tokio::fs::File,
     writer: tokio::fs::File,
 }
 
+#[cfg(not(windows))]
 impl AsyncRead for SerialPort {
     fn poll_read(
         mut self: Pin<&mut Self>,
@@ -54,6 +66,7 @@ impl AsyncRead for SerialPort {
     }
 }
 
+#[cfg(not(windows))]
 impl AsyncWrite for SerialPort {
     fn poll_write(
         mut self: Pin<&mut Self>,

@@ -8,37 +8,24 @@
 //! version: on a mismatch (the guest tools were updated) the daemon refuses its `hello`, the helper exits, and
 //! its service manager starts the new binary.
 
-// The Windows listener (a named pipe) comes with the Windows session launch; until then only Unix serves helpers.
-#![cfg_attr(not(unix), allow(dead_code))]
-
 use std::collections::HashMap;
 #[cfg(unix)]
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use bytes::Bytes;
-#[cfg(unix)]
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use serde_json::Value;
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::{mpsc, oneshot};
-#[cfg(unix)]
 use vmpane_agent_proto::PROTO;
 use vmpane_agent_proto::error::ErrorCode;
-#[cfg(unix)]
-use vmpane_agent_proto::frame::{Frame, FrameDecoder};
-use vmpane_agent_proto::frame::{StreamStatus, is_host_stream};
-#[cfg(unix)]
-use vmpane_agent_proto::jsonrpc::Message;
-use vmpane_agent_proto::jsonrpc::{ErrorObject, Id, Request, Response, encode_value};
+use vmpane_agent_proto::frame::{Frame, FrameDecoder, StreamStatus, is_host_stream};
+use vmpane_agent_proto::jsonrpc::{ErrorObject, Id, Message, Request, Response, encode_value};
 use vmpane_agent_proto::limits::MAX_OPEN_STREAMS;
-use vmpane_agent_proto::methods::ExecExited;
-#[cfg(unix)]
-use vmpane_agent_proto::methods::{HelloParams, HelloResult, method};
+use vmpane_agent_proto::methods::{ExecExited, HelloParams, HelloResult, method};
 
-use crate::connection::{Incoming, Outbox};
-#[cfg(unix)]
-use crate::connection::{next_frame, read_message, spawn_writer};
+use crate::connection::{Incoming, Outbox, next_frame, read_message, spawn_writer};
 
 /// Calls to the helper wait this long for their response.
 const CALL_TIMEOUT: Duration = Duration::from_secs(30);
@@ -265,13 +252,16 @@ impl SessionHub {
                 continue;
             }
             let hub = Arc::clone(&self);
-            tokio::spawn(async move { hub.serve(stream, uid).await });
+            tokio::spawn(async move {
+                tracing::info!(uid, "session helper connecting");
+                hub.serve(stream).await
+            });
         }
     }
 
-    #[cfg(unix)]
-    async fn serve(self: Arc<Self>, stream: tokio::net::UnixStream, uid: u32) {
-        let (mut reader, writer) = stream.into_split();
+    /// Runs one helper connection (already admitted) through `hello` to its end.
+    pub async fn serve<S: AsyncRead + AsyncWrite + Send + 'static>(self: Arc<Self>, stream: S) {
+        let (mut reader, writer) = tokio::io::split(stream);
         let writer = spawn_writer(writer);
         let link = Arc::new(SessionLink {
             out: writer.out.clone(),
@@ -322,7 +312,7 @@ impl SessionHub {
         {
             return;
         }
-        tracing::info!(uid, "session helper connected");
+        tracing::info!("session helper connected");
         self.set(Some(Arc::clone(&link)));
         let outcome = read_loop(&link, &mut reader, &mut decoder, &mut buf).await;
         link.close();
@@ -331,7 +321,7 @@ impl SessionHub {
         if current.as_ref().is_some_and(|c| Arc::ptr_eq(c, &link)) {
             *current = None;
         }
-        tracing::info!(uid, ?outcome, "session helper disconnected");
+        tracing::info!(?outcome, "session helper disconnected");
     }
 }
 
@@ -351,10 +341,9 @@ fn bind(path: &Path) -> std::io::Result<tokio::net::UnixListener> {
     Ok(listener)
 }
 
-#[cfg(unix)]
-async fn read_loop(
+async fn read_loop<R: AsyncRead + Unpin>(
     link: &SessionLink,
-    reader: &mut tokio::net::unix::OwnedReadHalf,
+    reader: &mut R,
     decoder: &mut FrameDecoder,
     buf: &mut BytesMut,
 ) -> Result<(), String> {
@@ -384,4 +373,79 @@ async fn read_loop(
 /// Params for relaying a request: the same object, re-encoded (it was already validated by the caller).
 pub fn relay_params<T: serde::Serialize>(params: &T) -> Value {
     encode_value(params)
+}
+
+#[cfg(windows)]
+impl SessionHub {
+    /// Keeps a helper running as the user at the console (Windows service only): launched into that session
+    /// with a fresh named pipe whose only accepted client is the launched process. Session changes (logon,
+    /// logoff, console switch) end the current helper and start over.
+    pub async fn supervise(self: Arc<Self>, mut changes: mpsc::UnboundedReceiver<()>) {
+        use tokio::net::windows::named_pipe::ServerOptions;
+
+        use crate::os::session;
+
+        let Ok(exe) = std::env::current_exe() else {
+            return;
+        };
+        let mut attempt = 0u64;
+        loop {
+            let Some(console) = session::console_session() else {
+                pause_or_change(&mut changes).await;
+                continue;
+            };
+            attempt += 1;
+            let pipe = format!(r"\\.\pipe\vmpane-agent-{}-{attempt}", std::process::id());
+            let server = match ServerOptions::new()
+                .first_pipe_instance(true)
+                .reject_remote_clients(true)
+                .create(&pipe)
+            {
+                Ok(server) => server,
+                Err(err) => {
+                    tracing::warn!(%err, "cannot create the session helper's pipe");
+                    pause_or_change(&mut changes).await;
+                    continue;
+                }
+            };
+            let helper = match session::launch(console, &exe, &pipe) {
+                Ok(helper) => Arc::new(helper),
+                Err(err) => {
+                    // No user logged in to the console session yet: try again on the next session change.
+                    tracing::debug!(%err, console, "cannot start the session helper");
+                    pause_or_change(&mut changes).await;
+                    continue;
+                }
+            };
+            let connected = tokio::select! {
+                result = tokio::time::timeout(Duration::from_secs(30), server.connect()) => matches!(result, Ok(Ok(()))),
+                _ = changes.recv() => false,
+            };
+            if connected && session::pipe_client_pid(&server) == Some(helper.pid) {
+                let exited = {
+                    let helper = Arc::clone(&helper);
+                    tokio::task::spawn_blocking(move || helper.wait())
+                };
+                tokio::select! {
+                    () = Arc::clone(&self).serve(server) => {}
+                    _ = changes.recv() => {}
+                    _ = exited => {}
+                }
+                self.set(None);
+            } else if connected {
+                tracing::warn!("a process other than the launched helper took the session pipe");
+            }
+            helper.kill();
+            tokio::time::sleep(Duration::from_secs(2)).await;
+        }
+    }
+}
+
+/// Five seconds, or less if the session changes.
+#[cfg(windows)]
+async fn pause_or_change(changes: &mut mpsc::UnboundedReceiver<()>) {
+    tokio::select! {
+        () = tokio::time::sleep(Duration::from_secs(5)) => {}
+        _ = changes.recv() => {}
+    }
 }

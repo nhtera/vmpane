@@ -11,6 +11,9 @@ use windows::Win32::System::SystemInformation::SetSystemTime;
 use windows::Win32::System::Time::FileTimeToSystemTime;
 
 mod net;
+pub mod serial;
+pub mod service;
+pub mod session;
 pub use net::{interfaces, listening_ports};
 
 pub const HAS_NET_INFO: bool = true;
@@ -80,13 +83,6 @@ pub fn mode_of(_meta: &std::fs::Metadata) -> u32 {
 
 pub fn create_private_dir(path: &Path) -> std::io::Result<()> {
     std::fs::create_dir(path)
-}
-
-pub fn open_serial(path: &Path) -> std::io::Result<std::fs::File> {
-    std::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(path)
 }
 
 /// Selects `path` in Explorer.
