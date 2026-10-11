@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 import VMPaneControl
@@ -137,4 +138,15 @@ private func eventually(_ condition: @MainActor () -> Bool) async -> Bool {
     channel.answer("vm.snapshot.delete", .failure(RPCError(.invalidParams, "no snapshot")))
     await model.delete(newer)
     #expect(model.lastError == "no snapshot")
+}
+
+@Test @MainActor func dockIconsDifferBySystemAndState() throws {
+    func pixels(_ image: NSImage) throws -> Data {
+        let tiff = try #require(image.tiffRepresentation)
+        return try #require(NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]))
+    }
+    let linux = try pixels(DockIcon.image(os: .linux, state: .running))
+    #expect(linux != (try pixels(DockIcon.image(os: .windows, state: .running))))
+    #expect(linux != (try pixels(DockIcon.image(os: .linux, state: .paused))))
+    #expect(DockIcon.badge(.paused) == "Paused" && DockIcon.badge(.running) == nil)
 }

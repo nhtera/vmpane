@@ -96,7 +96,7 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
         Task {
             do {
                 try await controller.start()
-                await self.connectWindowModel(socket: prepared.runFiles.socketURL)
+                await self.connectWindowModel(socket: prepared.runFiles.socketURL, bundle: prepared.lock.bundle)
             } catch {
                 FileHandle.standardError.write(Data("VMPaneVM: cannot bind the control socket: \(error)\n".utf8))
                 await controller.shutdown()
@@ -138,11 +138,51 @@ extension HelperDelegate {
         }
     }
 
-    @MainActor fileprivate func connectWindowModel(socket: URL) async {
+    @MainActor fileprivate func connectWindowModel(socket: URL, bundle: VMBundle) async {
         guard let client = try? UDSClient.connect(to: socket) else { return }
         let model = HelperViewModel(channel: client)
         windowModel = model
         await model.start()
+        let os = (try? ConfigStore.load(bundle))?.os
+        let custom = NSImage(contentsOf: bundle.url.appendingPathComponent("icon.png"))
+        followDockTile(model, os: os, custom: custom)
+    }
+
+    /// The Dock tile shows the VM's icon and state, and changes with it.
+    @MainActor private func followDockTile(_ model: HelperViewModel, os: GuestOS?, custom: NSImage?) {
+        let state = withObservationTracking {
+            model.state
+        } onChange: {
+            Task { @MainActor [weak self] in self?.followDockTile(model, os: os, custom: custom) }
+        }
+        NSApp.applicationIconImage = DockIcon.image(os: os, state: state, custom: custom)
+        NSApp.dockTile.badgeLabel = DockIcon.badge(state)
+    }
+
+    /// The Dock menu: the window, power, pause and a snapshot, for this VM.
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        guard let model = windowModel else { return nil }
+        let menu = NSMenu()
+        menu.autoenablesItems = false  // the items say themselves whether they apply
+        func add(_ title: String, enabled: Bool = true, _ action: @escaping @MainActor () -> Void) {
+            let item = DockMenuItem(title: title, action: action)
+            item.isEnabled = enabled
+            menu.addItem(item)
+        }
+        add("Show Window") { [weak self] in self?.showWindow?() }
+        menu.addItem(.separator())
+        if model.can(.start) {
+            add("Start") { Task { await model.perform(.start) } }
+        } else {
+            add("Shut Down", enabled: model.can(.shutDown)) { Task { await model.perform(.shutDown) } }
+        }
+        if model.can(.resume) {
+            add("Resume") { Task { await model.perform(.resume) } }
+        } else {
+            add("Pause", enabled: model.can(.pause)) { Task { await model.perform(.pause) } }
+        }
+        add("Take Snapshot", enabled: model.can(.snapshot)) { Task { await model.perform(.snapshot) } }
+        return menu
     }
 
     /// Wraps a display window in the VM window's content (toolbar, overlays), once the model is there.
@@ -330,4 +370,20 @@ extension HelperDelegate {
             if let png = await display.capturePNG() { try? png.write(to: output, options: .atomic) }
         }
     }
+}
+
+/// A menu item that runs a closure (the Dock menu has no responder chain to target).
+@MainActor
+private final class DockMenuItem: NSMenuItem {
+    private let run: @MainActor () -> Void
+
+    init(title: String, action: @escaping @MainActor () -> Void) {
+        run = action
+        super.init(title: title, action: #selector(fire), keyEquivalent: "")
+        target = self
+    }
+
+    required init(coder: NSCoder) { fatalError("not used") }
+
+    @objc private func fire() { run() }
 }
