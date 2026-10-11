@@ -10,7 +10,69 @@ import VMPaneMCP
 struct MCP: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Serve VMPane to an AI agent over MCP (stdio), or stop all agents.",
-        subcommands: [MCPServe.self, MCPKill.self], defaultSubcommand: MCPServe.self)
+        subcommands: [MCPServe.self, MCPKill.self, MCPConfig.self], defaultSubcommand: MCPServe.self)
+}
+
+/// Adds VMPane to an AI client's MCP configuration: shows the change, and makes it with --apply (after a backup).
+struct MCPConfig: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "config", abstract: "Add VMPane to Claude Code, Codex CLI or Gemini CLI (shows the change; --apply makes it).")
+    @Argument(help: "claude, codex or gemini") var client: String
+    @Flag(help: "Make the change (the old file is kept as a backup).") var apply = false
+
+    func run() throws {
+        guard let which = ClientConfigWriter.Client(rawValue: client) else { CLI.fail("the client is claude, codex or gemini", .usage) }
+        let vmpane = (Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])).resolvingSymlinksInPath()
+        let claudeOnPath = which == .claude && Self.onPath("claude")
+        let change: ClientConfigWriter.Change
+        do {
+            change = try ClientConfigWriter.change(
+                for: which, vmpane: vmpane, home: Self.home, claudeOnPath: claudeOnPath)
+        } catch {
+            CLI.fail("cannot read the client's settings: \(error)", .failure)
+        }
+        guard apply else {
+            print(change.summary)
+            if let after = change.after, let file = change.file {
+                print("\nNew \(file.lastPathComponent):\n\(after)")
+                print("Run again with --apply to write it (the old file is kept as a backup).")
+            } else if change.command != nil {
+                print("Run again with --apply to run it.")
+            }
+            return
+        }
+        if let command = change.command {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            process.arguments = command
+            try process.run()
+            process.waitUntilExit()
+            if process.terminationStatus != 0 { CLI.fail("\(command.joined(separator: " ")) failed", .failure) }
+            return
+        }
+        guard change.file != nil else {
+            print(change.summary)
+            return
+        }
+        do {
+            let backup = try ClientConfigWriter.apply(change)
+            print("updated \(change.file?.path ?? "")" + (backup.map { " (backup: \($0.lastPathComponent))" } ?? ""))
+        } catch {
+            CLI.fail("cannot write the client's settings: \(error)", .failure)
+        }
+    }
+
+    /// $HOME, like other command-line tools (Foundation's home ignores it).
+    static var home: URL {
+        ProcessInfo.processInfo.environment["HOME"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+            ?? FileManager.default.homeDirectoryForCurrentUser
+    }
+
+    static func onPath(_ program: String) -> Bool {
+        (ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator: ":").contains {
+            FileManager.default.isExecutableFile(atPath: "\($0)/\(program)")
+        }
+    }
 }
 
 /// Stops every AI agent at once (any VM, any helper), with or without the app running; only the app lets them
