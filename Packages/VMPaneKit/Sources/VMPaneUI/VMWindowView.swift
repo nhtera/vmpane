@@ -7,12 +7,31 @@ import VMPaneCore
 public struct VMWindowView: View {
     let display: NSView
     @Bindable var model: HelperViewModel
+    /// Sends ⌘-shortcuts to the guest (true) or leaves them with the Mac; nil when the display cannot.
+    let captureKeys: (@MainActor (Bool) -> Void)?
     @State private var settings: SettingsModel?
     @State private var snapshots: SnapshotsModel?
+    @State private var capturing = false
+    @State private var hud = false
 
-    public init(display: NSView, model: HelperViewModel) {
+    public init(display: NSView, model: HelperViewModel, captureKeys: (@MainActor (Bool) -> Void)? = nil) {
         self.display = display
         self.model = model
+        self.captureKeys = captureKeys
+    }
+
+    private var capture: Binding<Bool> {
+        Binding(
+            get: { capturing },
+            set: { captured in
+                capturing = captured
+                captureKeys?(captured)
+                withAnimation { hud = true }
+                Task {
+                    try? await Task.sleep(for: .seconds(3))
+                    withAnimation { hud = false }
+                }
+            })
     }
 
     private var errorShown: Binding<Bool> {
@@ -28,9 +47,21 @@ public struct VMWindowView: View {
             } else if model.state == .stopped || model.state == .error {
                 StoppedOverlay(model: model)
             }
+            if hud {
+                CaptureHUD(capturing: capturing)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .padding(.top, 12)
+                    .transition(.opacity)
+            }
         }
         .toolbar {
             VMToolbar(model: model)
+            if captureKeys != nil {
+                ToolbarItem(placement: .primaryAction) {
+                    Toggle("Capture Keyboard", systemImage: "command", isOn: capture)
+                        .help(capturing ? "Give ⌘-shortcuts back to the Mac" : "Send ⌘-shortcuts (⌘-Tab, ⌘Q…) to the VM")
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button("Snapshots", systemImage: "clock.arrow.circlepath") { snapshots = model.snapshotsModel() }
                     .help("Take, restore and delete snapshots")
@@ -60,8 +91,10 @@ public struct VMWindowView: View {
 /// Puts `VMWindowView` into a display window, with its toolbar bridged into the window's title bar.
 @MainActor
 public enum VMWindowContent {
-    public static func install(in window: NSWindow, display: NSView, model: HelperViewModel) {
-        let hosting = NSHostingController(rootView: VMWindowView(display: display, model: model))
+    public static func install(
+        in window: NSWindow, display: NSView, model: HelperViewModel, captureKeys: (@MainActor (Bool) -> Void)? = nil
+    ) {
+        let hosting = NSHostingController(rootView: VMWindowView(display: display, model: model, captureKeys: captureKeys))
         hosting.sceneBridgingOptions = [.toolbars]
         hosting.sizingOptions = []  // the window keeps its size and aspect; SwiftUI does not resize it
         let size = window.contentLayoutRect.size
@@ -88,6 +121,7 @@ struct VMToolbar: ToolbarContent {
                 button("Start", "play.fill", .start, help: "Start the VM")
             } else {
                 button("Shut Down", "power", .shutDown, help: "Shut down the guest (the power button)")
+                    .keyboardShortcut(".", modifiers: .command)
             }
             if model.can(.resume) {
                 button("Resume", "play.circle", .resume, help: "Resume the paused VM")
@@ -96,6 +130,7 @@ struct VMToolbar: ToolbarContent {
             }
             button("Suspend", "moon.zzz", .suspend, help: "Save the VM's state and stop it")
             button("Snapshot", "camera.aperture", .snapshot, help: "Take a live snapshot")
+                .keyboardShortcut("s", modifiers: [.command, .shift])
             Button("Screenshot", systemImage: "camera.viewfinder") {
                 let desktop =
                     FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
@@ -155,5 +190,23 @@ struct StoppedOverlay: View {
         .padding(16)
         .background(.regularMaterial, in: Capsule())
         .disabled(!model.can(.start))
+    }
+}
+
+/// Says where ⌘-shortcuts go, for a moment after the keyboard capture changes.
+struct CaptureHUD: View {
+    let capturing: Bool
+
+    var body: some View {
+        Label(
+            capturing
+                ? "⌘-shortcuts go to the VM. Click ⌘ in the toolbar to give them back."
+                : "⌘-shortcuts stay with the Mac.",
+            systemImage: capturing ? "command.circle.fill" : "command.circle"
+        )
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: Capsule())
+        .accessibilityAddTraits(.updatesFrequently)
     }
 }

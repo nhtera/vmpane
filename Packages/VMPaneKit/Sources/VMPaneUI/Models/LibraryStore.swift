@@ -80,6 +80,24 @@ public final class LibraryStore {
         }
     }
 
+    /// Adds VM bundles opened or dropped from elsewhere (Finder, another Mac) and selects the last one. A bundle
+    /// that duplicates a listed VM gets its own identity; its config is checked as any other bundle's.
+    public func importBundles(_ urls: [URL]) async {
+        let ops = LibraryOps(library: library, identity: .ui)
+        var last: URL?
+        for url in urls where url.pathExtension == VMPane.bundleExtension {
+            do {
+                last = try await Blocking.run { try ops.importBundle(at: url).url }
+            } catch {
+                lastError = "Cannot add \(url.lastPathComponent): \(error)"
+            }
+        }
+        await reload()
+        if let last, let row = rows.first(where: { $0.bundleURL.standardizedFileURL == last.standardizedFileURL }) {
+            selection = row.id
+        }
+    }
+
     /// Creates VMs in this library (the wizard).
     public func makeCreator() -> VMCreator {
         VMCreator(ops: LibraryOps(library: library, identity: .ui))

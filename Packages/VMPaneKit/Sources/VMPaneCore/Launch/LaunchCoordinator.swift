@@ -1,6 +1,6 @@
 import Foundation
 
-public enum LaunchError: Error, Equatable, Sendable {
+public enum LaunchError: Error, Equatable, Sendable, CustomStringConvertible {
     /// A live helper already owns this VM (the helper exits with `alreadyRunningExitCode`).
     case alreadyRunning(pid: Int32)
     /// The bundle lock is held but no helper or child we know of holds it.
@@ -8,6 +8,17 @@ public enum LaunchError: Error, Equatable, Sendable {
     /// Children of a dead helper did not exit.
     case orphansSurvived([ProcessRecord])
     case tooManyMacOSGuests(limit: Int)
+
+    public var description: String {
+        switch self {
+        case .alreadyRunning(let pid): "This VM is already running (process \(pid))."
+        case .lockedByUnknownProcess: "Another program has this VM open."
+        case .orphansSurvived(let records):
+            "Processes left by this VM's last run did not exit (\(records.map { String($0.pid) }.joined(separator: ", ")))."
+        case .tooManyMacOSGuests(let limit):
+            "macOS allows \(limit) macOS virtual machines running at once on a Mac. Shut one down to start this one."
+        }
+    }
 }
 
 /// A bundle opened by its helper: locked, recovered, migrated, and registered in the run directory.

@@ -190,12 +190,14 @@ extension HelperDelegate {
         return menu
     }
 
-    /// Wraps a display window in the VM window's content (toolbar, overlays), once the model is there.
     /// Wraps a display window in the VM window's content (toolbar, overlays) once the model is there, keeps its
     /// frame across starts, and makes closing it follow the VM's close action instead of destroying it.
-    @MainActor fileprivate func dress(_ window: NSWindow, display: NSView, hide: @escaping @MainActor () -> Void) {
+    @MainActor fileprivate func dress(
+        _ window: NSWindow, display: NSView, captureKeys: (@MainActor (Bool) -> Void)? = nil,
+        hide: @escaping @MainActor () -> Void
+    ) {
         guard let windowModel, let controller else { return }
-        VMWindowContent.install(in: window, display: display, model: windowModel)
+        VMWindowContent.install(in: window, display: display, model: windowModel, captureKeys: captureKeys)
         let vmID = prepared?.config.id.uuidString ?? "vm"
         window.setFrameAutosaveName("VMPane.vm.\(vmID)")
         let closer = WindowCloser(model: windowModel, controller: controller, hide: hide)
@@ -207,7 +209,8 @@ extension HelperDelegate {
     fileprivate func observeDisplay(_ controller: HelperController, backend: VZBackend, config: VMConfigV1) {
         Task { @MainActor in
             backend.onDisplayCreated = { [weak self] window, view in
-                self?.dress(window, display: view) { backend.hideDisplay() }
+                self?.dress(
+                    window, display: view, captureKeys: { backend.captureSystemKeys($0) }, hide: { backend.hideDisplay() })
             }
         }
         showWindow = { backend.showDisplay() }

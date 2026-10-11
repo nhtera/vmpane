@@ -26,7 +26,7 @@ public final class VZDisplayHost {
         window.isReleasedWhenClosed = false
         window.center()
         view.virtualMachine = box.virtualMachine
-        // ⌘-shortcuts stay with the Mac (window toolbar, ⌘Q, ⌘-Tab) until a keyboard-capture toggle exists.
+        // ⌘-shortcuts stay with the Mac (window toolbar, ⌘Q, ⌘-Tab) until the user captures the keyboard.
         view.capturesSystemKeys = false
         view.automaticallyReconfiguresDisplay = true
         hide()

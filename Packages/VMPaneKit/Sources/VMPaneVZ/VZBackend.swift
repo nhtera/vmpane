@@ -163,6 +163,11 @@ public final class VZBackend: VMBackend {
         display?.show()
     }
 
+    /// Whether ⌘-shortcuts, ⌘-Tab and the like go to the guest (on) or stay with the Mac (off, the default).
+    @MainActor public func captureSystemKeys(_ captured: Bool) {
+        display?.view.capturesSystemKeys = captured
+    }
+
     /// Takes the window off screen as the user sees it (it keeps rendering for capture and input).
     @MainActor public func hideDisplay() {
         display?.hide()

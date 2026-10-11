@@ -29,6 +29,12 @@ struct LibraryWindow: View {
                     }
             }
             .navigationSplitViewColumnWidth(min: 220, ideal: 260)
+            .dropDestination(for: URL.self) { urls, _ in
+                let bundles = urls.filter { $0.pathExtension == VMPane.bundleExtension }
+                guard !bundles.isEmpty else { return false }
+                Task { await store.importBundles(bundles) }
+                return true
+            }
             .overlay {
                 if store.rows.isEmpty {
                     ContentUnavailableView {
@@ -181,6 +187,7 @@ struct VMDetailView: View {
                         .help("Show this VM's window")
                     Button("Shut Down", systemImage: "power") { act(.stop(force: false)) }
                         .help("Shut down the guest")
+                        .keyboardShortcut(".", modifiers: .command)
                 } else {
                     Button("Start", systemImage: "play.fill") { act(.start(headless: false)) }
                         .help("Start this VM")

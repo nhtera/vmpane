@@ -35,6 +35,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         supervisor.start()
     }
 
+    /// A .vmpane bundle opened from Finder (double-click, Open With, or dropped on the Dock icon).
+    func application(_ application: NSApplication, open urls: [URL]) {
+        Task { await library.importBundles(urls) }
+    }
+
     func applicationDidBecomeActive(_ notification: Notification) {
         Task { await library.reload() }
     }

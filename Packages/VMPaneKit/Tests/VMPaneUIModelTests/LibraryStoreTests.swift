@@ -169,6 +169,25 @@ final class LockedFlag: @unchecked Sendable {
     #expect(store.lastError == nil)
 }
 
+@Test @MainActor func importedBundlesAreListedAndSelected() async throws {
+    let links = FakeLinks()
+    let fixture = try makeStore(links)
+    let (store, ops, root) = (fixture.store, fixture.ops, fixture.root)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let made = try ops.create(name: "Elsewhere", os: .linux, diskGiB: 8)
+    let id = try ConfigStore.load(made).id
+    try VMLibrary(paths: VMPanePaths(root: root)).unregister(id: id)
+    let outside = root.appendingPathComponent("Downloads/Elsewhere.vmpane")  // not in the library folder
+    try FileManager.default.createDirectory(at: outside.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try FileManager.default.moveItem(at: made.url, to: outside)
+    await store.reload()
+    #expect(store.rows.isEmpty)
+    await store.importBundles([outside, root.appendingPathComponent("notes.txt")])
+    #expect(store.rows.map(\.name) == ["Elsewhere"])
+    #expect(store.selection == id)
+    #expect(store.lastError == nil)
+}
+
 @Test @MainActor func riskyShareFoldersAreFlagged() {
     let home = URL(fileURLWithPath: "/Users/someone")
     #expect(ShareWarning.reason(for: URL(fileURLWithPath: "/"), home: home) != nil)
