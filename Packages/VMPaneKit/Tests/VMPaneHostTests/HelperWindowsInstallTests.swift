@@ -171,3 +171,21 @@ private func waitUntil(_ condition: () async throws -> Bool) async throws -> Boo
     #expect(try await waitUntil { (try? ConfigStore.load(bundle))?.install == nil })
     await #expect(throws: (any Error).self) { _ = try await helper.client.call("vm.install.cancel", params: [:]) }
 }
+
+/// Setup holds the password in RAM and the disk holds its answers until the first sign-in: an installing VM is
+/// neither suspended nor snapshotted.
+@Test func anInstallingVMIsNeitherSuspendedNorSnapshotted() async throws {
+    let (helper, _) = try await installingHarness()
+    defer { Task { await helper.tearDown() } }
+    _ = try await helper.client.call("vm.start", params: ["headless": true])
+    for (method, params) in [("vm.suspend", [:]), ("vm.snapshot.create", ["name": "s", "kind": "live"])] as [(String, JSONValue)] {
+        do {
+            _ = try await helper.client.call(method, params: params)
+            Issue.record("\(method) succeeded during an install")
+        } catch {
+            #expect(String(describing: error).contains("installing Windows"))
+        }
+    }
+    #expect(try await helper.state() == "running")
+    #expect(helper.stateFiles().isEmpty)
+}

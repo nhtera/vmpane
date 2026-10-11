@@ -87,9 +87,11 @@ extension HelperController {
 
     /// Setup rebooted: from now on the disk must boot, never the ISO again.
     func installGuestReset() async {
-        guard var state = windowsInstall, state.phase == .setupRunning, !state.mediaEjected, let backend else { return }
+        guard let install = windowsInstall, install.phase == .setupRunning, !install.mediaEjected, let backend else { return }
         do {
             try await backend.ejectMedia(WindowsInstall.mediaID)
+            // Re-read after the await: a cancel or timeout that ended the install meanwhile stands.
+            guard var state = windowsInstall, !state.isFinished else { return }
             state.mediaEjected = true
             await persistInstall(state)
             // Out of the config too: a later start (helper restarted, Mac rebooted) cannot boot the ISO at all.
@@ -143,10 +145,12 @@ extension HelperController {
     /// and the NIC comes back (no longer an install). The VM must be stopped.
     @discardableResult
     private func finalizeInstall() async -> Bool {
-        guard var state = windowsInstall else { return false }
+        guard windowsInstall?.phase == .toolsInstalled else { return false }
         var finalized = WindowsInstall.cleanUp(config, bundle: prepared.lock.bundle)
         finalized.qemu?.gpu = .virtio
         guard await saveConfig(finalized) else { return false }
+        // Re-read after the await: a cancel that ended the install meanwhile stands, and the VM stays stopped.
+        guard var state = windowsInstall, !state.isFinished else { return false }
         state.advance(to: .done)
         await persistInstall(state)
         stopInstallWatchers()
@@ -165,6 +169,10 @@ extension HelperController {
         loadInstall()
         guard let install = windowsInstall, !install.isFinished else {
             return .failure(RPCError(.invalidState, "no Windows install is in progress"))
+        }
+        // QEMU is opening the install discs: deleting the unattend image now could leave Setup running with it.
+        guard state != .starting else {
+            return .failure(RPCError(.invalidState, "the VM is starting; cancel the install once it runs"))
         }
         if [.running, .paused].contains(state), let backend, !install.mediaEjected {
             try? await backend.ejectMedia(WindowsInstall.mediaID)

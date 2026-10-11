@@ -4,7 +4,7 @@
 #   2. the helper drives it: first boot, Setup (the ISO ejected at its first reboot), first sign-in, guest tools,
 #      finalize (no install media, virtio display, NIC back), and the VM starts again (target ≤ 40 min);
 #   3. the desktop comes up, and the password is nowhere in the bundle (config, logs, install/) or the helper log.
-# ISO: $VMPANE_WINDOWS_ISO, else ~/Downloads/Win*arm64*.iso; none (or < 40 GiB free) → skipped.
+# ISO: $VMPANE_WINDOWS_ISO, else ~/Downloads/Win*arm64*.iso; none (or < 25 GiB free: prepare needs 20) → skipped.
 # Inside the guest (drivers, DNS, no Winlogon DefaultPassword / Panther answers) needs the agent: Phase 07.
 source "$VMPANE_ROOT/itest/lib/common.sh"
 IT_SCENARIO=win-install
@@ -12,7 +12,7 @@ IT_SCENARIO=win-install
 scenario_run() {
     local iso tools work bundle request password pid socket start phase last='' state
     iso=$(it_windows_iso) || { echo "win-install: no Windows 11 Arm64 ISO (set VMPANE_WINDOWS_ISO)"; return 77; }
-    (($(df -g "$HOME" | awk 'NR == 2 {print $4}') >= 40)) || { echo "win-install: needs 40 GiB free"; return 77; }
+    (($(df -g "$HOME" | awk 'NR == 2 {print $4}') >= 25)) || { echo "win-install: needs 25 GiB free"; return 77; }
     tools=$("$VMPANE_ROOT/guest-tools/build-iso.sh" | tail -1) || it_fail "cannot build the guest-tools ISO" || return 1
 
     work=$(cd "$(mktemp -d /tmp/vp-wi.XXXXXX)" && pwd -P)

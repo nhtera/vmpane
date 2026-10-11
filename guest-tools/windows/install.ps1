@@ -5,8 +5,10 @@
 #      viogpudo is installed while ramfb is the only display (VMPane adds virtio-gpu afterwards);
 #   2. reports "VMPANE-INSTALL firstLogon" on the VMPane agent port (it exists once vioserial is installed);
 #   3. spice-vdagent (clipboard, display resize) and the VMPane agent, when the disc has them;
-#   4. reports "VMPANE-INSTALL toolsInstalled": VMPane then shuts Windows down and restarts it with its network
-#      and virtio display. That is why the unattend runs this script last, after it removed the password.
+#   4. unattended: checks the install's password is gone from Windows (Setup's answer copies, the auto-logon
+#      password; the unattend removed them before running this script) and, only then,
+#   5. reports "VMPANE-INSTALL toolsInstalled" and shuts Windows down: VMPane restarts it with its network and
+#      virtio display. Unreported, the install times out as failed and VMPane asks the user to change the password.
 param([switch]$Unattended)
 
 $ErrorActionPreference = 'Continue'
@@ -45,10 +47,11 @@ public static class VMPanePort {
 function Report([string]$phase) {
     # The port appears a moment after vioserial binds: retry for up to a minute.
     for ($i = 0; $i -lt 60; $i++) {
-        if ([VMPanePort]::Send("VMPANE-INSTALL $phase")) { Log "reported $phase"; return }
+        if ([VMPanePort]::Send("VMPANE-INSTALL $phase")) { Log "reported $phase"; return $true }
         Start-Sleep -Seconds 1
     }
     Log "could not report $phase (no agent port)"
+    return $false
 }
 
 Log "VMPane guest tools from $root (unattended: $Unattended)"
@@ -61,7 +64,7 @@ foreach ($dir in Get-ChildItem -Path $drivers -Directory -ErrorAction SilentlyCo
 }
 
 # 2. The VMPane agent port works now.
-Report 'firstLogon'
+Report 'firstLogon' | Out-Null
 
 # 3. spice-vdagent and the VMPane agent (installers on the disc, when present)
 foreach ($msi in @(Get-ChildItem -Path $root -Filter '*.msi' -Recurse -ErrorAction SilentlyContinue)) {
@@ -69,6 +72,19 @@ foreach ($msi in @(Get-ChildItem -Path $root -Filter '*.msi' -Recurse -ErrorActi
     Log ("installer {0}: exit {1}" -f $msi.Name, $process.ExitCode)
 }
 
-# 4. Done: VMPane restarts the VM with its network and virtio display.
-Report 'toolsInstalled'
+if (-not $Unattended) { Log 'done'; exit 0 }
+
+# 4. The install's password, removed again in case a FirstLogonCommand failed, then checked.
+$winlogon = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+$answers = @("$env:WINDIR\Panther\unattend*.xml", "$env:WINDIR\Panther\Unattend\unattend*.xml")
+Remove-ItemProperty -Path $winlogon -Name DefaultPassword -ErrorAction SilentlyContinue
+Set-ItemProperty -Path $winlogon -Name AutoAdminLogon -Value '0' -ErrorAction SilentlyContinue
+Remove-Item -Path $answers -Force -ErrorAction SilentlyContinue
+$left = @(Get-ItemProperty -Path $winlogon -Name DefaultPassword -ErrorAction SilentlyContinue) +
+    @(Get-ChildItem -Path $answers -ErrorAction SilentlyContinue)
+if ($left.Count -gt 0) { Log "the install's password is still in Windows ($($left.Count) copies); not reporting"; exit 1 }
+Log 'the install password is removed'
+
+# 5. Done: VMPane restarts the VM with its network and virtio display once Windows is down.
+if (Report 'toolsInstalled') { & shutdown.exe /s /t 5 /c 'VMPane is finishing the install' }
 Log 'done'

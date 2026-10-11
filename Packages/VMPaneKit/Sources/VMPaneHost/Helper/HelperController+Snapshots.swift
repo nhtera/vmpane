@@ -51,6 +51,8 @@ extension HelperController {
     }
 
     func createSnapshot(_ name: String, kind: SnapshotMeta.Kind, origin: SnapshotMeta.Origin) async throws -> SnapshotMeta {
+        // Until the first sign-in removes them, the disk (and Setup's RAM) hold the install's answers, password included.
+        guard !isInstallingWindows else { throw RPCError(.invalidState, "a VM installing Windows cannot be snapshotted") }
         let store = SnapshotStore(lock: prepared.lock)
         let context = snapshotContext
         switch kind {

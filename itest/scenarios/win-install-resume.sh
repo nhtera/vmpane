@@ -5,14 +5,14 @@
 #      config (it cannot boot again and wipe the disk);
 #   3. vm.install.cancel: the VM stops, the unattend image is gone, the config has no install left.
 # Whether Windows Setup itself recovers from the power cut is Windows' business, not checked here.
-# Skips like win-install (no ISO, < 40 GiB free).
+# Skips like win-install (no ISO, < 25 GiB free).
 source "$VMPANE_ROOT/itest/lib/common.sh"
 IT_SCENARIO=win-install-resume
 
 scenario_run() {
     local iso tools work bundle request pid socket start attempts
     iso=$(it_windows_iso) || { echo "win-install-resume: no Windows 11 Arm64 ISO (set VMPANE_WINDOWS_ISO)"; return 77; }
-    (($(df -g "$HOME" | awk 'NR == 2 {print $4}') >= 40)) || { echo "win-install-resume: needs 40 GiB free"; return 77; }
+    (($(df -g "$HOME" | awk 'NR == 2 {print $4}') >= 25)) || { echo "win-install-resume: needs 25 GiB free"; return 77; }
     tools=$("$VMPANE_ROOT/guest-tools/build-iso.sh" | tail -1) || it_fail "cannot build the guest-tools ISO" || return 1
 
     work=$(cd "$(mktemp -d /tmp/vp-wr.XXXXXX)" && pwd -P)

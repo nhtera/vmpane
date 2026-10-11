@@ -210,6 +210,8 @@ extension HelperController {
 
     /// Saves RAM state and stops. `suspend.json` is written last: it is the commit marker.
     func suspendVM(_ backend: VMBackend) async throws {
+        // Setup holds the install's password in RAM: no saved state may keep it (a shutdown stops instead).
+        guard !isInstallingWindows else { throw RPCError(.invalidState, "a VM installing Windows cannot be suspended") }
         let bundle = prepared.lock.bundle
         let memory = UInt64(config.memory.mib) << 20
         let checkSpace = checkSpace
