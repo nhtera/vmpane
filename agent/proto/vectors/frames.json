@@ -1,0 +1,226 @@
+{
+  "cases": [
+    {
+      "error": null,
+      "frames": [
+        {
+          "json": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"agent.ping\"}",
+          "type": "message"
+        }
+      ],
+      "hex": "0000002f007b226a736f6e727063223a22322e30222c226964223a312c226d6574686f64223a226167656e742e70696e67227d",
+      "name": "message",
+      "remaining": 0
+    },
+    {
+      "error": null,
+      "frames": [
+        {
+          "hex": "68656c6c6f",
+          "stream": 3,
+          "type": "chunk"
+        }
+      ],
+      "hex": "0000000a010000000368656c6c6f",
+      "name": "chunk",
+      "remaining": 0
+    },
+    {
+      "error": null,
+      "frames": [
+        {
+          "status": "ok",
+          "stream": 3,
+          "type": "end"
+        }
+      ],
+      "hex": "00000006020000000300",
+      "name": "end ok",
+      "remaining": 0
+    },
+    {
+      "error": null,
+      "frames": [
+        {
+          "status": "error",
+          "stream": 4,
+          "type": "end"
+        }
+      ],
+      "hex": "00000006020000000401",
+      "name": "end error",
+      "remaining": 0
+    },
+    {
+      "error": null,
+      "frames": [
+        {
+          "status": "cancelled",
+          "stream": 5,
+          "type": "end"
+        }
+      ],
+      "hex": "00000006020000000502",
+      "name": "end cancelled",
+      "remaining": 0
+    },
+    {
+      "error": null,
+      "frames": [
+        {
+          "json": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"agent.ping\"}",
+          "type": "message"
+        },
+        {
+          "hex": "68656c6c6f",
+          "stream": 3,
+          "type": "chunk"
+        },
+        {
+          "json": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"agent.ping\"}",
+          "type": "message"
+        }
+      ],
+      "hex": "0000002f007b226a736f6e727063223a22322e30222c226964223a312c226d6574686f64223a226167656e742e70696e67227d0000000a010000000368656c6c6f0000002f007b226a736f6e727063223a22322e30222c226964223a312c226d6574686f64223a226167656e742e70696e67227d",
+      "name": "three frames back to back",
+      "remaining": 0
+    },
+    {
+      "error": null,
+      "frames": [
+        {
+          "json": "",
+          "type": "message"
+        }
+      ],
+      "hex": "0000000100",
+      "name": "empty message payload",
+      "remaining": 0
+    },
+    {
+      "error": null,
+      "frames": [],
+      "hex": "000000",
+      "name": "partial header",
+      "remaining": 3
+    },
+    {
+      "error": null,
+      "frames": [],
+      "hex": "0000000a010000000368656c6c",
+      "name": "partial payload",
+      "remaining": 13
+    },
+    {
+      "error": null,
+      "frames": [
+        {
+          "json": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"agent.ping\"}",
+          "type": "message"
+        }
+      ],
+      "hex": "0000002f007b226a736f6e727063223a22322e30222c226964223a312c226d6574686f64223a226167656e742e70696e67227d0000000a010000",
+      "name": "whole frame then a partial one",
+      "remaining": 7
+    },
+    {
+      "error": "badLength",
+      "frames": [],
+      "hex": "00000000",
+      "name": "zero length",
+      "remaining": null
+    },
+    {
+      "error": "badType",
+      "frames": [],
+      "hex": "0000000109",
+      "name": "unknown type",
+      "remaining": null
+    },
+    {
+      "error": null,
+      "frames": [],
+      "hex": "0010000100",
+      "name": "largest message header",
+      "remaining": 5
+    },
+    {
+      "error": "tooLarge",
+      "frames": [],
+      "hex": "0010000200",
+      "name": "message one byte too large",
+      "remaining": null
+    },
+    {
+      "error": null,
+      "frames": [],
+      "hex": "0004000501",
+      "name": "largest chunk header",
+      "remaining": 5
+    },
+    {
+      "error": "tooLarge",
+      "frames": [],
+      "hex": "0004000601",
+      "name": "chunk one byte too large",
+      "remaining": null
+    },
+    {
+      "error": "tooLarge",
+      "frames": [],
+      "hex": "ffffffff00",
+      "name": "length 0xffffffff",
+      "remaining": null
+    },
+    {
+      "error": "badLength",
+      "frames": [],
+      "hex": "000000050100000001",
+      "name": "chunk without data",
+      "remaining": null
+    },
+    {
+      "error": "badLength",
+      "frames": [],
+      "hex": "00000003010000",
+      "name": "chunk shorter than its stream id",
+      "remaining": null
+    },
+    {
+      "error": "badStream",
+      "frames": [],
+      "hex": "00000006010000000041",
+      "name": "chunk on stream 0",
+      "remaining": null
+    },
+    {
+      "error": "badLength",
+      "frames": [],
+      "hex": "000000050200000001",
+      "name": "end too short",
+      "remaining": null
+    },
+    {
+      "error": "badLength",
+      "frames": [],
+      "hex": "0000000702000000010000",
+      "name": "end too long",
+      "remaining": null
+    },
+    {
+      "error": "badStatus",
+      "frames": [],
+      "hex": "00000006020000000103",
+      "name": "end unknown status",
+      "remaining": null
+    },
+    {
+      "error": "badStream",
+      "frames": [],
+      "hex": "00000006020000000000",
+      "name": "end on stream 0",
+      "remaining": null
+    }
+  ],
+  "description": "Frame decoding: decode until more input is needed (error null, `remaining` bytes left) or an error."
+}

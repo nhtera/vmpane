@@ -1,0 +1,365 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "hasParams": false,
+        "id": 7,
+        "kind": "request",
+        "method": "agent.ping"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"agent.ping\"}",
+      "name": "request, integer id",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "hasParams": true,
+        "id": "a1",
+        "kind": "request",
+        "method": "file.stat"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":\"a1\",\"method\":\"file.stat\",\"params\":{\"path\":\"/\"}}",
+      "name": "request, string id",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "hasParams": false,
+        "id": -9007199254740993,
+        "kind": "request",
+        "method": "m"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":-9007199254740993,\"method\":\"m\"}",
+      "name": "request, negative id",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "hasParams": true,
+        "kind": "notification",
+        "method": "exec.exited"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"method\":\"exec.exited\",\"params\":{\"execId\":1,\"code\":0}}",
+      "name": "notification",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "id": 1,
+        "kind": "response",
+        "ok": true
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"proto\":1,\"hostVersion\":\"1.0\"}}",
+      "name": "response result",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "errorCode": -32017,
+        "id": "x",
+        "kind": "response",
+        "ok": false
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":\"x\",\"error\":{\"code\":-32017,\"message\":\"no common version\",\"data\":{\"proto\":1}}}",
+      "name": "response error",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "errorCode": -32700,
+        "id": null,
+        "kind": "response",
+        "ok": false
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32700,\"message\":\"parse\"}}",
+      "name": "response error, null id",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "hasParams": false,
+        "id": 1,
+        "kind": "request",
+        "method": "m"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"m\",\"future\":{\"x\":[1]}}",
+      "name": "unknown members ignored",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "hasParams": true,
+        "kind": "notification",
+        "method": "m"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"method\":\"m\",\"params\":[1,2]}",
+      "name": "params array",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "hasParams": true,
+        "kind": "notification",
+        "method": "m"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"method\":\"m\",\"params\":{\"s\":\"é\\n\\\\\\\"é😀\"}}",
+      "name": "escapes and unicode",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "hasParams": true,
+        "kind": "notification",
+        "method": "m"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"method\":\"m\",\"params\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+      "name": "depth at the limit",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "depth",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"method\":\"m\",\"params\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+      "name": "depth one over the limit",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "hasParams": true,
+        "kind": "notification",
+        "method": "m"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"method\":\"m\",\"params\":{\"s\":\"\\\"[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{[{\"}}",
+      "name": "brackets inside a string",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "hasParams": true,
+        "kind": "notification",
+        "method": "m"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"method\":\"m\",\"params\":{\"s\":\"@PAD@\"}}",
+      "name": "string at the limit",
+      "pad": 65536
+    },
+    {
+      "expect": {
+        "error": "string",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"method\":\"m\",\"params\":{\"s\":\"@PAD@\"}}",
+      "name": "string one over the limit",
+      "pad": 65537
+    },
+    {
+      "expect": {
+        "error": "string",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"method\":\"m\",\"params\":{\"@PAD@\":1}}",
+      "name": "key one over the limit",
+      "pad": 65537
+    },
+    {
+      "expect": {
+        "error": "string",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"method\":\"@PAD@\"}",
+      "name": "method one over the limit",
+      "pad": 65537
+    },
+    {
+      "expect": {
+        "error": "invalid",
+        "kind": "error"
+      },
+      "json": "[{\"jsonrpc\":\"2.0\",\"method\":\"m\"}]",
+      "name": "batch (array)",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "invalid",
+        "kind": "error"
+      },
+      "json": "\"hello\"",
+      "name": "not an object",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "invalid",
+        "kind": "error"
+      },
+      "json": "{\"id\":1,\"method\":\"m\"}",
+      "name": "jsonrpc missing",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "invalid",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"1.0\",\"id\":1,\"method\":\"m\"}",
+      "name": "jsonrpc 1.0",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "invalid",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":5}",
+      "name": "method not a string",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "invalid",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":1.5,\"method\":\"m\"}",
+      "name": "fractional id",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "invalid",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":null,\"method\":\"m\"}",
+      "name": "null request id",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "invalid",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":true,\"method\":\"m\"}",
+      "name": "boolean id",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "invalid",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":9223372036854775808,\"method\":\"m\"}",
+      "name": "id above Int64",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "invalid",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"method\":\"m\",\"params\":1}",
+      "name": "params a number",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "invalid",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"result\":1}",
+      "name": "response without id",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "invalid",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":1}",
+      "name": "response with neither",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "invalid",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":1,\"error\":{\"code\":1,\"message\":\"m\"}}",
+      "name": "response with both",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "invalid",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":null,\"result\":1}",
+      "name": "result with null id",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "invalid",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":1.5,\"message\":\"m\"}}",
+      "name": "error code not an integer",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "invalid",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":4294967296,\"message\":\"m\"}}",
+      "name": "error code beyond Int32",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "invalid",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":1}}",
+      "name": "error without message",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "parse",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"method\":",
+      "name": "truncated",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "parse",
+        "kind": "error"
+      },
+      "json": "{\"jsonrpc\":\"2.0\",\"method\":\"m\"} x",
+      "name": "trailing garbage",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "parse",
+        "kind": "error"
+      },
+      "json": "",
+      "name": "empty",
+      "pad": 0
+    },
+    {
+      "expect": {
+        "error": "parse",
+        "kind": "error"
+      },
+      "hex": "7b226a736f6e727063223a22322e30222c226d6574686f64223a226d222c22706172616d73223a7b2273223a22ff227d7d",
+      "name": "invalid UTF-8"
+    }
+  ],
+  "description": "Message parsing. Input is `json` (with `@PAD@` replaced by `pad` × \"a\") or `hex`. Checks run in order: depth on raw bytes, syntax, string lengths, JSON-RPC shape."
+}

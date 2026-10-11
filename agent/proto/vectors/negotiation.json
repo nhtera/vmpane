@@ -1,0 +1,82 @@
+{
+  "cases": [
+    {
+      "agent": [
+        1,
+        1
+      ],
+      "expect": 1,
+      "host": [
+        1,
+        1
+      ]
+    },
+    {
+      "agent": [
+        2,
+        5
+      ],
+      "expect": 3,
+      "host": [
+        1,
+        3
+      ]
+    },
+    {
+      "agent": [
+        1,
+        3
+      ],
+      "expect": 3,
+      "host": [
+        2,
+        5
+      ]
+    },
+    {
+      "agent": [
+        3,
+        4
+      ],
+      "expect": null,
+      "host": [
+        1,
+        2
+      ]
+    },
+    {
+      "agent": [
+        1,
+        2
+      ],
+      "expect": null,
+      "host": [
+        3,
+        4
+      ]
+    },
+    {
+      "agent": [
+        2,
+        2
+      ],
+      "expect": 2,
+      "host": [
+        1,
+        5
+      ]
+    },
+    {
+      "agent": [
+        1,
+        2
+      ],
+      "expect": null,
+      "host": [
+        2,
+        1
+      ]
+    }
+  ],
+  "description": "Version negotiation: the highest version in both [min, max] ranges, null when none."
+}

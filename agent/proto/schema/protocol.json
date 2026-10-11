@@ -1,0 +1,1012 @@
+{
+  "$defs": {
+    "AgentInfo": {
+      "properties": {
+        "agentVersion": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "caps": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "os": {
+          "type": "string"
+        },
+        "osVersion": {
+          "default": "",
+          "type": "string"
+        },
+        "proto": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "session": {
+          "default": false,
+          "type": "boolean"
+        },
+        "uptimeMs": {
+          "default": 0,
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "agentVersion",
+        "proto",
+        "os",
+        "arch"
+      ],
+      "type": "object"
+    },
+    "ClipboardChanged": {
+      "description": "guest → host notification when the guest clipboard changes (rate-limited by the host).",
+      "properties": {
+        "seq": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "types": {
+          "items": {
+            "$ref": "#/$defs/ClipboardType"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "types",
+        "seq"
+      ],
+      "type": "object"
+    },
+    "ClipboardContents": {
+      "description": "`clipboard.get` result (guest-allocated streams) and `clipboard.set` params (host-allocated streams; the\nresponse comes after every stream ended).",
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ClipboardItem"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
+    "ClipboardGetParams": {
+      "properties": {
+        "types": {
+          "items": {
+            "$ref": "#/$defs/ClipboardType"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "types"
+      ],
+      "type": "object"
+    },
+    "ClipboardItem": {
+      "description": "One clipboard representation. `text` and `png` carry `stream` and `size` (≤ 32 MiB); `files` carries\n`files`.",
+      "properties": {
+        "files": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "size": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "stream": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "type": {
+          "$ref": "#/$defs/ClipboardType"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "ClipboardType": {
+      "oneOf": [
+        {
+          "const": "text",
+          "description": "UTF-8 text, on a stream.",
+          "type": "string"
+        },
+        {
+          "const": "png",
+          "description": "PNG image, on a stream.",
+          "type": "string"
+        },
+        {
+          "const": "files",
+          "description": "Absolute guest paths, inline.",
+          "type": "string"
+        }
+      ]
+    },
+    "DisplaySetParams": {
+      "properties": {
+        "heightPx": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "scale": {
+          "default": 1.0,
+          "description": "Backing scale (1 or 2); the agent picks the closest mode.",
+          "format": "double",
+          "type": "number"
+        },
+        "widthPx": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "widthPx",
+        "heightPx"
+      ],
+      "type": "object"
+    },
+    "Empty": {
+      "description": "An empty object: `{}` as params or result.",
+      "type": "object"
+    },
+    "ExecExited": {
+      "description": "guest → host notification, once per `exec.start`, after the output streams ended.",
+      "properties": {
+        "code": {
+          "default": null,
+          "description": "Exit code; None when a signal ended the process.",
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "execId": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "signal": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timedOut": {
+          "default": false,
+          "description": "The agent killed it because `timeoutMs` passed.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "execId"
+      ],
+      "type": "object"
+    },
+    "ExecSignalParams": {
+      "properties": {
+        "execId": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "signal": {
+          "$ref": "#/$defs/Signal"
+        }
+      },
+      "required": [
+        "execId",
+        "signal"
+      ],
+      "type": "object"
+    },
+    "ExecStartParams": {
+      "description": "Starts a process. Exactly one of `argv` (run directly) and `shell` (a command line for `/bin/sh -c` or\n`cmd.exe /c`). Output streams start at once; the end is reported by `exec.exited` after both output\nstreams ended.",
+      "properties": {
+        "argv": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "as": {
+          "$ref": "#/$defs/RunAs",
+          "default": "user"
+        },
+        "cwd": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "Added to (and overriding) the identity's environment.",
+          "type": "object"
+        },
+        "shell": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stdin": {
+          "default": false,
+          "description": "Open a stdin stream (host → guest); otherwise stdin is empty.",
+          "type": "boolean"
+        },
+        "timeoutMs": {
+          "default": null,
+          "description": "Kill the process tree after this long.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ExecStartResult": {
+      "description": "Stream ids are guest-allocated (even), `stdin` included: the host sends on it.",
+      "properties": {
+        "execId": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stderr": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stdin": {
+          "default": null,
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "stdout": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "execId",
+        "stdout",
+        "stderr"
+      ],
+      "type": "object"
+    },
+    "FileKind": {
+      "enum": [
+        "file",
+        "dir",
+        "symlink",
+        "other"
+      ],
+      "type": "string"
+    },
+    "FilePullParams": {
+      "description": "Reads a guest file onto a guest-allocated stream. `tooLarge` when the file is bigger than `maxBytes`.",
+      "properties": {
+        "maxBytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "maxBytes"
+      ],
+      "type": "object"
+    },
+    "FilePullResult": {
+      "description": "The data follows on `stream`; the host checks it received exactly `size` bytes.",
+      "properties": {
+        "size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stream": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "size",
+        "stream"
+      ],
+      "type": "object"
+    },
+    "FilePushParams": {
+      "description": "Writes a guest file from a host stream (host-allocated, odd id). The host sends the chunks right after\nthe request; the agent writes to a temporary file beside `path`, checks `size` and `sha256`, then renames.\nThe response comes after the stream ended. An early error response means the agent drops the rest.",
+      "properties": {
+        "mode": {
+          "default": null,
+          "description": "Unix permission bits; ignored on Windows.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "overwrite": {
+          "default": false,
+          "description": "Replace an existing file.",
+          "type": "boolean"
+        },
+        "path": {
+          "description": "Absolute guest path; the parent directory must exist.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Lowercase hex SHA-256 of the whole file.",
+          "type": "string"
+        },
+        "size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stream": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "size",
+        "sha256",
+        "stream"
+      ],
+      "type": "object"
+    },
+    "FilePushResult": {
+      "properties": {
+        "sha256": {
+          "type": "string"
+        },
+        "size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "FileStat": {
+      "description": "`file.stat` result; does not follow a final symlink.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/FileKind"
+        },
+        "mode": {
+          "default": 0,
+          "description": "Unix permission bits; 0 on Windows.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mtimeUnixNanos": {
+          "default": 0,
+          "format": "int64",
+          "type": "integer"
+        },
+        "size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "size"
+      ],
+      "type": "object"
+    },
+    "FsFreezeParams": {
+      "description": "Freezes guest file systems for a disk snapshot. They thaw by themselves after `timeoutMs` (default 10 s,\nat most 60 s) or when the host disconnects, whichever comes first.",
+      "properties": {
+        "timeoutMs": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "FsFreezeResult": {
+      "description": "Mount points (Linux), volumes (Windows) or nothing (macOS: only a `sync`, not a consistency point).",
+      "properties": {
+        "frozen": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "frozen"
+      ],
+      "type": "object"
+    },
+    "FsThawResult": {
+      "properties": {
+        "thawed": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "thawed"
+      ],
+      "type": "object"
+    },
+    "HelloParams": {
+      "description": "guest → host, first on every connection. The host answers with the highest version in\n`[max(minProto, hostMin), min(proto, hostMax)]`, or `protoUnsupported`.",
+      "properties": {
+        "agentVersion": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "caps": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "minProto": {
+          "description": "Oldest protocol version the agent speaks.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "os": {
+          "description": "`macos`, `linux` or `windows`.",
+          "type": "string"
+        },
+        "osVersion": {
+          "default": "",
+          "type": "string"
+        },
+        "proto": {
+          "description": "Newest protocol version the agent speaks.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "session": {
+          "default": false,
+          "description": "A logged-in user's session helper is connected to the daemon.",
+          "type": "boolean"
+        },
+        "token": {
+          "default": null,
+          "description": "Per-VM secret from the tools medium; required on TCP, absent on vsock and virtio-serial.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "proto",
+        "minProto",
+        "agentVersion",
+        "os",
+        "arch"
+      ],
+      "type": "object"
+    },
+    "HelloResult": {
+      "properties": {
+        "hostVersion": {
+          "type": "string"
+        },
+        "proto": {
+          "description": "The version both sides use from now on.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "proto",
+        "hostVersion"
+      ],
+      "type": "object"
+    },
+    "ListeningPort": {
+      "properties": {
+        "address": {
+          "description": "Bound address (`0.0.0.0`, `::`, `127.0.0.1`, …).",
+          "type": "string"
+        },
+        "port": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "process": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "proto": {
+          "$ref": "#/$defs/PortProto"
+        }
+      },
+      "required": [
+        "proto",
+        "address",
+        "port"
+      ],
+      "type": "object"
+    },
+    "MkdirTempParams": {
+      "description": "Creates a new private directory under the user's temp directory (the drag-and-drop drop folder).",
+      "properties": {
+        "prefix": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "NetAddrs": {
+      "description": "`net.addrs` result. A hint only: the host trusts its own DHCP lease.",
+      "properties": {
+        "interfaces": {
+          "items": {
+            "$ref": "#/$defs/NetInterface"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "interfaces"
+      ],
+      "type": "object"
+    },
+    "NetInterface": {
+      "properties": {
+        "ipv4": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ipv6": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "mac": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "PathParams": {
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "PortProto": {
+      "enum": [
+        "tcp",
+        "udp"
+      ],
+      "type": "string"
+    },
+    "PortsListening": {
+      "properties": {
+        "ports": {
+          "items": {
+            "$ref": "#/$defs/ListeningPort"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "ports"
+      ],
+      "type": "object"
+    },
+    "PowerShutdownParams": {
+      "properties": {
+        "force": {
+          "default": false,
+          "description": "Do not wait for applications to close.",
+          "type": "boolean"
+        },
+        "reboot": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "RunAs": {
+      "description": "Which guest identity runs a command: the logged-in user (through the session helper) or root / LocalSystem\n(the daemon).",
+      "enum": [
+        "user",
+        "admin"
+      ],
+      "type": "string"
+    },
+    "Signal": {
+      "oneOf": [
+        {
+          "const": "int",
+          "description": "Ctrl-C (`SIGINT`, `CTRL_BREAK_EVENT`).",
+          "type": "string"
+        },
+        {
+          "const": "term",
+          "description": "Ask to stop (`SIGTERM`; Windows: same as kill).",
+          "type": "string"
+        },
+        {
+          "const": "kill",
+          "description": "Kill the whole process tree.",
+          "type": "string"
+        }
+      ]
+    },
+    "TimeSetParams": {
+      "properties": {
+        "unixNanos": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "unixNanos"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "errorCodes": {
+    "busy": -32047,
+    "capUnsupported": -32041,
+    "helloRequired": -32040,
+    "integrity": -32049,
+    "internalError": -32603,
+    "invalidParams": -32602,
+    "invalidRequest": -32600,
+    "io": -32044,
+    "methodNotFound": -32601,
+    "noSession": -32048,
+    "notFound": -32042,
+    "parseError": -32700,
+    "permissionDenied": -32043,
+    "protoUnsupported": -32017,
+    "timeout": -32045,
+    "tooLarge": -32046,
+    "unauthorized": -32050
+  },
+  "limits": {
+    "freezeDefaultTimeoutMs": 10000,
+    "freezeMaxTimeoutMs": 60000,
+    "maxChunk": 262144,
+    "maxClipboardBytes": 33554432,
+    "maxClipboardChangedPerSecond": 10,
+    "maxJsonDepth": 32,
+    "maxJsonFrame": 1048576,
+    "maxOpenStreams": 16,
+    "maxString": 65536
+  },
+  "methods": {
+    "agent.info": {
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/Empty"
+      },
+      "result": {
+        "$ref": "#/$defs/AgentInfo"
+      }
+    },
+    "agent.ping": {
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/Empty"
+      },
+      "result": {
+        "$ref": "#/$defs/Empty"
+      }
+    },
+    "clipboard.changed": {
+      "direction": "guestToHost",
+      "kind": "notification",
+      "params": {
+        "$ref": "#/$defs/ClipboardChanged"
+      }
+    },
+    "clipboard.get": {
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/ClipboardGetParams"
+      },
+      "result": {
+        "$ref": "#/$defs/ClipboardContents"
+      }
+    },
+    "clipboard.set": {
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/ClipboardContents"
+      },
+      "result": {
+        "$ref": "#/$defs/Empty"
+      }
+    },
+    "display.set": {
+      "cap": "display",
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/DisplaySetParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Empty"
+      }
+    },
+    "exec.exited": {
+      "direction": "guestToHost",
+      "kind": "notification",
+      "params": {
+        "$ref": "#/$defs/ExecExited"
+      }
+    },
+    "exec.signal": {
+      "cap": "exec",
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/ExecSignalParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Empty"
+      }
+    },
+    "exec.start": {
+      "cap": "exec",
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/ExecStartParams"
+      },
+      "result": {
+        "$ref": "#/$defs/ExecStartResult"
+      }
+    },
+    "file.mkdirTemp": {
+      "cap": "file",
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/MkdirTempParams"
+      },
+      "result": {
+        "$ref": "#/$defs/PathParams"
+      }
+    },
+    "file.pull": {
+      "cap": "file",
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/FilePullParams"
+      },
+      "result": {
+        "$ref": "#/$defs/FilePullResult"
+      }
+    },
+    "file.push": {
+      "cap": "file",
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/FilePushParams"
+      },
+      "result": {
+        "$ref": "#/$defs/FilePushResult"
+      }
+    },
+    "file.stat": {
+      "cap": "file",
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/PathParams"
+      },
+      "result": {
+        "$ref": "#/$defs/FileStat"
+      }
+    },
+    "fs.freeze": {
+      "cap": "freeze",
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/FsFreezeParams"
+      },
+      "result": {
+        "$ref": "#/$defs/FsFreezeResult"
+      }
+    },
+    "fs.thaw": {
+      "cap": "freeze",
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/Empty"
+      },
+      "result": {
+        "$ref": "#/$defs/FsThawResult"
+      }
+    },
+    "hello": {
+      "direction": "guestToHost",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/HelloParams"
+      },
+      "result": {
+        "$ref": "#/$defs/HelloResult"
+      }
+    },
+    "net.addrs": {
+      "cap": "net",
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/Empty"
+      },
+      "result": {
+        "$ref": "#/$defs/NetAddrs"
+      }
+    },
+    "ports.listening": {
+      "cap": "ports",
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/Empty"
+      },
+      "result": {
+        "$ref": "#/$defs/PortsListening"
+      }
+    },
+    "power.shutdown": {
+      "cap": "power",
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/PowerShutdownParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Empty"
+      }
+    },
+    "session.reveal": {
+      "cap": "reveal",
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/PathParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Empty"
+      }
+    },
+    "time.set": {
+      "cap": "time",
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/TimeSetParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Empty"
+      }
+    }
+  },
+  "minProto": 1,
+  "proto": 1,
+  "title": "VMPane agent protocol"
+}

@@ -4,6 +4,6 @@ fn main() {
     println!(
         "vmpane-session {} (protocol {})",
         env!("CARGO_PKG_VERSION"),
-        vmpane_agent_proto::PROTOCOL_VERSION
+        vmpane_agent_proto::PROTO
     );
 }
