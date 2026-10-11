@@ -10,9 +10,16 @@ source "$VMPANE_ROOT/itest/lib/common.sh"
 IT_SCENARIO=golden-windows
 
 iso=$(it_windows_iso) || { echo "golden-windows: no Windows 11 Arm64 ISO (set VMPANE_WINDOWS_ISO)" >&2; exit 77; }
+work_iso="$VMPANE_ROOT/build/guest-tools/itest-golden-tools.iso"
 rm -rf "$golden.partial" "$golden"  # an outdated golden: its space counts towards the check below
 (($(df -g "$HOME" | awk 'NR == 2 {print $4}') >= 25)) || { echo "golden-windows: needs 25 GiB free" >&2; exit 77; }
-tools=$("$VMPANE_ROOT/guest-tools/build-iso.sh" | tail -1)
+# The agent MSI, when downloaded (guest-tools/fetch-agent-msi.sh), goes onto the tools disc: the install adds it.
+with_agent=
+if compgen -G "$IT_WINDOWS_EXTRA/*.msi" >/dev/null; then
+    export VMPANE_GUEST_TOOLS_EXTRA=$IT_WINDOWS_EXTRA
+    with_agent=1
+fi
+tools=$("$VMPANE_ROOT/guest-tools/build-iso.sh" "$work_iso" | tail -1)
 
 work=$(cd "$(mktemp -d /tmp/vp-golden-win.XXXXXX)" && pwd -P)
 export VMPANE_SUPPORT_DIR="$work/s"
@@ -41,5 +48,6 @@ pid=
 rm -rf "$golden.partial/install"  # only install.json (done) is left there
 chmod -R go-rwx "$golden.partial"
 mv "$golden.partial" "$golden"
+[[ -n $with_agent ]] && touch "$golden/.agent"
 echo "$IT_GOLDEN_WINDOWS_VERSION" >"$golden/.ready"
 du -sh "$golden" | awk '{print "golden Windows bundle ready: " $1}'

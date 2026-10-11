@@ -147,10 +147,17 @@ it_golden_macos() {
 
 # The golden Windows bundle (VMPane's unattended install; see build-golden-windows.sh).
 # Built once into ~/VMPaneItest/win11-base.vmpane; scenarios clone it. Exit 77 without a Windows ISO.
+# With an agent MSI in build/guest-tools/windows-extra (guest-tools/fetch-agent-msi.sh) the install puts the agent
+# in (marker .agent); a golden built without it is rebuilt once the MSI is there.
 IT_GOLDEN_WINDOWS_VERSION=3
+IT_WINDOWS_EXTRA="$VMPANE_ROOT/build/guest-tools/windows-extra"
 it_golden_windows() {
     local golden="$HOME/VMPaneItest/win11-base.vmpane" status
-    if [[ $(cat "$golden/.ready" 2>/dev/null) == "$IT_GOLDEN_WINDOWS_VERSION" ]]; then echo "$golden"; return 0; fi
+    if [[ $(cat "$golden/.ready" 2>/dev/null) == "$IT_GOLDEN_WINDOWS_VERSION" ]] &&
+        { [[ -f $golden/.agent ]] || ! compgen -G "$IT_WINDOWS_EXTRA/*.msi" >/dev/null; }; then
+        echo "$golden"
+        return 0
+    fi
     "$VMPANE_ROOT/itest/lib/build-golden-windows.sh" "$golden" >&2 || { status=$?; return "$status"; }
     echo "$golden"
 }
