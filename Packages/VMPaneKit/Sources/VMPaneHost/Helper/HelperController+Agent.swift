@@ -159,7 +159,10 @@ extension HelperController {
     private static let fileChunk = 1 << 20
 
     /// Host file → guest: hashed first (the agent checks size and SHA-256 before renaming into place).
-    private static func push(_ files: FileTransfer, on connection: AgentConnection) async throws -> UInt64 {
+    /// Pushes a host file to the guest; `progress` hears the bytes sent so far.
+    static func push(
+        _ files: FileTransfer, on connection: AgentConnection, progress: (@Sendable (UInt64) -> Void)? = nil
+    ) async throws -> UInt64 {
         let url = URL(fileURLWithPath: files.hostPath)
         guard url.path.hasPrefix("/") else { throw RPCError(.invalidParams, "hostPath must be absolute") }
         let (size, sha256) = try await Blocking.run { () throws -> (UInt64, String) in
@@ -185,6 +188,7 @@ extension HelperController {
             guard !data.isEmpty else { break }
             try await connection.send(data, on: stream)
             sent += UInt64(data.count)
+            progress?(sent)
         }
         try await connection.end(stream, status: sent == size ? .ok : .error)
         let result = try await connection.response(call, timeout: transferTimeout(size))
@@ -290,7 +294,7 @@ private struct ExecSignal: Decodable {
     var signal: AgentSignal
 }
 
-private struct FileTransfer: Decodable {
+struct FileTransfer: Decodable {
     var hostPath: String
     var guestPath: String
     /// Replace an existing target (the guest file for a push, the host file for a pull).

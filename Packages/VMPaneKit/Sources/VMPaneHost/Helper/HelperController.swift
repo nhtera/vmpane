@@ -130,6 +130,7 @@ public actor HelperController {
         case .eventsSubscribe?: return subscribe(request.params, connection)
         case .vmSettingsGet?: return RPCParams.encode(config)
         case .vmPortsList?: return await portsList()
+        case .vmFilesDrop?: return await dropFiles(request.params)
         case .vmSettingsApply?: return await applySettings(request.params)
         case .vmStart?, .vmPause?, .vmResume?, .vmSuspend?, .vmStop?:
             return await lifecycle(request.method, request.params)

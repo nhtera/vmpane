@@ -50,7 +50,7 @@ private func eventually(_ condition: @MainActor () -> Bool) async -> Bool {
     let model = HelperViewModel(channel: channel)
     await model.start()
     #expect(channel.calls.prefix(2) == ["events.subscribe", "vm.info"])
-    #expect(channel.params(of: "events.subscribe") == ["topics": ["vm", "install", "agent"]])
+    #expect(channel.params(of: "events.subscribe") == ["topics": ["vm", "install", "agent", "files"]])
     #expect(model.state == .stopped && model.can(.start) && !model.can(.shutDown))
 
     channel.answer("vm.info", .success(["state": "running", "allowedRequests": ["pause", "suspend", "stop"]]))
@@ -167,4 +167,17 @@ private func eventually(_ condition: @MainActor () -> Bool) async -> Bool {
     await model.refreshPorts()
     #expect(model.portStatuses["web"] == SettingsModel.PortStatus(state: "listening", reason: nil))
     #expect(model.portStatuses["dns"]?.reason == "bind: Address already in use")
+}
+
+@Test @MainActor func droppedFilesGoToTheHelperWithProgress() async throws {
+    let channel = FakeChannel()
+    let model = HelperViewModel(channel: channel)
+    channel.answer("vm.files.drop", .success(["guestPath": "/home/u/Desktop/VMPane Drops/x", "files": 1]))
+    model.transfer = HelperViewModel.Transfer(bytesDone: 0, bytesTotal: 0, file: "a")
+    model.apply(RPCRequest(id: nil, method: "files.progress", params: ["bytesDone": 5, "bytesTotal": 10, "file": "a"]))
+    #expect(model.transfer?.fraction == 0.5)
+    model.transfer = nil
+    await model.drop([URL(fileURLWithPath: "/tmp/a"), URL(fileURLWithPath: "/tmp/b")])
+    #expect(channel.params(of: "vm.files.drop") == ["paths": ["/tmp/a", "/tmp/b"]])
+    #expect(model.transfer == nil && model.lastError == nil)
 }

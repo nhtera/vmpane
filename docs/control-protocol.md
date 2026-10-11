@@ -65,6 +65,7 @@ denied.
 | `agent.exec.signal` | `{execId, signal}` (own exec only) | `{}` | exec |
 | `agent.file.push` | `{hostPath, guestPath, overwrite}` | `{bytes}` | exec |
 | `agent.file.pull` | `{guestPath, hostPath, overwrite}` | `{bytes}` | exec |
+| `vm.files.drop` | `{paths}` (host files and folders, e.g. dropped on the VM window) | `{guestPath, files, bytes, skipped, revealed}`: copied into a new folder in the logged-in user's `Desktop/VMPane Drops`, owned by that user, then shown | exec |
 | `mcp.policy.get` | — | `{policy, confirmExec, autoSnapshot, auditTypedText}` | uiOnly |
 | `mcp.policy.set` | `{policy, …}` | `{}` | uiOnly |
 | `mcp.enableAll` | — | `{}` | uiOnly |
@@ -101,6 +102,7 @@ Sent to clients subscribed (`events.subscribe`) to the topic.
 | `console.output` | `{dataB64}` |
 | `snapshot.progress` | `{id, percent}` |
 | `install.progress` | `{phase, percent, message}` |
+| `files.progress` | `{bytesDone, bytesTotal, file}` (during `vm.files.drop`) |
 <!-- contract:notifications:end -->
 
 ## Errors

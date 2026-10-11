@@ -31,6 +31,7 @@ public enum ControlMethod: String, CaseIterable, Sendable {
     case agentExecSignal = "agent.exec.signal"
     case agentFilePush = "agent.file.push"
     case agentFilePull = "agent.file.pull"
+    case vmFilesDrop = "vm.files.drop"
     case mcpPolicyGet = "mcp.policy.get"
     case mcpPolicySet = "mcp.policy.set"
     case mcpEnableAll = "mcp.enableAll"
@@ -52,4 +53,5 @@ public enum ControlNotification: String, CaseIterable, Sendable {
     case consoleOutput = "console.output"
     case snapshotProgress = "snapshot.progress"
     case installProgress = "install.progress"
+    case filesProgress = "files.progress"
 }

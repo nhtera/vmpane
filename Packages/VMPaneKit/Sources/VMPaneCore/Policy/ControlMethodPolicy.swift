@@ -72,6 +72,7 @@ public enum ControlMethodPolicy {
         "agent.exec.signal": .level(.exec),
         "agent.file.push": .level(.exec),
         "agent.file.pull": .level(.exec),
+        "vm.files.drop": .level(.exec),
         "mcp.policy.get": .uiOnly,
         "mcp.policy.set": .uiOnly,
         "mcp.enableAll": .uiOnly,

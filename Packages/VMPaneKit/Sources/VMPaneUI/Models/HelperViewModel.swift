@@ -34,8 +34,18 @@ public final class HelperViewModel {
     public var lastError: String?
     /// The last screenshot saved, for a confirmation.
     public private(set) var lastScreenshot: URL?
+    /// Files being copied into the guest (dropped on the window), with progress; nil when none.
+    public internal(set) var transfer: Transfer?
 
-    @ObservationIgnored private let channel: HelperChannel
+    public struct Transfer: Equatable, Sendable {
+        public var bytesDone: Int64
+        public var bytesTotal: Int64
+        public var file: String
+
+        public var fraction: Double { bytesTotal > 0 ? Double(bytesDone) / Double(bytesTotal) : 0 }
+    }
+
+    @ObservationIgnored let channel: HelperChannel
     @ObservationIgnored private var listener: Task<Void, Never>?
 
     public init(channel: HelperChannel) {
@@ -46,7 +56,7 @@ public final class HelperViewModel {
     public func start() async {
         do {
             _ = try await channel.call(
-                ControlMethod.eventsSubscribe.rawValue, params: ["topics": ["vm", "install", "agent"]], timeout: .seconds(5))
+                ControlMethod.eventsSubscribe.rawValue, params: ["topics": ["vm", "install", "agent", "files"]], timeout: .seconds(5))
             await refresh()
             agentConnected =
                 (try? await channel.call(ControlMethod.agentStatus.rawValue, params: nil, timeout: .seconds(5)))?["connected"] == true
@@ -84,6 +94,10 @@ public final class HelperViewModel {
                 message: note.params?["message"]?.stringValue ?? "")
         case ControlNotification.agentConnectionChanged.rawValue:
             agentConnected = note.params?["connected"] == true
+        case ControlNotification.filesProgress.rawValue where transfer != nil:
+            transfer = Transfer(
+                bytesDone: note.params?["bytesDone"]?.intValue ?? 0, bytesTotal: note.params?["bytesTotal"]?.intValue ?? 0,
+                file: note.params?["file"]?.stringValue ?? "")
         default:
             break
         }

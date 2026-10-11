@@ -42,10 +42,21 @@ public struct VMWindowView: View {
         ZStack {
             DisplayHost(view: display)
                 .accessibilityLabel("Virtual machine display")
+                .dropDestination(for: URL.self) { urls, _ in
+                    let files = urls.filter(\.isFileURL)
+                    guard !files.isEmpty, model.state == .running, model.transfer == nil else { return false }
+                    Task { await model.drop(files) }
+                    return true
+                }
             if let install = model.install, install.isActive {
                 InstallProgressOverlay(progress: install)
             } else if model.state == .stopped || model.state == .error {
                 StoppedOverlay(model: model)
+            }
+            if let transfer = model.transfer {
+                TransferHUD(transfer: transfer)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 16)
             }
             if hud {
                 CaptureHUD(capturing: capturing)
@@ -208,5 +219,30 @@ struct CaptureHUD: View {
         .padding(.vertical, 8)
         .background(.regularMaterial, in: Capsule())
         .accessibilityAddTraits(.updatesFrequently)
+    }
+}
+
+/// Files being copied into the guest: which one, and how far along.
+struct TransferHUD: View {
+    let transfer: HelperViewModel.Transfer
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Copying “\(transfer.file)” into the VM").font(.callout).lineLimit(1).truncationMode(.middle)
+            if transfer.bytesTotal > 0 {
+                ProgressView(value: transfer.fraction)
+                Text(
+                    "\(ByteCountFormatter.string(fromByteCount: transfer.bytesDone, countStyle: .file)) of "
+                        + ByteCountFormatter.string(fromByteCount: transfer.bytesTotal, countStyle: .file)
+                )
+                .font(.caption).foregroundStyle(.secondary)
+            } else {
+                ProgressView().controlSize(.small)
+            }
+        }
+        .padding(12)
+        .frame(width: 320)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .accessibilityElement(children: .combine)
     }
 }
