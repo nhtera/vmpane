@@ -46,6 +46,7 @@ struct OSChoiceStep: View {
 struct SourceStep: View {
     @Bindable var wizard: WizardModel
     @State private var catalog: [ImageCatalog.Image] = []
+    @State private var downloading = false
 
     var body: some View {
         Form {
@@ -67,6 +68,7 @@ struct SourceStep: View {
             case .windows?:
                 Section {
                     Text("Download Windows 11 for Arm (ISO) from Microsoft, then choose the file here.")
+                    Button("Download from Microsoft…") { downloading = true }
                     if let page = Links.windowsDownload { Link("Open Microsoft's download page", destination: page) }
                     fileRow(title: "Choose the Windows ISO…", types: [UTType(filenameExtension: "iso") ?? .data]) { .windowsISO($0) }
                 }
@@ -75,6 +77,9 @@ struct SourceStep: View {
             }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: $downloading) {
+            WindowsISODownloadView { wizard.source = .windowsISO($0) }
+        }
         .task(id: wizard.os) {
             catalog =
                 switch wizard.os {
