@@ -61,7 +61,9 @@ extension HelperController {
         switch HelperStateMachine.transition(state, event) {
         case .success(let next):
             guard next != state else { return true }
+            let previous = state
             state = next
+            agentFollowState(from: previous, to: next)
             stateContinuation.yield(next)
             server?.broadcast(
                 topic: "vm", method: ControlNotification.vmStateChanged.rawValue,

@@ -1,5 +1,4 @@
 import CryptoKit
-import Darwin
 import Foundation
 import Testing
 import VMPaneControl
@@ -7,50 +6,21 @@ import VMPaneCore
 
 @testable import VMPaneHost
 
-/// The Swift host codec and connection against the real Rust agent (`agent/target/debug/vmpane-agent`, built by
-/// `cargo build`), over a Unix socket on this Mac. Skipped when the agent is not built.
-private let agentBinary: URL = {
-    URL(fileURLWithPath: #filePath).deletingLastPathComponent()  // Tests/VMPaneHostTests/Agent
-        .deletingLastPathComponent().deletingLastPathComponent()  // Tests
-        .deletingLastPathComponent().deletingLastPathComponent()  // Packages
-        .deletingLastPathComponent()  // repo root
-        .appendingPathComponent("agent/target/debug/vmpane-agent")
-}()
-
-private let agentBuilt = FileManager.default.isExecutableFile(atPath: agentBinary.path)
-
 private struct RealAgent {
     let connection: AgentConnection
-    let process: Process
-    let directory: URL
+    let spawned: SpawnedAgent
+    var directory: URL { spawned.directory }
 
     static func start() async throws -> RealAgent {
-        let directory = URL(fileURLWithPath: "/tmp/vpa-\(UUID().uuidString.prefix(8))", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let socketURL = directory.appendingPathComponent("s")
-        let listener = try UnixSocket.make()
-        defer { close(listener) }
-        try UnixSocket.bind(listener, to: UnixSocketAddress(socketURL))
-        guard listen(listener, 1) == 0 else { throw POSIXError(.EIO) }
-        let process = Process()
-        process.executableURL = agentBinary
-        process.arguments = ["--connect", "unix:\(socketURL.path)", "--once"]
-        process.standardError = FileHandle.nullDevice
-        try process.run()
-        let fd = try await Blocking.run { () throws -> Int32 in
-            var poller = pollfd(fd: listener, events: Int16(POLLIN), revents: 0)
-            guard poll(&poller, 1, 10_000) > 0 else { throw POSIXError(.ETIMEDOUT) }
-            return accept(listener, nil, nil)
-        }
-        let connection = AgentConnection(fd: fd, hostVersion: "e2e")
+        let spawned = try await SpawnedAgent.spawn()
+        let connection = AgentConnection(fd: spawned.fd, hostVersion: "e2e")
         _ = try await connection.open(helloTimeout: .seconds(10))
-        return RealAgent(connection: connection, process: process, directory: directory)
+        return RealAgent(connection: connection, spawned: spawned)
     }
 
     func stop() async {
         await connection.close(.closed("test done"))
-        process.waitUntilExit()
-        try? FileManager.default.removeItem(at: directory)
+        spawned.cleanUp()
     }
 }
 

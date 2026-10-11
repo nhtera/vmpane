@@ -18,12 +18,20 @@ actor VZRunner {
 
     nonisolated let events: AsyncStream<BackendEvent>
     private nonisolated let continuation: AsyncStream<BackendEvent>.Continuation
+    /// Guest agent connections on vsock port 6271 (`vmpane-agent-proto::VSOCK_PORT`), as owned descriptors.
+    nonisolated let agentSockets: AsyncStream<Int32>
+    private let agentListener: AgentListener
     private var vm: VZVirtualMachine?
     private var configuration: VZVirtualMachineConfiguration?
     private var delegate: Delegate?
 
+    static let agentPort: UInt32 = 6271
+
     init() {
         (events, continuation) = AsyncStream.makeStream(of: BackendEvent.self)
+        let (sockets, socketContinuation) = AsyncStream.makeStream(of: Int32.self)
+        agentSockets = sockets
+        agentListener = AgentListener(socketContinuation)
     }
 
     /// Builds the configuration and the VM on the VM queue. Returns the box for the display view.
@@ -34,6 +42,11 @@ actor VZRunner {
         let vm = VZVirtualMachine(configuration: configuration, queue: queue)
         let delegate = Delegate(continuation)
         vm.delegate = delegate
+        if let device = vm.socketDevices.first as? VZVirtioSocketDevice {
+            let listener = VZVirtioSocketListener()
+            listener.delegate = agentListener
+            device.setSocketListener(listener, forPort: Self.agentPort)
+        }
         self.vm = vm
         self.configuration = configuration
         self.delegate = delegate
@@ -228,6 +241,27 @@ actor VZRunner {
         func virtualMachine(_ virtualMachine: VZVirtualMachine, didStopWithError error: any Error) {
             continuation.yield(.failed(message: error.localizedDescription))
         }
+    }
+}
+
+/// Accepts the guest agent's vsock connections (called on the VM queue) and hands over a duplicate of each
+/// descriptor: VZ closes its own when the connection object goes away.
+private final class AgentListener: NSObject, VZVirtioSocketListenerDelegate, @unchecked Sendable {
+    private let continuation: AsyncStream<Int32>.Continuation
+
+    init(_ continuation: AsyncStream<Int32>.Continuation) {
+        self.continuation = continuation
+    }
+
+    func listener(
+        _ listener: VZVirtioSocketListener, shouldAcceptNewConnection connection: VZVirtioSocketConnection,
+        from socketDevice: VZVirtioSocketDevice
+    ) -> Bool {
+        let fd = dup(connection.fileDescriptor)
+        guard fd >= 0 else { return false }
+        _ = fcntl(fd, F_SETFD, FD_CLOEXEC)
+        if case .dropped = continuation.yield(fd) { close(fd) }
+        return true
     }
 }
 

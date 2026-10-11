@@ -111,9 +111,14 @@ public protocol VMBackend: AnyObject, Sendable {
     func applyLive(_ config: VMConfigV1, paths: [String]) async -> Set<String>
     /// Removes the medium of the `removable` entry `id` from the running VM (the drive stays, empty).
     func ejectMedia(_ id: String) async throws
+    /// Connections the guest agent opened to the host (vsock on VZ): connected stream sockets the receiver
+    /// owns. Single consumer, for the backend's lifetime. Backends whose agent channel the helper opens itself
+    /// (QEMU's chardev socket) yield nothing.
+    var agentSockets: AsyncStream<Int32> { get }
 }
 
 extension VMBackend {
+    public var agentSockets: AsyncStream<Int32> { AsyncStream { $0.finish() } }
     public func applyLive(_ config: VMConfigV1, paths: [String]) async -> Set<String> { [] }
     public func ejectMedia(_ id: String) async throws { throw BackendUnsupported(feature: "ejecting media") }
 }

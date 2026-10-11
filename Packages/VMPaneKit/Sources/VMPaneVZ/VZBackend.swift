@@ -9,6 +9,7 @@ public final class VZBackend: VMBackend {
     public let kind = BackendKind.vz
     public let capabilities: LiveCapabilities = [.pause, .suspend, .liveSnapshot, .screenshot, .input]
     public nonisolated let events: AsyncStream<BackendEvent>
+    public nonisolated var agentSockets: AsyncStream<Int32> { runner.agentSockets }
 
     /// Saved RAM state inside the state directory (see `SavedStateRule`).
     public static let stateFileName = "suspend.vzvmsave"

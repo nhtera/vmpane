@@ -24,6 +24,11 @@ public actor HelperController {
     var installReader: GuestLineReader?
     var installWatch: Task<Void, Never>?
     var installTiming = InstallTiming()
+    /// The guest agent's connection (`HelperController+Agent`).
+    let agentHub = AgentHub(hostVersion: VMPane.version)
+    let agentExecs = AgentExecs()
+    var agentLink: UDSAgentLink?
+    var agentTasks: [Task<Void, Never>] = []
     /// The config the running VM was started with, plus settings applied live since (nil before a start).
     var runningConfig: VMConfigV1?
     /// Whether the Mac is locked (replaced in tests).
@@ -73,6 +78,7 @@ public actor HelperController {
         try server.start()
         self.server = server
         startEventPump()
+        startAgentPump()
     }
 
     /// Stops the server, stops recorded children, removes run files and releases the bundle lock.
@@ -81,6 +87,9 @@ public actor HelperController {
         shuttingDown = true
         await stopBackendForShutdown()  // the VM must be down before its disks' lock is released
         pumpTask?.cancel()
+        for task in agentTasks { task.cancel() }
+        await agentLink?.stop()
+        await agentHub.disconnect("the helper is shutting down")
         server?.stop()
         server = nil
         let prepared = prepared
@@ -110,6 +119,8 @@ public actor HelperController {
             displayContinuation.yield()
             return .success(.object([:]))
         case .vmInstallCancel?: return await cancelInstall()
+        case .agentStatus?, .agentExec?, .agentExecInput?, .agentExecSignal?, .agentFilePush?, .agentFilePull?:
+            return await agentRequest(request.method, request.params, from: connection)
         case .eventsSubscribe?: return subscribe(request.params, connection)
         case .vmSettingsGet?: return RPCParams.encode(config)
         case .vmSettingsApply?: return await applySettings(request.params)

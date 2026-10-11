@@ -44,6 +44,8 @@ final class ScriptedBackend: VMBackend, @unchecked Sendable {
     let capabilities: LiveCapabilities = [.pause, .suspend, .liveSnapshot, .screenshot, .input]
     let events: AsyncStream<BackendEvent>
     private let continuation: AsyncStream<BackendEvent>.Continuation
+    let agentSockets: AsyncStream<Int32>
+    private let agentContinuation: AsyncStream<Int32>.Continuation
     private let lock = NSLock()
     private var calls: [String] = []
     private var failures: [String: any Error] = [:]
@@ -55,7 +57,11 @@ final class ScriptedBackend: VMBackend, @unchecked Sendable {
 
     init() {
         (events, continuation) = AsyncStream.makeStream(of: BackendEvent.self)
+        (agentSockets, agentContinuation) = AsyncStream.makeStream(of: Int32.self)
     }
+
+    /// Hands the helper a guest agent connection, as VZ's vsock listener does.
+    func connectAgent(_ fd: Int32) { agentContinuation.yield(fd) }
 
     var recordedCalls: [String] { lock.withLock { calls } }
     func failOnce(_ call: String, with error: any Error = POSIXError(.EIO)) { lock.withLock { failures[call] = error } }
