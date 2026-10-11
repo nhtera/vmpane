@@ -193,7 +193,7 @@ extension HelperController {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         var sent: UInt64 = 0
-        while sent < size, await !connection.isAnswered(call) {
+        while sent < size, !Task.isCancelled, await !connection.isAnswered(call) {
             let data = try await Blocking.run { try handle.read(upToCount: fileChunk) ?? Data() }
             guard !data.isEmpty else { break }
             try await connection.send(data, on: stream)

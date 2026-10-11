@@ -54,7 +54,7 @@ public struct VMWindowView: View {
                 StoppedOverlay(model: model)
             }
             if let transfer = model.transfer {
-                TransferHUD(transfer: transfer)
+                TransferHUD(transfer: transfer) { Task { await model.cancelDrop() } }
                     .frame(maxHeight: .infinity, alignment: .bottom)
                     .padding(.bottom, 16)
             }
@@ -229,10 +229,18 @@ struct CaptureHUD: View {
 /// Files being copied into the guest: which one, and how far along.
 struct TransferHUD: View {
     let transfer: HelperViewModel.Transfer
+    let cancel: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Copying “\(transfer.file)” into the VM").font(.callout).lineLimit(1).truncationMode(.middle)
+            HStack {
+                Text("Copying “\(transfer.file)” into the VM").font(.callout).lineLimit(1).truncationMode(.middle)
+                Spacer()
+                Button("Stop", systemImage: "xmark.circle.fill", action: cancel)
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help("Stop copying (what was copied so far is removed from the VM)")
+            }
             if transfer.bytesTotal > 0 {
                 ProgressView(value: transfer.fraction)
                 Text(

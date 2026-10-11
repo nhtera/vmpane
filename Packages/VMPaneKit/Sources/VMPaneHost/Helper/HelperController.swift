@@ -35,6 +35,8 @@ public actor HelperController {
     /// helper app provides for it.
     var clipboardBridge: ClipboardBridge?
     var hostPasteboard: HostPasteboard?
+    /// The file drop in progress (`vm.files.cancel` stops it).
+    var dropTask: Task<Result<JSONValue, RPCError>, Never>?
     /// A running VZ VM's port forwards (`HelperController+Ports`).
     var portForwarder: PortForwarder?
     /// Refreshes `thumbnail.png` while the VM runs (`HelperController+Thumbnail`).
@@ -134,7 +136,16 @@ public actor HelperController {
         case .eventsSubscribe?: return subscribe(request.params, connection)
         case .vmSettingsGet?: return RPCParams.encode(config)
         case .vmPortsList?: return await portsList()
-        case .vmFilesDrop?: return await dropFiles(request.params)
+        case .vmFilesDrop?:
+            guard dropTask == nil else { return .failure(RPCError(.invalidState, "files are already being copied into the VM")) }
+            let params = request.params
+            let task = Task { await self.dropFiles(params) }
+            dropTask = task
+            defer { dropTask = nil }
+            return await task.value
+        case .vmFilesCancel?:
+            dropTask?.cancel()
+            return .success([:])
         case .vmClipboardRead?: return await clipboardRead(request.params)
         case .vmClipboardWrite?: return await clipboardWrite(request.params)
         case .vmSettingsApply?: return await applySettings(request.params)

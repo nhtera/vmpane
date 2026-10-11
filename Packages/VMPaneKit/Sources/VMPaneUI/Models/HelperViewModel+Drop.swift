@@ -12,6 +12,8 @@ extension HelperViewModel {
         do {
             _ = try await channel.call(
                 ControlMethod.vmFilesDrop.rawValue, params: ["paths": .array(urls.map { .string($0.path) })], timeout: .seconds(3600))
+        } catch let error as RPCError where error.message == "cancelled" {
+            // The user stopped it.
         } catch let error as RPCError {
             lastError =
                 error.code == ControlErrorCode.agentUnavailable.rawValue
@@ -19,5 +21,10 @@ extension HelperViewModel {
         } catch {
             lastError = String(describing: error)
         }
+    }
+
+    /// Stops the copy in progress; what was copied so far is removed from the guest.
+    public func cancelDrop() async {
+        _ = try? await channel.call(ControlMethod.vmFilesCancel.rawValue, params: nil, timeout: .seconds(10))
     }
 }

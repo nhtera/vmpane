@@ -32,6 +32,7 @@ public enum ControlMethod: String, CaseIterable, Sendable {
     case agentFilePush = "agent.file.push"
     case agentFilePull = "agent.file.pull"
     case vmFilesDrop = "vm.files.drop"
+    case vmFilesCancel = "vm.files.cancel"
     case mcpPolicyGet = "mcp.policy.get"
     case mcpPolicySet = "mcp.policy.set"
     case mcpEnableAll = "mcp.enableAll"

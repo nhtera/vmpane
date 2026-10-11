@@ -66,6 +66,7 @@ denied.
 | `agent.file.push` | `{hostPath, guestPath, overwrite}` | `{bytes}` | exec |
 | `agent.file.pull` | `{guestPath, hostPath, overwrite}` | `{bytes}` | exec |
 | `vm.files.drop` | `{paths}` (host files and folders, e.g. dropped on the VM window) | `{guestPath, files, bytes, skipped, revealed}`: copied into a new folder in the logged-in user's `Desktop/VMPane Drops`, owned by that user, then shown | exec |
+| `vm.files.cancel` | — | `{}`: stops a running `vm.files.drop` (it fails with "cancelled"; the partial drop folder is removed) | exec |
 | `mcp.policy.get` | — | `{policy, confirmExec, autoSnapshot, auditTypedText}` | uiOnly |
 | `mcp.policy.set` | `{policy, …}` | `{}` | uiOnly |
 | `mcp.enableAll` | — | `{}` | uiOnly |

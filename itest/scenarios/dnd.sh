@@ -42,4 +42,17 @@ scenario_run() {
     [[ $owner == ubuntu ]] || it_fail "the dropped files belong to '$owner'" || return 1
     if it_agent_exec "test -e \"$guest/Album/link\""; then it_fail "the symlink was copied"; return 1; fi
     echo "dnd: 3 files + a folder dropped into $guest: SHA-256 match, owned by ubuntu, symlink skipped (revealed: $(jq -r .revealed <<<"$out"))"
+
+    # A cancelled drop stops and leaves nothing behind.
+    head -c 1073741824 /dev/zero >"$src/big.bin"
+    /usr/bin/python3 "$VMPANE_ROOT/itest/lib/rpc.py" "$socket" vm.files.drop "$(jq -nc --arg p "$src/big.bin" '{paths: [$p]}')" \
+        >"$work/cancelled.json" 2>&1 &
+    local dropper=$!
+    sleep 1
+    it_rpc "$socket" vm.files.cancel >/dev/null || it_fail "vm.files.cancel failed" || return 1
+    wait "$dropper" && { it_fail "the cancelled drop reported success: $(cat "$work/cancelled.json")"; return 1; }
+    grep -q cancelled "$work/cancelled.json" || it_fail "unexpected answer: $(cat "$work/cancelled.json")" || return 1
+    [[ $(it_agent_exec 'ls "/home/ubuntu/Desktop/VMPane Drops" | wc -l') == 1 ]] \
+        || it_fail "the cancelled drop left a folder: $(it_agent_exec 'ls "/home/ubuntu/Desktop/VMPane Drops"')" || return 1
+    echo "dnd: a cancelled drop stops and its folder is removed"
 }

@@ -29,21 +29,28 @@ extension HelperController {
         guard let connection = await agentHub.waitForConnection(timeout: Self.agentWait), let peer = await agentHub.status.peer else {
             return .failure(RPCError(.agentUnavailable, "the guest agent is not connected"))
         }
+        var dropFolder: String?
         do {
             let (items, skipped) = try await Blocking.run { try Self.dropItems(paths.map { URL(fileURLWithPath: $0) }) }
             let windows = peer.hello.os == "windows"
             let folder = try await makeDropFolder(items.filter { $0.source == nil }.map(\.path), windows: windows, on: connection)
+            dropFolder = folder.path
             let total = items.reduce(0) { $0 + $1.size }
             var done: UInt64 = 0
             for item in items {
+                guard !Task.isCancelled else { throw CancellationError() }
                 guard let source = item.source else { continue }
                 let target = folder.path + (windows ? "\\" + item.path.replacingOccurrences(of: "/", with: "\\") : "/" + item.path)
                 let before = done
                 let server = server
-                done += try await Self.push(FileTransfer(hostPath: source.path, guestPath: target), on: connection) { sent in
-                    server?.broadcast(
-                        topic: "files", method: ControlNotification.filesProgress.rawValue,
-                        params: ["bytesDone": .int(Int64(before + sent)), "bytesTotal": .int(Int64(total)), "file": .string(item.path)])
+                do {
+                    done += try await Self.push(FileTransfer(hostPath: source.path, guestPath: target), on: connection) { sent in
+                        server?.broadcast(
+                            topic: "files", method: ControlNotification.filesProgress.rawValue,
+                            params: ["bytesDone": .int(Int64(before + sent)), "bytesTotal": .int(Int64(total)), "file": .string(item.path)])
+                    }
+                } catch  where Task.isCancelled {
+                    throw CancellationError()
                 }
             }
             if let owner = folder.owner {
@@ -58,6 +65,13 @@ extension HelperController {
                 "guestPath": .string(folder.path), "files": .int(Int64(files)), "bytes": .int(Int64(done)),
                 "skipped": .array(skipped.map { .string($0) }), "revealed": .bool(reveal != nil),
             ])
+        } catch is CancellationError {
+            if let folder = dropFolder {
+                // Not cancelled itself: the removal must still reach the guest.
+                let windows = peer.hello.os == "windows"
+                await Task { await self.removeDropFolder(folder, windows: windows, on: connection) }.value
+            }
+            return .failure(RPCError(.invalidState, "cancelled"))
         } catch let error as RPCError {
             return .failure(error)
         } catch let error as AgentConnection.ConnectionError {
@@ -66,6 +80,15 @@ extension HelperController {
         } catch {
             return .failure(RPCError(.internalError, String(describing: error)))
         }
+    }
+
+    /// A cancelled drop's folder goes away again (as the user, who made it).
+    private func removeDropFolder(_ path: String, windows: Bool, on connection: AgentConnection) async {
+        let argv =
+            windows
+            ? ["cmd.exe", "/c", "rmdir", "/s", "/q", path]
+            : ["/bin/sh", "-c", "rm -rf -- \"$1\"", "sh", path]
+        _ = try? await agentExecs.run(AgentExecStartParams(argv: argv, as: windows ? .user : .admin, timeoutMs: 60000), on: connection)
     }
 
     /// What `urls` expand to: each top-level item by its name, folders walked; symlinks are skipped (their names
