@@ -33,6 +33,12 @@ public actor AgentConnection {
     var nextID: Int64 = 1
     var nextHostStream: UInt32 = 1
     var clipboardNotices: [ContinuousClock.Instant] = []
+    /// When the last bytes arrived, and whether reading is held back by a full stream (`watchIdle`).
+    var lastReceived = ContinuousClock.now
+    var readingPaused = false
+
+    /// `vmpane-agent-proto::limits::HEARTBEAT_SECONDS`.
+    static let heartbeat: Duration = .seconds(5)
     /// Set while a refusal is being written: input is ignored, the connection closes once it is out.
     var refusing = false
     var closeReason: ConnectionError?
@@ -70,14 +76,19 @@ public actor AgentConnection {
     /// (a QEMU port is connected before the guest has booted).
     public func open(helloTimeout: Duration?) async throws -> Peer {
         let (bytes, consumed) = socket.reads()
+        let socket = socket
         Task { [weak self] in
             for await chunk in bytes {
-                guard let self else { return }
+                guard let self else {
+                    socket.close()  // nobody owns the connection any more: stop the reader thread
+                    return
+                }
                 await self.receive(chunk)
                 consumed()
             }
             await self?.close(.closed("the guest closed the connection"))
         }
+        Task { [weak self] in await self?.watchIdle() }
         if let helloTimeout {
             Task { [weak self] in
                 try? await Task.sleep(for: helloTimeout)
@@ -91,6 +102,18 @@ public actor AgentConnection {
                 continuation.resume(throwing: closeReason)
             } else {
                 helloWaiter = continuation
+            }
+        }
+    }
+
+    /// Closes a connection that has been silent for three heartbeats after `hello` (a guest that froze, or a QEMU
+    /// port whose agent died without the host noticing). Not while the host itself holds back reading.
+    func watchIdle() async {
+        while closeReason == nil {
+            try? await Task.sleep(for: Self.heartbeat)
+            guard peer != nil, !readingPaused else { continue }
+            if ContinuousClock.now - lastReceived > Self.heartbeat * 3 {
+                close(.closed("no heartbeat from the agent"))
             }
         }
     }

@@ -25,7 +25,7 @@ public final class AgentInbound: @unchecked Sendable {
     init(id: UInt32) { self.id = id }
 
     /// Nobody will read this stream: drop its data as it arrives.
-    func discard() {
+    public func discard() {
         lock.withLock {
             discarding = true
             chunks.removeAll()

@@ -133,15 +133,14 @@ pub async fn start(conn: &Arc<Conn>, params: ExecStartParams) -> Result<Reply, E
     Reply::then(&result, async move {
         let exited = run(
             &conn,
+            exec_id,
             child,
-            pid,
             stdout,
             stderr,
             stdin.zip(child_stdin),
             timeout,
         )
         .await;
-        conn.execs.remove(exec_id);
         let notice = ExecExited { exec_id, ..exited };
         let _ = conn.out.notify(method::EXEC_EXITED, &notice).await;
     })
@@ -149,13 +148,14 @@ pub async fn start(conn: &Arc<Conn>, params: ExecStartParams) -> Result<Reply, E
 
 async fn run(
     conn: &Arc<Conn>,
+    exec_id: u32,
     mut child: Child,
-    pid: u32,
     stdout: OutStream,
     stderr: OutStream,
     stdin: Option<((u32, mpsc::Receiver<Incoming>), ChildStdin)>,
     timeout: Option<Duration>,
 ) -> ExecExited {
+    let pid = child.id().unwrap_or(0);
     let (exited_tx, exited_rx) = watch::channel(false);
     let out_pipe = child.stdout.take();
     let err_pipe = child.stderr.take();
@@ -171,6 +171,8 @@ async fn run(
             },
             None => (child.wait().await, false),
         };
+        // Reaped: its process group id may be reused, so it can no longer be signalled.
+        conn.execs.remove(exec_id);
         let _ = exited_tx.send(true);
         (status, timed_out)
     };

@@ -59,6 +59,15 @@ func helperRunsCommandsThroughTheAgent() async throws {
     #expect(echoed.output["stdout"] == "piped")
     #expect(echoed.exited?["code"] == 0)
 
+    // Large output arrives whole: each piece is written to the client before the next is read from the agent.
+    let big = try await helper.client.call("agent.exec", params: ["shell": "head -c 20000000 /dev/zero", "as": "admin"])
+    var total = 0
+    for await note in helper.client.notifications where note.params?["execId"] == big["execId"] {
+        if note.method == "exec.output" { total += Data(base64Encoded: note.params?["dataB64"]?.stringValue ?? "")?.count ?? 0 }
+        if note.method == "exec.exited" { break }
+    }
+    #expect(total == 20_000_000)
+
     agent.cleanUp()
     await helper.tearDown()
 }
@@ -79,10 +88,27 @@ func helperPushesAndPullsFilesThroughTheAgent() async throws {
     let pulled = try await helper.client.call("agent.file.pull", params: ["guestPath": .string(guestPath), "hostPath": .string(back.path)])
     #expect(pulled["bytes"] == .int(Int64(data.count)))
     #expect(try Data(contentsOf: back) == data)
+    await #expect(throws: RPCError.self) {  // the target exists
+        _ = try await helper.client.call("agent.file.pull", params: ["guestPath": .string(guestPath), "hostPath": .string(back.path)])
+    }
     await #expect(throws: RPCError.self) {
-        _ = try await helper.client.call("agent.file.pull", params: ["guestPath": "/no/such/file", "hostPath": .string(back.path)])
+        _ = try await helper.client.call(
+            "agent.file.pull", params: ["guestPath": "/no/such/file", "hostPath": .string(back.path), "overwrite": true])
     }
     #expect(try Data(contentsOf: back) == data, "a failed pull leaves the target alone")
+    try Data("old".utf8).write(to: back)
+    _ = try await helper.client.call(
+        "agent.file.pull", params: ["guestPath": .string(guestPath), "hostPath": .string(back.path), "overwrite": true])
+    #expect(try Data(contentsOf: back) == data)
+    // A symlink in the partial file's place is replaced, never written through.
+    let victim = helper.root.appendingPathComponent("victim")
+    try Data("keep".utf8).write(to: victim)
+    let fresh = helper.root.appendingPathComponent("fresh.bin")
+    try FileManager.default.createSymbolicLink(
+        at: helper.root.appendingPathComponent(".fresh.bin.vmpane-partial"), withDestinationURL: victim)
+    _ = try await helper.client.call("agent.file.pull", params: ["guestPath": .string(guestPath), "hostPath": .string(fresh.path)])
+    #expect(try Data(contentsOf: victim) == Data("keep".utf8))
+    #expect(try Data(contentsOf: fresh) == data)
 
     agent.cleanUp()
     await helper.tearDown()

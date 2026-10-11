@@ -137,6 +137,10 @@ pub fn freeze() -> std::io::Result<Vec<String>> {
     Ok(Vec::new())
 }
 
+pub fn thaw_stale() -> Vec<String> {
+    Vec::new()
+}
+
 pub fn thaw(_frozen: &[String]) -> Vec<String> {
     Vec::new()
 }

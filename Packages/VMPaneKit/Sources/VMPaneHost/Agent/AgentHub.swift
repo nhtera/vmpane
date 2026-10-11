@@ -22,6 +22,10 @@ public actor AgentHub {
     private var refuseUntil: ContinuousClock.Instant?
     private var violationDelay: Duration = .seconds(1)
     private var waiters: [CheckedContinuation<AgentConnection?, Never>] = []
+    /// Connections opened but not through `hello` yet: each costs a reader thread, so a guest cannot open many.
+    private var unhelloed = 0
+
+    static let maxUnhelloed = 2
     /// Connection changes, for `agent.connectionChanged` and per-connection work (clock sync, notifications).
     public nonisolated let events: AsyncStream<Event>
     private let eventContinuation: AsyncStream<Event>.Continuation
@@ -49,14 +53,22 @@ public actor AgentHub {
             close(fd)
             return
         }
+        guard unhelloed < Self.maxUnhelloed else {
+            close(fd)
+            noteClose(.violation("too many connections before hello"))
+            return
+        }
         await serve(AgentConnection(fd: fd, hostVersion: hostVersion, token: token), helloTimeout: helloTimeout)
     }
 
     func serve(_ connection: AgentConnection, helloTimeout: Duration?) async {
         let peer: AgentConnection.Peer
+        unhelloed += 1
         do {
             peer = try await connection.open(helloTimeout: helloTimeout)
+            unhelloed -= 1
         } catch {
+            unhelloed -= 1
             noteClose(error as? AgentConnection.ConnectionError)
             return
         }

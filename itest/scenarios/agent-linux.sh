@@ -13,7 +13,7 @@ it_agent_exec() { /usr/bin/python3 "$VMPANE_ROOT/itest/lib/agent_exec.py" "$sock
 it_agent_connected() { [[ $(it_rpc "$socket" agent.status | jq -r .connected) == true ]]; }
 
 scenario_run() {
-    local work bundle pid socket start out id big back host_sum guest_sum seconds mbps drift rc
+    local work bundle pid socket start out id big back host_sum guest_sum seconds mbps drift rc what
     [[ -f "$APP/Contents/Resources/GuestTools/linux/SHA256SUMS" ]] \
         || { echo "agent-linux: the app has no Linux guest tools (guest-tools/build-linux.sh, then rebuild)" >&2; return 77; }
     it_boot_linux_clone || return 1
@@ -69,14 +69,26 @@ scenario_run() {
     it_agent_exec 'rm -f /root/big.bin' >/dev/null
 
     # 5. Clock after a live-snapshot restore: the guest resumes with the snapshot's time; the host resets it.
+    #    A locked Mac cannot restore saved memory (macLocked): then the same check across a 20 s pause.
     id=$(it_rpc "$socket" vm.snapshot.create '{"name": "clock", "kind": "live"}' | jq -r .id) || it_fail "snapshot failed" || return 1
     sleep 20
-    it_rpc "$socket" vm.snapshot.restore "{\"id\": \"$id\"}" >/dev/null || it_fail "restore failed" || return 1
-    it_wait_for 30 it_agent_connected || it_fail "the agent did not reconnect after the restore" || return 1
-    sleep 2  # the clock sync follows the reconnect
+    if out=$(it_rpc "$socket" vm.snapshot.restore "{\"id\": \"$id\"}"); then
+        what="a restore 20 s back"
+    elif [[ $(jq -r .code <<<"$out" 2>/dev/null) == -32018 ]]; then
+        echo "agent-linux: this Mac is locked, so no restore; checking the clock across a pause instead"
+        it_rpc "$socket" vm.pause >/dev/null || it_fail "pause failed" || return 1
+        sleep 20
+        it_rpc "$socket" vm.resume >/dev/null || it_fail "resume failed" || return 1
+        what="a 20 s pause"
+    else
+        it_fail "restore failed: $out"
+        return 1
+    fi
+    it_wait_for 30 it_agent_connected || it_fail "the agent did not reconnect after $what" || return 1
+    sleep 2  # the clock sync follows the reconnect or resume
     drift=$(/usr/bin/python3 -c "import time; print(abs(float('$(it_agent_exec 'date +%s.%N')') - time.time()))")
-    /usr/bin/python3 -c "import sys; sys.exit(0 if $drift < 1 else 1)" || it_fail "guest clock off by ${drift} s after the restore" || return 1
-    echo "agent-linux: guest clock within $(printf '%.3f' "$drift") s of the host after a restore 20 s back"
+    /usr/bin/python3 -c "import sys; sys.exit(0 if $drift < 1 else 1)" || it_fail "guest clock off by ${drift} s after $what" || return 1
+    echo "agent-linux: guest clock within $(printf '%.3f' "$drift") s of the host after $what"
 
     # 6. Disk snapshot of the running guest: frozen by the agent while the disks are cloned, then thawed.
     it_rpc "$socket" vm.snapshot.create '{"name": "frozen", "kind": "disk"}' >/dev/null || it_fail "running disk snapshot failed" || return 1

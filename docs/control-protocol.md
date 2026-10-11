@@ -63,8 +63,8 @@ denied.
 | `agent.exec` | `{argv, as, cwd, env, timeoutMs, stdin}` | `{execId}` | exec (as:user), admin (as:admin) |
 | `agent.exec.input` | `{execId, dataB64, eof}` | `{}` | exec |
 | `agent.exec.signal` | `{execId, signal}` (own exec only) | `{}` | exec |
-| `agent.file.push` | `{hostPath, guestPath}` | `{bytes}` | exec |
-| `agent.file.pull` | `{guestPath, hostPath}` | `{bytes}` | exec |
+| `agent.file.push` | `{hostPath, guestPath, overwrite}` | `{bytes}` | exec |
+| `agent.file.pull` | `{guestPath, hostPath, overwrite}` | `{bytes}` | exec |
 | `mcp.policy.get` | — | `{policy, confirmExec, autoSnapshot, auditTypedText}` | uiOnly |
 | `mcp.policy.set` | `{policy, …}` | `{}` | uiOnly |
 | `mcp.enableAll` | — | `{}` | uiOnly |

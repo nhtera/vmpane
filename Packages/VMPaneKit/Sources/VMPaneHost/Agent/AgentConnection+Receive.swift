@@ -6,6 +6,7 @@ import VMPaneCore
 extension AgentConnection {
     func receive(_ bytes: Data) async {
         guard closeReason == nil, !refusing else { return }
+        lastReceived = .now
         decoder.append(bytes)
         while closeReason == nil, !refusing {
             let frame: AgentFrame?
@@ -28,7 +29,12 @@ extension AgentConnection {
             }
         case .chunk(let stream, let data):
             guard let target = inbound[stream] else { return close(.violation("data on unknown stream \(stream)")) }
-            if target.push(data) { await target.waitForRoom() }
+            if target.push(data) {
+                readingPaused = true
+                await target.waitForRoom()
+                readingPaused = false
+                lastReceived = .now
+            }
         case .end(let stream, let status):
             guard let target = inbound.removeValue(forKey: stream) else {
                 return close(.violation("end of unknown stream \(stream)"))
@@ -47,7 +53,10 @@ extension AgentConnection {
             if request.method == AgentMethod.clipboardChanged && !allowClipboardNotice() {
                 return close(.violation("clipboard.changed faster than \(AgentLimits.maxClipboardChangedPerSecond)/s"))
             }
-            if request.method != AgentMethod.agentHeartbeat { notificationContinuation.yield(request) }
+            guard request.method != AgentMethod.agentHeartbeat else { return }
+            if case .dropped = notificationContinuation.yield(request) {
+                close(.violation("notifications faster than the host handles them"))
+            }
         case .request(let request):
             close(.violation("the guest may not send \(request.method)"))
         case .response(let response):

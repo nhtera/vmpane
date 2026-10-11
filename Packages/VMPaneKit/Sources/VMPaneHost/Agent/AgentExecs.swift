@@ -17,8 +17,19 @@ actor AgentExecs {
         case arrived(AgentExecExited)
     }
 
-    private var routes: [UInt32: Route] = [:]
-    private var exits: [UInt32: Exit] = [:]
+    /// An exec on one agent connection: a new agent numbers its execs from 1 again.
+    private struct Key: Hashable {
+        let connection: ObjectIdentifier
+        let execId: UInt32
+
+        init(_ connection: AgentConnection, _ execId: UInt32) {
+            self.connection = ObjectIdentifier(connection)
+            self.execId = execId
+        }
+    }
+
+    private var routes: [Key: Route] = [:]
+    private var exits: [Key: Exit] = [:]
 
     static let streamNames = AgentConnection.StreamNames(
         inbound: { [$0["stdout"]?.intValue, $0["stderr"]?.intValue].compactMap { $0.map(UInt32.init) } },
@@ -30,7 +41,8 @@ actor AgentExecs {
     {
         let call = try await connection.call(AgentMethod.execStart, RPCParams.encode(params).get(), streams: Self.streamNames)
         let started = try RPCParams.decode(AgentExecStartResult.self, from: call.result).get()
-        routes[started.execId] = Route(owner: owner, connection: connection, stdin: started.stdin)
+        let key = Key(connection, started.execId)
+        routes[key] = Route(owner: owner, connection: connection, stdin: started.stdin)
         let outputs = [("stdout", call.inbound[started.stdout]), ("stderr", call.inbound[started.stderr])]
         Task {
             await withTaskGroup(of: Void.self) { group in
@@ -38,15 +50,15 @@ actor AgentExecs {
                     group.addTask { await Self.forward(stream, name: name, execId: started.execId, to: owner) }
                 }
             }
-            let exited = await self.waitForExit(started.execId)
+            let exited = await self.waitForExit(key)
             let params: JSONValue = [
                 "execId": .int(Int64(started.execId)),
                 "code": exited?.code.map { .int(Int64($0)) } ?? .null,
                 "signal": exited.map { $0.signal.map(JSONValue.string) ?? .null } ?? "disconnected",
                 "timedOut": .bool(exited?.timedOut ?? false),
             ]
-            owner.send(.request(RPCRequest(id: nil, method: ControlNotification.execExited.rawValue, params: params)))
-            self.remove(started.execId)
+            await owner.sendWhenWritten(.request(RPCRequest(id: nil, method: ControlNotification.execExited.rawValue, params: params)))
+            self.remove(key)
         }
         return started.execId
     }
@@ -60,42 +72,40 @@ actor AgentExecs {
         }
     }
 
-    private func waitForExit(_ execId: UInt32) async -> AgentExecExited? {
-        if case .arrived(let exited)? = exits.removeValue(forKey: execId) { return exited }
-        guard routes[execId] != nil else { return nil }  // the agent went away before the process ended
-        return await withCheckedContinuation { exits[execId] = .waiting($0) }
+    private func waitForExit(_ key: Key) async -> AgentExecExited? {
+        if case .arrived(let exited)? = exits.removeValue(forKey: key) { return exited }
+        guard routes[key] != nil else { return nil }  // the agent went away before the process ended
+        return await withCheckedContinuation { exits[key] = .waiting($0) }
     }
 
-    private func remove(_ execId: UInt32) {
-        routes[execId] = nil
-        exits[execId] = nil
+    private func remove(_ key: Key) {
+        routes[key] = nil
+        exits[key] = nil
     }
 
     /// `exec.exited` from the agent. It can come before `start` has recorded the route (a quick process), so
     /// it is kept until asked for; a guest cannot grow the table past a small bound.
-    func exited(_ notice: AgentExecExited) {
-        if case .waiting(let continuation)? = exits.removeValue(forKey: notice.execId) {
+    func exited(_ notice: AgentExecExited, on connection: AgentConnection) {
+        let key = Key(connection, notice.execId)
+        if case .waiting(let continuation)? = exits.removeValue(forKey: key) {
             continuation.resume(returning: notice)
         } else if exits.count < 1024 {
-            exits[notice.execId] = .arrived(notice)
+            exits[key] = .arrived(notice)
         }
     }
 
     /// The agent connection closed: every running exec ends without an exit status.
     func disconnected(_ connection: AgentConnection) {
-        for (execId, route) in routes where route.connection === connection {
-            routes[execId] = nil
-            if case .waiting(let continuation)? = exits.removeValue(forKey: execId) { continuation.resume(returning: nil) }
+        let gone = ObjectIdentifier(connection)
+        for key in routes.keys where key.connection == gone {
+            routes[key] = nil
+            if case .waiting(let continuation)? = exits.removeValue(forKey: key) { continuation.resume(returning: nil) }
         }
-        // Unclaimed exits belong to the old connection; a new agent numbers its execs from 1 again.
-        exits = exits.filter {
-            if case .waiting = $0.value { return true }
-            return false
-        }
+        exits = exits.filter { $0.key.connection != gone }
     }
 
     private func route(_ execId: UInt32, owner: ControlConnection) throws -> Route {
-        guard let route = routes[execId], route.owner === owner else {
+        guard let route = routes.first(where: { $0.key.execId == execId && $0.value.owner === owner })?.value else {
             throw RPCError(.invalidParams, "no running exec \(execId) started by this connection")
         }
         return route

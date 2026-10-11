@@ -8,8 +8,9 @@
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use bytes::{Bytes, BytesMut};
 use serde::Serialize;
@@ -19,7 +20,9 @@ use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use vmpane_agent_proto::error::ErrorCode;
 use vmpane_agent_proto::frame::{Frame, FrameDecoder, StreamStatus, is_host_stream};
-use vmpane_agent_proto::jsonrpc::{ErrorObject, Id, Message, Request, Response, encode_value};
+use vmpane_agent_proto::jsonrpc::{
+    ErrorObject, Id, Message, Notification, Request, Response, encode_value,
+};
 use vmpane_agent_proto::limits::{HEARTBEAT_SECONDS, MAX_CHUNK, MAX_OPEN_STREAMS};
 use vmpane_agent_proto::methods::Empty;
 use vmpane_agent_proto::methods::{HelloParams, HelloResult, method};
@@ -295,6 +298,10 @@ impl Drop for OutStream {
 pub async fn run(agent: Arc<Agent>, io: BoxIo, token: Option<String>) -> Result<(), ConnError> {
     let (mut reader, mut writer) = tokio::io::split(io);
     let (tx, mut rx) = mpsc::channel::<Frame>(OUTBOX_DEPTH);
+    // Milliseconds since `epoch` at which the write in progress started; 0 while the writer is idle.
+    let epoch = Instant::now();
+    let busy_since = Arc::new(AtomicU64::new(0));
+    let writer_busy = Arc::clone(&busy_since);
     let mut writer_task = tokio::spawn(async move {
         let mut buf = BytesMut::new();
         while let Some(frame) = rx.recv().await {
@@ -309,8 +316,10 @@ pub async fn run(agent: Arc<Agent>, io: BoxIo, token: Option<String>) -> Result<
                     break;
                 }
             }
+            writer_busy.store(millis_since(epoch).max(1), Ordering::Relaxed);
             writer.write_all(&buf).await?;
             writer.flush().await?;
+            writer_busy.store(0, Ordering::Relaxed);
         }
         Ok::<(), std::io::Error>(())
     });
@@ -360,7 +369,7 @@ pub async fn run(agent: Arc<Agent>, io: BoxIo, token: Option<String>) -> Result<
         execs: exec::Registry::default(),
     });
     let mut tasks = JoinSet::new();
-    let heartbeat = heartbeat(conn.out.clone());
+    let heartbeat = heartbeat(conn.out.clone(), epoch, busy_since);
     tokio::pin!(heartbeat);
     let outcome = loop {
         tokio::select! {
@@ -391,18 +400,32 @@ pub async fn run(agent: Arc<Agent>, io: BoxIo, token: Option<String>) -> Result<
     outcome
 }
 
-/// Sends `agent.heartbeat` every few seconds; returns when one cannot be queued in time (a dead connection the
-/// writer is stuck on, or a closed one). A failing write ends the connection through the writer task.
-async fn heartbeat(out: Outbox) {
+/// Queues `agent.heartbeat` every few seconds (skipped while the queue is full: the writer is busy anyway).
+/// Returns when a single write has been stuck for three periods: a dead connection the writer cannot finish.
+/// A full queue alone is no reason: the host may hold back reading while its client is slow. A write that fails
+/// ends the connection through the writer task.
+async fn heartbeat(out: Outbox, epoch: Instant, busy_since: Arc<AtomicU64>) {
     let period = Duration::from_secs(HEARTBEAT_SECONDS);
+    let stuck_after = u64::try_from((3 * period).as_millis()).unwrap_or(u64::MAX);
     loop {
         tokio::time::sleep(period).await;
-        match tokio::time::timeout(3 * period, out.notify(method::AGENT_HEARTBEAT, &Empty {})).await
+        let started = busy_since.load(Ordering::Relaxed);
+        if started != 0 && millis_since(epoch).saturating_sub(started) > stuck_after {
+            return;
+        }
+        if let Ok(bytes) =
+            Message::from(Notification::new(method::AGENT_HEARTBEAT, &Empty {})).to_bytes()
         {
-            Ok(Ok(())) => {}
-            _ => return,
+            match out.0.try_send(Frame::Message(bytes.into())) {
+                Ok(()) | Err(mpsc::error::TrySendError::Full(_)) => {}
+                Err(mpsc::error::TrySendError::Closed(_)) => return,
+            }
         }
     }
+}
+
+fn millis_since(epoch: Instant) -> u64 {
+    u64::try_from(epoch.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
 fn closed() -> ConnError {

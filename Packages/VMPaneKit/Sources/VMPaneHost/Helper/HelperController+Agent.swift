@@ -35,7 +35,7 @@ extension HelperController {
             Task {
                 for await notice in connection.notifications where notice.method == AgentMethod.execExited {
                     if case .success(let exited) = RPCParams.decode(AgentExecExited.self, from: notice.params) {
-                        await execs.exited(exited)
+                        await execs.exited(exited, on: connection)
                     }
                 }
                 await execs.disconnected(connection)
@@ -163,7 +163,8 @@ extension HelperController {
             return (size, hasher.finalize().map { String(format: "%02x", $0) }.joined())
         }
         let stream = try await connection.openOutbound()
-        let params = AgentFilePushParams(path: files.guestPath, size: size, sha256: sha256, stream: stream, overwrite: true)
+        let params = AgentFilePushParams(
+            path: files.guestPath, size: size, sha256: sha256, stream: stream, overwrite: files.overwrite ?? false)
         let call = try await connection.start(AgentMethod.filePush, RPCParams.encode(params).get())
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
@@ -179,21 +180,29 @@ extension HelperController {
         return try RPCParams.decode(AgentFilePushResult.self, from: result.result).get().size
     }
 
-    /// Guest file → host: written beside the target and renamed once the announced size arrived.
+    /// Guest file → host: written to a new private file beside the target (never through a symlink), synced and
+    /// renamed once exactly the announced size arrived. An existing target is replaced only with `overwrite`.
     private static func pull(_ files: FileTransfer, on connection: AgentConnection) async throws -> UInt64 {
         let url = URL(fileURLWithPath: files.hostPath)
         guard url.path.hasPrefix("/") else { throw RPCError(.invalidParams, "hostPath must be absolute") }
+        let overwrite = files.overwrite ?? false
+        var info = stat()
+        if !overwrite, lstat(url.path, &info) == 0 { throw RPCError(.invalidParams, "\(url.path) exists (pass overwrite: true)") }
         let names = AgentConnection.StreamNames(inbound: { [$0["stream"]?.intValue].compactMap { $0.map(UInt32.init) } })
         let call = try await connection.call(
             AgentMethod.filePull, RPCParams.encode(AgentFilePullParams(path: files.guestPath, maxBytes: 1 << 40)).get(),
             timeout: .seconds(30), streams: names)
         let size = try RPCParams.decode(AgentFilePullResult.self, from: call.result).get().size
         guard let stream = call.inbound.values.first else { throw RPCError(.internalError, "no stream for the file") }
-        let partial = url.deletingLastPathComponent().appendingPathComponent(".\(url.lastPathComponent).vmpane-partial")
-        guard FileManager.default.createFile(atPath: partial.path, contents: nil) else {
-            throw RPCError(.invalidParams, "cannot create \(partial.path)")
+        let directory = url.deletingLastPathComponent()
+        let available = (try? SpaceGuard.freeBytes(at: directory)) ?? 0
+        guard available >= size + Self.pullReserve else {
+            stream.discard()
+            throw RPCError(.insufficientSpace, "the file needs \(size >> 20) MiB, \(available >> 20) MiB free on the host")
         }
-        let handle = try FileHandle(forWritingTo: partial)
+        let partial = directory.appendingPathComponent(".\(url.lastPathComponent).vmpane-partial")
+        let fd = try createExclusive(partial)
+        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
         var received: UInt64 = 0
         do {
             while let data = try await stream.next() {
@@ -201,15 +210,34 @@ extension HelperController {
                 guard received <= size else { throw RPCError(.internalError, "the guest sent more than announced") }
                 try handle.write(contentsOf: data)
             }
-            try handle.close()
             guard received == size else { throw RPCError(.internalError, "the guest sent \(received) of \(size) bytes") }
-            guard rename(partial.path, url.path) == 0 else { throw POSIXError.current() }
+            fchmod(fd, 0o644)
+            try handle.synchronize()
+            try handle.close()
+            let moved = overwrite ? rename(partial.path, url.path) : renamex_np(partial.path, url.path, UInt32(RENAME_EXCL))
+            guard moved == 0 else { throw POSIXError.current() }
         } catch {
+            stream.discard()
             try? handle.close()
-            try? FileManager.default.removeItem(at: partial)
+            unlink(partial.path)
             throw error
         }
         return size
+    }
+
+    /// Free space a pull leaves on the host volume.
+    private static let pullReserve: UInt64 = 256 << 20
+
+    /// A new 0600 file, never through a symlink; a stale one from an interrupted pull is replaced.
+    private static func createExclusive(_ url: URL) throws -> Int32 {
+        let flags = O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC
+        var fd = open(url.path, flags, 0o600)
+        if fd < 0, errno == EEXIST {
+            unlink(url.path)
+            fd = open(url.path, flags, 0o600)
+        }
+        guard fd >= 0 else { throw RPCError(.invalidParams, "cannot create \(url.path): \(String(cString: strerror(errno)))") }
+        return fd
     }
 
     /// 60 s plus 10 MB/s: generous for vsock (≥ 100 MB/s) and virtio-serial (≥ 30 MB/s).
@@ -254,4 +282,6 @@ private struct ExecSignal: Decodable {
 private struct FileTransfer: Decodable {
     var hostPath: String
     var guestPath: String
+    /// Replace an existing target (the guest file for a push, the host file for a pull).
+    var overwrite: Bool?
 }

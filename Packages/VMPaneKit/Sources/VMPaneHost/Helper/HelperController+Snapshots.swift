@@ -93,12 +93,21 @@ extension HelperController {
             throw refusal
         }
         let created = await Blocking.run { Result { try store.create(name: name, kind: .disk, origin: origin, context: context) } }
+        // Everything frozen must still have been frozen at the thaw: a guest that thawed by itself (its timer ran out
+        // during the clone) may have written meanwhile, so the snapshot is not consistent.
+        var thawed: [String] = []
         do {
-            _ = try await connection.call(AgentMethod.fsThaw, timeout: .seconds(15))
+            let reply = try await connection.call(AgentMethod.fsThaw, timeout: .seconds(15))
+            thawed = try RPCParams.decode(AgentFsThawResult.self, from: reply.result).get().thawed
         } catch {
             Self.log.error("thawing the guest after a snapshot failed: \(String(describing: error), privacy: .public)")
         }
-        return try created.get()
+        let snapshot = try created.get()
+        guard Set(thawed) == Set(frozen) else {
+            try? await Blocking.run { try store.delete(snapshot.id) }
+            throw RPCError(.internalError, "the guest's file systems thawed before the disks were copied; try again")
+        }
+        return snapshot
     }
 
     private func liveSnapshot(

@@ -224,6 +224,14 @@ pub fn freeze() -> std::io::Result<Vec<String>> {
     Ok(frozen)
 }
 
+/// Thaws whatever a previous agent left frozen (it crashed or was killed mid-freeze; the freeze lived only in
+/// its memory). File systems that are not frozen answer EINVAL and are skipped.
+pub fn thaw_stale() -> Vec<String> {
+    freezable_mounts()
+        .map(|mounts| thaw(&mounts))
+        .unwrap_or_default()
+}
+
 /// Thaws in the reverse order of freezing; returns what thawed.
 pub fn thaw(frozen: &[String]) -> Vec<String> {
     frozen

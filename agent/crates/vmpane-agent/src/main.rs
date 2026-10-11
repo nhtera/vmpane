@@ -94,6 +94,10 @@ fn main() -> ExitCode {
         }
     };
     log::init(args.verbose);
+    let stale = os::thaw_stale();
+    if !stale.is_empty() {
+        tracing::warn!(?stale, "thawed file systems a previous agent left frozen");
+    }
     let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()

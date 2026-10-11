@@ -253,3 +253,19 @@ func violationsAfterHelloCloseTheConnection(_ violation: String) async throws {
     }
     Issue.record("no end frame")
 }
+
+/// A guest cannot hold more than two connections open without saying hello; the third is closed at once and
+/// starts the violation backoff.
+@Test func connectionsBeforeHelloAreCapped() async throws {
+    let hub = AgentHub(hostVersion: "h")
+    let (first, firstFD) = try FakeAgent.pair()
+    let (second, secondFD) = try FakeAgent.pair()
+    let (third, thirdFD) = try FakeAgent.pair()
+    let waiting = [firstFD, secondFD].map { fd in Task { await hub.serve(fd: fd, helloTimeout: .seconds(2)) } }
+    try await Task.sleep(for: .milliseconds(100))
+    await hub.serve(fd: thirdFD, helloTimeout: .seconds(2))
+    #expect(third.sawClose(within: 1))
+    #expect(!first.sawClose(within: 0.2) && !second.sawClose(within: 0.2))
+    for task in waiting { await task.value }  // both time out without hello
+    #expect(await hub.status.connected == false)
+}

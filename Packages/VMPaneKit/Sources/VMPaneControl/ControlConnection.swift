@@ -83,6 +83,17 @@ public final class ControlConnection: @unchecked Sendable, Hashable {
         queue.async { self.writeOnQueue(message) }
     }
 
+    /// Sends a message and resumes once it is written (or the connection is closed): a caller that awaits each
+    /// one never queues more than the client takes (e.g. exec output from a fast guest to a slow client).
+    public func sendWhenWritten(_ message: RPCMessage) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            queue.async {
+                self.writeOnQueue(message)
+                continuation.resume()
+            }
+        }
+    }
+
     /// Sends a notification if the connection subscribed to its topic (see `events.subscribe`).
     public func notify(topic: String, method: String, params: JSONValue?) {
         queue.async {
