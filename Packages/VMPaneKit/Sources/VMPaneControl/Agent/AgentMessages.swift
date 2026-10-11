@@ -245,6 +245,12 @@ public struct AgentClipboardItem: Codable, Equatable, Sendable {
     }
 }
 
+public struct AgentClipboardGetParams: Codable, Equatable, Sendable {
+    public var types: [AgentClipboardType]
+
+    public init(types: [AgentClipboardType]) { self.types = types }
+}
+
 public struct AgentClipboardContents: Codable, Equatable, Sendable {
     public var items: [AgentClipboardItem]
 

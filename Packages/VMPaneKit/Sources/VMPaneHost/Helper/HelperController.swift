@@ -31,6 +31,10 @@ public actor HelperController {
     let agentExecs = AgentExecs()
     var agentLink: UDSAgentLink?
     var agentTasks: [Task<Void, Never>] = []
+    /// Clipboard sharing through the guest agent (`HelperController+Clipboard`), and the Mac's pasteboard the
+    /// helper app provides for it.
+    var clipboardBridge: ClipboardBridge?
+    var hostPasteboard: HostPasteboard?
     /// A running VZ VM's port forwards (`HelperController+Ports`).
     var portForwarder: PortForwarder?
     /// Refreshes `thumbnail.png` while the VM runs (`HelperController+Thumbnail`).
@@ -131,6 +135,8 @@ public actor HelperController {
         case .vmSettingsGet?: return RPCParams.encode(config)
         case .vmPortsList?: return await portsList()
         case .vmFilesDrop?: return await dropFiles(request.params)
+        case .vmClipboardRead?: return await clipboardRead(request.params)
+        case .vmClipboardWrite?: return await clipboardWrite(request.params)
         case .vmSettingsApply?: return await applySettings(request.params)
         case .vmStart?, .vmPause?, .vmResume?, .vmSuspend?, .vmStop?:
             return await lifecycle(request.method, request.params)

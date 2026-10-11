@@ -98,6 +98,7 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
         }
         self.prepared = prepared
         let controller = makeController(prepared, runtimeVersion: runtime, paths: paths)
+        Task { await controller.setHostPasteboard(GeneralPasteboard()) }
         Task {
             do {
                 try await controller.start()

@@ -57,8 +57,8 @@ denied.
 | `vm.settings.get` | — | `config` | observe |
 | `vm.settings.apply` | `{patch}` (JSON merge patch over the config) | `{fields: {path: applied\|nextBoot\|rejected}, reasons?}` | admin; sensitive patch: uiOnly |
 | `vm.ports.list` | — | `{rules: [{…rule, status: listening\|blocked\|failed\|inactive, reason?}]}` (`blocked`: macOS Local Network privacy) | observe |
-| `vm.clipboard.read` | `{types}` | `{items}` | control + clipboard.allowWithAgents |
-| `vm.clipboard.write` | `{items}` | `{}` | control + clipboard.allowWithAgents |
+| `vm.clipboard.read` | `{types?}` (text, png, files) | `{items: [{type: text, text} \| {type: png, dataB64} \| {type: files, files}]}` (guest agent's clipboard: macOS guests) | control + clipboard.allowWithAgents |
+| `vm.clipboard.write` | `{items: [{type: text, text} \| {type: png, dataB64}]}` | `{}` | control + clipboard.allowWithAgents |
 | `agent.status` | — | `{connected, version, os}` | observe |
 | `agent.exec` | `{argv, as, cwd, env, timeoutMs, stdin}` | `{execId}` | exec (as:user), admin (as:admin) |
 | `agent.exec.input` | `{execId, dataB64, eof}` | `{}` | exec |

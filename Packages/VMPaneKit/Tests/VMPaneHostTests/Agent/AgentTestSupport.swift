@@ -26,7 +26,8 @@ struct SpawnedAgent {
     let process: Process
     let directory: URL
 
-    static func spawn() async throws -> SpawnedAgent {
+    /// `extra`: more agent arguments (e.g. `--session-socket`).
+    static func spawn(_ extra: [String] = []) async throws -> SpawnedAgent {
         let directory = URL(fileURLWithPath: "/tmp/vpa-\(UUID().uuidString.prefix(8))", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let socketURL = directory.appendingPathComponent("s")
@@ -36,7 +37,7 @@ struct SpawnedAgent {
         guard listen(listener, 1) == 0 else { throw POSIXError(.EIO) }
         let process = Process()
         process.executableURL = agentBinary
-        process.arguments = ["--connect", "unix:\(socketURL.path)", "--once"]
+        process.arguments = ["--connect", "unix:\(socketURL.path)", "--once"] + extra
         process.standardError = FileHandle.nullDevice
         try process.run()
         let fd = try await Blocking.run { () throws -> Int32 in

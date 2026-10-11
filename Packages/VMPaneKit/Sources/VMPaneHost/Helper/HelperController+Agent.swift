@@ -32,10 +32,18 @@ extension HelperController {
         case .connected(let connection, let peer):
             Self.log.info("guest agent \(peer.hello.agentVersion, privacy: .public) connected (\(peer.hello.os, privacy: .public))")
             let execs = agentExecs
+            let clipboard = clipboardAttach(connection, peer: peer)
             Task {
-                for await notice in connection.notifications where notice.method == AgentMethod.execExited {
-                    if case .success(let exited) = RPCParams.decode(AgentExecExited.self, from: notice.params) {
-                        await execs.exited(exited, on: connection)
+                for await notice in connection.notifications {
+                    switch notice.method {
+                    case AgentMethod.execExited:
+                        if case .success(let exited) = RPCParams.decode(AgentExecExited.self, from: notice.params) {
+                            await execs.exited(exited, on: connection)
+                        }
+                    case AgentMethod.clipboardChanged:
+                        await clipboard?.guestChanged()
+                    default:
+                        break
                     }
                 }
                 await execs.disconnected(connection)
@@ -44,6 +52,8 @@ extension HelperController {
             Task { await self.mountShares(connection, peer: peer) }
             broadcastAgent(connected: true)
         case .disconnected:
+            let bridge = clipboardBridge
+            Task { await bridge?.attach(nil) }
             broadcastAgent(connected: false)
         }
     }
@@ -238,6 +248,29 @@ extension HelperController {
             throw error
         }
         return size
+    }
+
+    /// Copies guest file `path` into `handle` (a file `sink` made), counting its size against the sink's budget.
+    static func pull(_ path: String, into handle: FileHandle, sink: HostFileSink, on connection: AgentConnection) async throws {
+        let names = AgentConnection.StreamNames(inbound: { [$0["stream"]?.intValue].compactMap { $0.map(UInt32.init) } })
+        let call = try await connection.call(
+            AgentMethod.filePull, RPCParams.encode(AgentFilePullParams(path: path, maxBytes: UInt64(HostFileSink.defaultMaxBytes))).get(),
+            timeout: .seconds(30), streams: names)
+        let size = try RPCParams.decode(AgentFilePullResult.self, from: call.result).get().size
+        guard let stream = call.inbound.values.first else { throw RPCError(.internalError, "no stream for the file") }
+        do {
+            try sink.reserve(bytes: Int64(size))
+            var received: UInt64 = 0
+            while let data = try await stream.next() {
+                received += UInt64(data.count)
+                guard received <= size else { throw RPCError(.internalError, "the guest sent more than announced") }
+                try handle.write(contentsOf: data)
+            }
+            guard received == size else { throw RPCError(.internalError, "the guest sent \(received) of \(size) bytes") }
+        } catch {
+            stream.discard()
+            throw error
+        }
     }
 
     /// Free space a pull leaves on the host volume.

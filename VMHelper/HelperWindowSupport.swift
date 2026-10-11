@@ -44,4 +44,46 @@ final class WindowCloser: NSObject, NSWindowDelegate {
         }
         return false
     }
+
+    // Clipboard sharing runs only while the VM's window is the key window.
+    func windowDidBecomeKey(_ notification: Notification) {
+        let controller = controller
+        Task { await controller.windowFocusChanged(true) }
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        let controller = controller
+        Task { await controller.windowFocusChanged(false) }
+    }
+}
+
+/// The Mac's general pasteboard, for the clipboard bridge (text, PNG, file URLs).
+final class GeneralPasteboard: HostPasteboard {
+    func changeCount() async -> Int { await MainActor.run { NSPasteboard.general.changeCount } }
+
+    func read() async -> ClipboardContent {
+        await MainActor.run {
+            let pasteboard = NSPasteboard.general
+            let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+            var png = pasteboard.data(forType: .png)
+            if png == nil, let tiff = pasteboard.data(forType: .tiff) {
+                png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:])
+            }
+            return ClipboardContent(text: pasteboard.string(forType: .string), png: png, files: urls.map(\.path))
+        }
+    }
+
+    func write(_ content: ClipboardContent) async -> Int {
+        await MainActor.run {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            if !content.files.isEmpty {
+                pasteboard.writeObjects(content.files.map { URL(fileURLWithPath: $0) as NSURL })
+            } else {
+                if let text = content.text { pasteboard.setString(text, forType: .string) }
+                if let png = content.png { pasteboard.setData(png, forType: .png) }
+            }
+            return pasteboard.changeCount
+        }
+    }
 }
