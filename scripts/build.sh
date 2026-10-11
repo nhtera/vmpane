@@ -18,5 +18,8 @@ xcodebuild -project VMPane.xcodeproj -scheme VMPane -configuration "$config" \
 rm -rf "build/$config/VMPane.app"
 mkdir -p "build/$config"
 ditto "build/dd/Build/Products/$config/VMPane.app" "build/$config/VMPane.app"
+# Sparkle's XPC services are for sandboxed apps only; VMPane is not sandboxed.
+rm -rf "build/$config/VMPane.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices" \
+    "build/$config/VMPane.app/Contents/Frameworks/Sparkle.framework/XPCServices"
 scripts/sign.sh "build/$config/VMPane.app" >/dev/null
 echo "build: build/$config/VMPane.app"

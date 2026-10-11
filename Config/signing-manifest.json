@@ -1,5 +1,5 @@
 {
-  "comment": "Every Mach-O in VMPane.app, signed inside-out by scripts/sign.sh (never --deep). Paths are relative to the .app and may be globs. optional=true entries may be absent: QEMU parts (Helpers/qemu) and the SPICE client libraries (VMPaneVM.app/Contents/Frameworks) arrive with the QEMU bundle (qemu/scripts/package.sh); `sign.sh --qemu-only` signs that bundle on its own; *.dylib under MacOS/ exist only in Debug builds (Xcode preview support). Xcode's own local signatures are development-only (Xcode adds e.g. application-identifier to the CLI); sign.sh replaces them.",
+  "comment": "Every Mach-O in VMPane.app, signed inside-out by scripts/sign.sh (never --deep). Paths are relative to the .app and may be globs. optional=true entries may be absent: QEMU parts (Helpers/qemu) and the SPICE client libraries (VMPaneVM.app/Contents/Frameworks) arrive with the QEMU bundle (qemu/scripts/package.sh); `sign.sh --qemu-only` signs that bundle on its own; *.dylib under MacOS/ exist only in Debug builds (Xcode preview support). Xcode's own local signatures are development-only (Xcode adds e.g. application-identifier to the CLI); sign.sh replaces them. Sparkle (updates): its Autoupdate and Updater.app, then the framework; its XPC services exist only for sandboxed apps and are removed at build time.",
   "items": [
     { "path": "Contents/Helpers/qemu/lib/*.dylib", "identifier": null, "entitlements": null, "optional": true },
     { "path": "Contents/Helpers/qemu/bin/qemu-system-aarch64", "identifier": "app.vmpane.mac.qemu-system-aarch64", "entitlements": "Config/Entitlements/qemu.entitlements", "optional": true },
@@ -9,6 +9,9 @@
     { "path": "Contents/Helpers/VMPaneVM.app/Contents/MacOS/*.dylib", "identifier": null, "entitlements": null, "optional": true },
     { "path": "Contents/Helpers/VMPaneVM.app/Contents/Frameworks/*.dylib", "identifier": null, "entitlements": null, "optional": true },
     { "path": "Contents/Helpers/VMPaneVM.app", "identifier": "app.vmpane.mac.vm", "entitlements": "Config/Entitlements/VMPaneVM.entitlements" },
+    { "path": "Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate", "identifier": "org.sparkle-project.Sparkle.Autoupdate", "entitlements": null },
+    { "path": "Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app", "identifier": "org.sparkle-project.Sparkle.Updater", "entitlements": null },
+    { "path": "Contents/Frameworks/Sparkle.framework", "identifier": "org.sparkle-project.Sparkle", "entitlements": null },
     { "path": "Contents/MacOS/*.dylib", "identifier": null, "entitlements": null, "optional": true },
     { "path": ".", "identifier": "app.vmpane.mac", "entitlements": "Config/Entitlements/VMPane.entitlements" }
   ]

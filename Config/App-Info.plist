@@ -21,6 +21,10 @@
       <key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>vmpane</string></array></dict>
     </dict>
   </array>
+  <key>SUFeedURL</key><string>$(VMPANE_SPARKLE_FEED_URL)</string>
+  <key>SUPublicEDKey</key><string>$(VMPANE_SPARKLE_PUBLIC_KEY)</string>
+  <key>SUAutomaticallyUpdate</key><false/>
+  <key>SUAllowsAutomaticUpdates</key><false/>
   <key>NSLocalNetworkUsageDescription</key><string>VMPane connects to your virtual machines on this Mac’s virtual network to forward ports to them.</string>
   <key>CFBundleDocumentTypes</key>
   <array>

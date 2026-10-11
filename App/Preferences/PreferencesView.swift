@@ -6,6 +6,7 @@ struct PreferencesView: View {
     let paths: VMPanePaths
     @State private var excludeRAM = SharedPreferences.excludeRAMSnapshotsFromBackup
     @AppStorage("onboarded") private var onboarded = false
+    @AppStorage(UpdaterController.betaKey) private var betaUpdates = false
 
     var body: some View {
         Form {
@@ -22,6 +23,15 @@ struct PreferencesView: View {
                 Text("Backups")
             } footer: {
                 Text("A live snapshot saves the VM's memory, which can hold passwords and keys. Applies to snapshots taken from now on.")
+            }
+            if UpdaterController.isConfigured {
+                Section {
+                    Toggle("Get beta versions", isOn: $betaUpdates)
+                } header: {
+                    Text("Updates")
+                } footer: {
+                    Text("VMPane checks vmpane.app for updates and asks before installing one. Running VMs keep running.")
+                }
             }
             Section {
                 Text("VMPane sends nothing about you or your VMs anywhere: no telemetry, no crash reports.")

@@ -8,5 +8,9 @@ ENABLE_HARDENED_RUNTIME = YES
 CURRENT_PROJECT_VERSION = 1
 MARKETING_VERSION = 0.1.0
 DEAD_CODE_STRIPPING = YES
+// Sparkle updates (App/Updates/UpdaterController.swift): the appcast and its EdDSA public key. Either empty keeps
+// the updater off (development builds). `/$()/` keeps the URL's `//` from starting an xcconfig comment.
+VMPANE_SPARKLE_FEED_URL = https:/$()/vmpane.app/appcast.xml
+VMPANE_SPARKLE_PUBLIC_KEY =
 ENABLE_USER_SCRIPT_SANDBOXING = YES
 #include "Signing.xcconfig"

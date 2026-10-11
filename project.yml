@@ -19,6 +19,9 @@ packages:
   swift-argument-parser:
     url: https://github.com/apple/swift-argument-parser
     exactVersion: 1.8.2
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.10.0
 targets:
   VMPane:
     type: application
@@ -90,6 +93,8 @@ targets:
         product: VMPaneUI
       - package: VMPaneKit
         product: VMPaneMCP
+      - package: Sparkle
+        product: Sparkle
       # Helper app and CLI are embedded in Contents/Helpers (not MacOS/: case-insensitive collision with VMPane).
       - target: VMPaneVM
         embed: true

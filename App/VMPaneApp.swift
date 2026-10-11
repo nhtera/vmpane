@@ -13,6 +13,13 @@ struct VMPaneApp: App {
             LibraryWindow(store: appDelegate.library)
                 .frame(minWidth: 640, minHeight: 400)
         }
+        .commands {
+            CommandGroup(after: .appInfo) {
+                if UpdaterController.isConfigured {
+                    Button("Check for Updates…") { appDelegate.updater.checkForUpdates() }
+                }
+            }
+        }
         Settings {
             TabView {
                 PreferencesView(paths: appDelegate.supervisor.paths)
@@ -41,10 +48,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var killSwitch = AgentKillSwitch(paths: supervisor.paths)
 
     lazy var crashReports = CrashReports(paths: supervisor.paths, process: "app")
+    lazy var updater = UpdaterController(store: library)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         crashReports.start()
         supervisor.start()
+        updater.start()
         killSwitch.registerHotKey()
     }
 

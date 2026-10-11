@@ -90,7 +90,9 @@ for ((i = 0; i < count; i++)); do
     for target in "${targets[@]}"; do
         rel=${target#"$app"/}
         [[ "$target" == "$app" ]] && rel=.
-        if [[ -d "$target" ]]; then
+        if [[ "$target" == *.framework ]]; then
+            echo "$target/Versions/$(readlink "$target/Versions/Current")/$(basename "$target" .framework)" >>"$covered"
+        elif [[ -d "$target" ]]; then
             exe=$(plutil -extract CFBundleExecutable raw "$target/Contents/Info.plist")
             echo "$target/Contents/MacOS/$exe" >>"$covered"
         else

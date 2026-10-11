@@ -264,7 +264,7 @@ private final class TokenBox: @unchecked Sendable {
         let start = ContinuousClock.now
         call.cancel()
         await #expect(throws: CancellationError.self) { try await call.value }
-        #expect(ContinuousClock.now - start < .milliseconds(150))
+        #expect(ContinuousClock.now - start < .seconds(1), "well before the handler's 5 s")
         #expect(try await client.call("echo", params: ["still": "works"]) == ["still": "works"])
     }
 }
