@@ -35,24 +35,7 @@ extension HelperController {
             let windows = peer.hello.os == "windows"
             let folder = try await makeDropFolder(items.filter { $0.source == nil }.map(\.path), windows: windows, on: connection)
             dropFolder = folder.path
-            let total = items.reduce(0) { $0 + $1.size }
-            var done: UInt64 = 0
-            for item in items {
-                guard !Task.isCancelled else { throw CancellationError() }
-                guard let source = item.source else { continue }
-                let target = folder.path + (windows ? "\\" + item.path.replacingOccurrences(of: "/", with: "\\") : "/" + item.path)
-                let before = done
-                let server = server
-                do {
-                    done += try await Self.push(FileTransfer(hostPath: source.path, guestPath: target), on: connection) { sent in
-                        server?.broadcast(
-                            topic: "files", method: ControlNotification.filesProgress.rawValue,
-                            params: ["bytesDone": .int(Int64(before + sent)), "bytesTotal": .int(Int64(total)), "file": .string(item.path)])
-                    }
-                } catch  where Task.isCancelled {
-                    throw CancellationError()
-                }
-            }
+            let done = try await pushItems(items, into: folder.path, windows: windows, on: connection)
             if let owner = folder.owner {
                 // The agent wrote as root: the files become the user's.
                 let chown = try await agentExecs.run(
@@ -80,6 +63,29 @@ extension HelperController {
         } catch {
             return .failure(RPCError(.internalError, String(describing: error)))
         }
+    }
+
+    /// Copies the drop's files into `folder`, announcing progress; throws `CancellationError` once cancelled.
+    private func pushItems(_ items: [DropItem], into folder: String, windows: Bool, on connection: AgentConnection) async throws -> UInt64 {
+        let total = items.reduce(0) { $0 + $1.size }
+        var done: UInt64 = 0
+        for item in items {
+            guard !Task.isCancelled else { throw CancellationError() }
+            guard let source = item.source else { continue }
+            let target = folder + (windows ? "\\" + item.path.replacingOccurrences(of: "/", with: "\\") : "/" + item.path)
+            let before = done
+            let server = server
+            do {
+                done += try await Self.push(FileTransfer(hostPath: source.path, guestPath: target), on: connection) { sent in
+                    server?.broadcast(
+                        topic: "files", method: ControlNotification.filesProgress.rawValue,
+                        params: ["bytesDone": .int(Int64(before + sent)), "bytesTotal": .int(Int64(total)), "file": .string(item.path)])
+                }
+            } catch  where Task.isCancelled {
+                throw CancellationError()
+            }
+        }
+        return done
     }
 
     /// A cancelled drop's folder goes away again (as the user, who made it).
