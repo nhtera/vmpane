@@ -48,6 +48,8 @@ struct InstallCLI: ParsableCommand {
 struct Doctor: AsyncParsableCommand {
     static let configuration = CommandConfiguration(abstract: "Check VMPane's installation and running VMs.")
     @OptionGroup var output: OutputOptions
+    @Option(help: "Also write a support bundle (zip) here: system info, these checks, VM settings and log tails.")
+    var diagnostics: String?
 
     func run() async throws {
         var checks: [JSONValue] = []
@@ -65,7 +67,7 @@ struct Doctor: AsyncParsableCommand {
             let version = RuntimeStore.version(app: app, appVersion: VMPane.version)
             let runtime = paths.root.appendingPathComponent("runtime/\(version)")
             check(
-                "runtime copy", FileManager.default.fileExists(atPath: runtime.path),
+                "runtime copy", true,
                 version + (FileManager.default.fileExists(atPath: runtime.path) ? "" : " not made yet (made when a VM starts)"))
             let qemu = app.appendingPathComponent("Contents/Helpers/qemu/bin/qemu-system-aarch64")
             check(
@@ -80,21 +82,96 @@ struct Doctor: AsyncParsableCommand {
             URL(fileURLWithPath: $0).resolvingSymlinksInPath() == executable
         }
         check("vmpane on PATH", true, onPath ?? "not installed (vmpane install-cli)")
+        checks += await vmChecks()
+        let allOK = checks.allSatisfy { $0["ok"] == true }
+        if let diagnostics {
+            do {
+                try Diagnostics.write(to: URL(fileURLWithPath: diagnostics), checks: .array(checks))
+            } catch {
+                CLI.fail("cannot write \(diagnostics): \(error)", .failure)
+            }
+        }
+        CLI.print(.array(checks), json: output.json) {
+            checks.map { "\($0["ok"] == true ? "✓" : "✗") \($0["check"]?.stringValue ?? ""): \($0["detail"]?.stringValue ?? "")" }.joined(
+                separator: "\n")
+        }
+        if !allOK { throw ArgumentParser.ExitCode(ExitStatus.failure.rawValue) }
+    }
+    /// Each running VM: its helper's and agent's versions.
+    private func vmChecks() async -> [JSONValue] {
+        var checks: [JSONValue] = []
         for item in (try? CLI.library.items()) ?? [] {
             let name = item.config?.name ?? item.bundle.url.lastPathComponent
             guard let session = try? await CLI.connector.connect(item.id) else { continue }
             let agent = try? await session.client.call(ControlMethod.agentStatus.rawValue, timeout: .seconds(3))
             session.client.close()
             let agentText = agent?["connected"] == true ? "agent \(agent?["version"]?.stringValue ?? "?")" : "no agent"
-            check(
-                "VM \(name)", session.helperVersion == VMPane.version,
-                "helper \(session.helperVersion) (proto \(session.proto)), \(agentText)")
+            checks.append([
+                "check": .string("VM \(name)"), "ok": .bool(session.helperVersion == VMPane.version),
+                "detail": .string("helper \(session.helperVersion) (proto \(session.proto)), \(agentText)"),
+            ])
         }
-        let allOK = checks.allSatisfy { $0["ok"] == true }
-        CLI.print(.array(checks), json: output.json) {
-            checks.map { "\($0["ok"] == true ? "✓" : "✗") \($0["check"]?.stringValue ?? ""): \($0["detail"]?.stringValue ?? "")" }.joined(
-                separator: "\n")
+        return checks
+    }
+}
+
+/// The support bundle: what helps find a problem, nothing private. No disks, install media, TPM state, saved
+/// memory or snapshots; VM settings without the install's answers, Windows setup or the policy tag.
+enum Diagnostics {
+    static func write(to zip: URL, checks: JSONValue) throws {
+        let fm = FileManager.default
+        let folder = fm.temporaryDirectory.appendingPathComponent("vmpane-diagnostics-\(UUID().uuidString.prefix(8))")
+        try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: folder) }
+        try Data(OutputFormatter.json(checks).utf8).write(to: folder.appendingPathComponent("doctor.json"))
+        var system = ""
+        for (title, argv) in [
+            ("sw_vers", ["/usr/bin/sw_vers"]), ("hw.model", ["/usr/sbin/sysctl", "-n", "hw.model"]),
+            ("machdep.cpu.brand_string", ["/usr/sbin/sysctl", "-n", "machdep.cpu.brand_string"]),
+        ] {
+            system += "== \(title)\n" + run(argv) + "\n"
         }
-        if !allOK { throw ArgumentParser.ExitCode(ExitStatus.failure.rawValue) }
+        system += "== vmpane\n\(VMPane.version)\n"
+        try Data(system.utf8).write(to: folder.appendingPathComponent("system.txt"))
+        for item in (try? CLI.library.items()) ?? [] {
+            let name = SafeName.component(item.config?.name ?? "") ?? ShortID(item.id).rawValue
+            let target = folder.appendingPathComponent("vms/\(name)-\(ShortID(item.id))", isDirectory: true)
+            try fm.createDirectory(at: target, withIntermediateDirectories: true)
+            if var document = try? ConfigStore.readDocument(item.bundle) {
+                document["install"] = nil
+                document["windows"] = nil
+                if case .object(var mcp)? = document["mcp"] {
+                    mcp["tag"] = nil
+                    document["mcp"] = .object(mcp)
+                }
+                try Data(OutputFormatter.json(.object(document)).utf8).write(to: target.appendingPathComponent("config.json"))
+            }
+            let logs = item.bundle.url.appendingPathComponent("logs", isDirectory: true)
+            for log in (try? fm.contentsOfDirectory(at: logs, includingPropertiesForKeys: nil)) ?? []
+            where log.pathExtension == "log" || log.pathExtension == "jsonl" {
+                let lines = ((try? String(contentsOf: log, encoding: .utf8)) ?? "").split(separator: "\n", omittingEmptySubsequences: false)
+                try Data(lines.suffix(300).joined(separator: "\n").utf8).write(to: target.appendingPathComponent(log.lastPathComponent))
+            }
+        }
+        try? fm.removeItem(at: zip)
+        let ditto = Process()
+        ditto.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        ditto.arguments = ["-c", "-k", "--norsrc", "--keepParent", folder.path, zip.path]
+        try ditto.run()
+        ditto.waitUntilExit()
+        guard ditto.terminationStatus == 0 else { throw CocoaError(.fileWriteUnknown) }
+        print("wrote \(zip.path)")
+    }
+
+    static func run(_ argv: [String]) -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: argv[0])
+        process.arguments = Array(argv.dropFirst())
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        try? process.run()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return String(bytes: data, encoding: .utf8) ?? ""
     }
 }

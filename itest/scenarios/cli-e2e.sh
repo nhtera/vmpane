@@ -53,7 +53,11 @@ scenario_run() {
     out=$("$cli" doctor --json || true)  # exit 1 here: the itest's VMPane folder is not private
     jq -e '[.[] | select(.check | startswith("VM ")) | select(.ok)] | length == 1' <<<"$out" >/dev/null \
         || it_fail "doctor does not see the VM: $out" || return 1
-    echo "cli-e2e: cp both ways; doctor sees the running VM"
+    "$cli" doctor --diagnostics "$work/diag.zip" >/dev/null 2>&1 || true
+    unzip -l "$work/diag.zip" >"$work/diag.txt"  # (grep -q in a pipe trips pipefail)
+    grep -q "config.json" "$work/diag.txt" || it_fail "no VM settings in the diagnostics" || return 1
+    ! grep -qE "disk.img|\.vmpane/|state|tpm" "$work/diag.txt" || it_fail "the diagnostics carry VM data" || return 1
+    echo "cli-e2e: cp both ways; doctor sees the running VM; diagnostics without VM data"
 
     # 3. ports
     "$cli" exec "$id" --as admin -- sh -c 'mkdir -p /root/w && echo served >/root/w/f && setsid -f python3 -m http.server 8000 --directory /root/w >/dev/null 2>&1 </dev/null; sleep 1' \
