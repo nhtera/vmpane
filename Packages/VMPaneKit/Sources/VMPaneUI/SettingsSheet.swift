@@ -35,6 +35,15 @@ public struct SettingsSheet: View {
                         }
                     }
                     row("display.autoResize") { Toggle("Follow the window size", isOn: $model.draft.display.autoResize) }
+                    if model.draft.backend == .qemu {
+                        // VZ follows the window's backing pixels itself; the SPICE window picks the guest size.
+                        row("display.scaling") {
+                            Picker("Scaling", selection: $model.draft.display.scaling) {
+                                Text("Sharp (Retina pixels)").tag(DisplayConfig.Scaling.retina)
+                                Text("Larger (one pixel per point)").tag(DisplayConfig.Scaling.standard)
+                            }
+                        }
+                    }
                 }
                 Section("Sharing") {
                     row("clipboard.mode") {

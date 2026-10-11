@@ -104,6 +104,7 @@ private func eventually(_ condition: @MainActor () -> Bool) async -> Bool {
     model.draft.name = "Renamed"
     #expect(model.changedPaths == ["cpu.count", "name"])
     #expect(SettingsModel.kind(of: "name") == .host)
+    #expect(SettingsModel.kind(of: "display.scaling") == .nextBoot, "the SPICE window reads it at start")
     channel.answer("vm.settings.apply", .success(["fields": ["cpu.count": "nextBoot", "name": "applied"]]))
     await model.apply()
     #expect(channel.params(of: "vm.settings.apply") == ["patch": ["cpu": ["count": 4], "name": "Renamed"]])
