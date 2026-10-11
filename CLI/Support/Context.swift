@@ -12,13 +12,15 @@ enum CLI {
     static let paths = VMPanePaths.standard()
     static let library = VMLibrary(paths: paths)
 
-    /// This process's policy identity (Phase 10 step 3 tells interactive operators from agents).
-    static var identity: ClientIdentity { .automated }
+    /// This process's policy identity: `operator` for a person at a terminal who granted it (`vmpane operator
+    /// grant`), else policy-bound like an agent.
+    static let identity: ClientIdentity =
+        InteractiveSession.isInteractive() && OperatorGrant.isGranted(paths: paths) ? .operator : .automated
 
     static var ops: LibraryOps { LibraryOps(library: library, identity: identity) }
 
     static let connector = HelperConnector(
-        paths: paths, clientName: "vmpane", clientVersion: VMPane.version, kind: "cli"
+        paths: paths, clientName: "vmpane", clientVersion: VMPane.version, kind: "cli", operatorClaim: identity == .operator
     ) { bundle in
         let executable = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
         guard let app = LaunchCoordinator.enclosingApp(of: Bundle.main.executableURL ?? executable) else {

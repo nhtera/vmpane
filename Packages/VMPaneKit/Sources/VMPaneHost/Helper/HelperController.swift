@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import VMPaneControl
 import VMPaneCore
@@ -40,6 +41,12 @@ public actor HelperController {
     /// A running Windows VM's shared folders over WebDAV (`HelperController+Shares`), and the drive mapping task.
     var webdav: SharesWebDAV?
     var webdavMapping: Task<Void, Never>?
+    /// Who each control connection is (`HelperController+Policy`), the classifier that decides it, the policy key
+    /// and the VM's audit log.
+    var identities: [ObjectIdentifier: CallerIdentity] = [:]
+    var classifier: PeerClassifier
+    var policyKey: SymmetricKey?
+    let auditLog: AuditLog
     /// The file drop in progress (`vm.files.cancel` stops it).
     var dropTask: Task<Result<JSONValue, RPCError>, Never>?
     /// The connection that started it (only it may cancel it).
@@ -68,6 +75,10 @@ public actor HelperController {
 
     public func setGracefulStopTimeout(_ timeout: Duration) { gracefulStopTimeout = timeout }
     func setSessionLockCheck(_ check: @escaping @Sendable () -> Bool) { isSessionLocked = check }
+    func setClassifier(_ classifier: PeerClassifier) {
+        self.classifier = classifier
+        identities = [:]  // decided again with it
+    }
     func setSpaceCheck(_ check: @escaping @Sendable (UInt64, URL) throws -> Void) { checkSpace = check }
 
     public init(
@@ -84,6 +95,8 @@ public actor HelperController {
         (stateChanges, stateContinuation) = AsyncStream.makeStream(of: VMRunState.self)
         (displayRequests, displayContinuation) = AsyncStream.makeStream(of: Void.self)
         self.backend = backend
+        classifier = PeerClassifier.current()
+        auditLog = AuditLog(bundle: prepared.lock.bundle)
         gracefulStopTimeout = backend?.kind == .qemu ? .seconds(120) : .seconds(30)
         self.onShutdown = onShutdown
     }
@@ -122,7 +135,18 @@ public actor HelperController {
 
     // MARK: - Requests
 
+    /// Every request: who sent it decides whether the VM's agent policy allows it (`HelperController+Policy`).
     func handle(_ request: RPCRequest, from connection: ControlConnection) async -> Result<JSONValue, RPCError> {
+        if request.method == ControlMethod.helperHello.rawValue { noteHello(request.params, from: connection) }
+        let caller = identity(of: connection)
+        let started = ContinuousClock.now
+        if let denial = authorize(request, caller) { return .failure(denial) }
+        let result = await route(request, from: connection)
+        if caller.identity != .ui { audit(request, caller, result: result, since: started) }
+        return result
+    }
+
+    func route(_ request: RPCRequest, from connection: ControlConnection) async -> Result<JSONValue, RPCError> {
         switch ControlMethod(rawValue: request.method) {
         case .helperHello?: return hello(request.params)
         case .helperShutdown?:

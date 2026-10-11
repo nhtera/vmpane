@@ -28,7 +28,7 @@ public enum HelperDiscovery {
     /// are not mistaken for a live one.
     public static func connect(
         to vmID: UUID, paths: VMPanePaths, clientName: String, clientVersion: String,
-        kind: String
+        kind: String, operatorClaim: Bool = false
     ) async throws -> Session {
         await Blocking.run { _ = RunDirectoryReconciler.reconcile(paths: paths) }
         guard let socket = socket(for: vmID, paths: paths) else { throw DiscoveryError.notRunning }
@@ -38,7 +38,11 @@ public enum HelperDiscovery {
                 ControlMethod.helperHello.rawValue,
                 params: [
                     "proto": .int(Int64(ControlProtocol.version)), "minProto": .int(Int64(ControlProtocol.minimumVersion)),
-                    "client": ["name": .string(clientName), "version": .string(clientVersion), "kind": .string(kind)],
+                    "client": [
+                        "name": .string(clientName), "version": .string(clientVersion), "kind": .string(kind),
+                        // Honoured only from the signed vmpane CLI, which checked it itself (InteractiveSession, OperatorGrant).
+                        "operator": .bool(operatorClaim),
+                    ],
                 ])
             return Session(
                 client: client, proto: Int(hello["proto"]?.intValue ?? 0),

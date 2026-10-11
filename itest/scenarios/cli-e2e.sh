@@ -63,7 +63,20 @@ scenario_run() {
     [[ $(file -b "$work/shot.png") == PNG* ]] || it_fail "the screenshot is not a PNG" || return 1
     echo "cli-e2e: snapshot create/list/delete, screenshot"
 
-    # 5. stop
+    # 5. Policy: at observe, a script (no terminal) may look but not act: exit 77, recorded as a denial.
+    it_rpc "$socket" vm.settings.apply '{"patch": {"mcp": {"policy": "observe"}}}' >/dev/null || it_fail "cannot lower the policy" || return 1
+    "$cli" info "$id" >/dev/null || it_fail "info at observe" || return 1
+    rc=0; "$cli" exec "$id" --as admin -- true </dev/null 2>/dev/null || rc=$?
+    [[ $rc == 77 ]] || it_fail "exec at observe exited $rc, not 77" || return 1
+    tail -1 "$bundle/logs/mcp-audit.jsonl" | jq -e '.result == "denied" and .identity == "cli" and .method == "agent.exec"' >/dev/null \
+        || it_fail "no denial in the audit log: $(tail -1 "$bundle/logs/mcp-audit.jsonl")" || return 1
+    # Hand-raising the level in config.json does not count (no tag).
+    jq '.mcp.policy = "admin"' "$bundle/config.json" >"$work/c.json" && cp "$work/c.json" "$bundle/config.json"
+    [[ $("$cli" list --json | jq length) == 0 ]] || it_fail "a hand-edited policy made the VM visible" || return 1
+    it_rpc "$socket" vm.settings.apply '{"patch": {"mcp": {"policy": "admin"}}}' >/dev/null || it_fail "cannot raise the policy" || return 1
+    echo "cli-e2e: at observe a script is refused (77, audited); a hand-edited level counts as off"
+
+    # 6. stop
     [[ $("$cli" stop "$id" --force --json | jq -r .state) =~ ^(stopping|stopped)$ ]] || it_fail "stop" || return 1
     it_wait_for 30 bash -c "[[ \$('$cli' info '$id' --json | jq -r .state) == stopped ]]" || it_fail "the VM did not stop" || return 1
     echo "cli-e2e: stop --force"

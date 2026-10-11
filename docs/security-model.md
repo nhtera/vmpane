@@ -1,7 +1,7 @@
 # Security model
 
-This page covers Windows VMs (QEMU), Phase 05. Other parts (control sockets, MCP policy, guest agent) are
-added with their phases.
+This page covers Windows VMs (QEMU, Phase 05) and the agent policy for control sockets (Phase 10). The guest
+agent and integration features are covered in `agent-protocol.md` and the phase plans.
 
 ## Threat: a hostile Windows guest
 
@@ -27,6 +27,34 @@ What it can reach then:
   listener and no ticket, so the directory's permissions are its access control.
 - The children are recorded in `run/<sid>.children` before they run and hold the bundle lock, so no second
   QEMU can open the same disks, and a helper that dies has its children reaped by the next launch.
+
+## Threat: an AI agent acting through VMPane
+
+The agent policy is a guardrail for AI agents that drive VMs through VMPane's interfaces (MCP, and the `vmpane`
+CLI run without a terminal). An agent with a general shell on the Mac is not constrained by it: it could edit
+files, sign binaries or drive the app's UI like the user.
+
+- **Who is asking** comes from the control-socket peer's code signature (audit token), never from what it says
+  (`PeerClassifier`). A release helper accepts as the app only `app.vmpane.mac` signed with its own Team ID
+  and Apple's anchor; `app.vmpane.mac.cli` is the CLI; everything else is an agent. The helper's own window
+  runs in the helper's process. Development (ad hoc) builds compare identifiers only, and only they honour the
+  integration tests' bridge (`app.vmpane.mac.itest`, built by `scripts/itest.sh`, never shipped).
+- **What it may do** is `ControlMethodPolicy`'s table at the VM's level (`off` by default; `observe`,
+  `control`, `exec`, `admin`); app-only actions stay app-only. Core-direct library operations (`LibraryOps`)
+  use the same table; agents see only VMs at `observe` or above.
+- **The level counts only with VMPane's tag**: `mcp.tag` = HMAC-SHA256 over the VM id, the `mcp` settings and
+  `clipboard.allowWithAgents`, written when the app changes them. A level raised in `config.json` by hand reads
+  as `off`. The key is a 0600 file, `policy.key`, in VMPane's folder: the login keychain is not available to
+  helpers started from SSH or on a locked Mac, and an agent able to read the file has a shell anyway. (A
+  keychain item with a trusted-application ACL, shown to work in spike S4, can replace it.)
+- **Operator**: your own `vmpane` at a terminal acts as `operator` (everything but app-only actions, whatever
+  the level) when stdin and stdout are terminals, no ancestor is `vmpane mcp`, and you granted it once
+  (`vmpane operator grant`, a tagged `operator.grant` file; `revoke` removes it). The helper believes the
+  operator claim only from a peer signed as the CLI. An agent faking a terminal (e.g. `script`) with a grant
+  in place passes; that agent has a shell, and every operator call is audited as `operator`.
+- **Audit**: every call by a non-app client, and every refusal, is one line in the VM's
+  `logs/mcp-audit.jsonl` (synced before the answer; typed text and clipboard contents as SHA-256 unless the
+  VM records typed text; 10 MB × 5). It is a record, not tamper-proof.
 
 ## Accepted risks (v1)
 

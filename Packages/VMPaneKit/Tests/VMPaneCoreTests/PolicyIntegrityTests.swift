@@ -59,3 +59,26 @@ private func config(_ level: PolicyLevel) -> VMConfigV1 {
     #expect(try agent.list().map(\.id) == [config.id])
     #expect(try ui.list().count == 1)
 }
+
+@Test func operatorGrantsAreTaggedAndRevocable() throws {
+    let root = URL(fileURLWithPath: "/tmp/vp-op-\(UUID().uuidString.prefix(8))")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let paths = VMPanePaths(root: root)
+    #expect(!OperatorGrant.isGranted(paths: paths))
+    try OperatorGrant.grant(paths: paths)
+    #expect(OperatorGrant.isGranted(paths: paths))
+    #expect(!OperatorGrant.isGranted(paths: paths, uid: getuid() + 1), "another user's")
+    try Data("forged".utf8).write(to: root.appendingPathComponent("operator.grant"))
+    #expect(!OperatorGrant.isGranted(paths: paths))
+    try OperatorGrant.grant(paths: paths)
+    try OperatorGrant.revoke(paths: paths)
+    #expect(!OperatorGrant.isGranted(paths: paths))
+    try OperatorGrant.revoke(paths: paths)  // twice is fine
+}
+
+@Test func processAncestryIsReadable() {
+    // The test runner's own command line and its parent.
+    #expect(!InteractiveSession.arguments(of: getpid()).isEmpty)
+    #expect(InteractiveSession.parentPID(of: getpid()) == getppid())
+    #expect(!InteractiveSession.underMCP())
+}
