@@ -20,6 +20,9 @@ public final class VZBackend: VMBackend {
     private let title: String
     private let runner = VZRunner()
     @MainActor private var display: VZDisplayHost?
+    /// Called with each new display window and its VM view (a new VM object, and so a new window, per start),
+    /// e.g. to put the helper's window content around the view.
+    @MainActor public var onDisplayCreated: ((NSWindow, NSView) -> Void)?
     private let serialLog: FileHandle?
     private let box = BoxHolder()
 
@@ -104,7 +107,11 @@ public final class VZBackend: VMBackend {
         plans.withLock { $0.running = plan }
         let size = NSSize(width: plan.display.widthPx, height: plan.display.heightPx)
         let title = title
-        await MainActor.run { display = VZDisplayHost(box: box, title: title, guestSize: size) }
+        await MainActor.run {
+            let host = VZDisplayHost(box: box, title: title, guestSize: size)
+            display = host
+            onDisplayCreated?(host.window, host.view)
+        }
     }
 
     /// Live settings per the S11 matrix (`docs/live-capabilities.md`): shares, NIC attach/detach, display size.

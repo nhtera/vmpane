@@ -1,8 +1,10 @@
 import AppKit
+import VMPaneControl
 import VMPaneCore
 import VMPaneHost
 import VMPaneQEMU
 import VMPaneSpice
+import VMPaneUI
 import VMPaneVZ
 import os
 
@@ -15,6 +17,8 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
     private var signalSources: [DispatchSourceSignal] = []
     /// Shows the VM's window (set once the display exists). Closing the window only hides it: the VM keeps running.
     private var showWindow: (@MainActor () -> Void)?
+    /// The VM window's model: this helper's own control socket, as any client sees it.
+    @MainActor private var windowModel: HelperViewModel?
 
     static func main() {
         let arguments = HelperArguments(CommandLine.arguments)
@@ -92,6 +96,7 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
         Task {
             do {
                 try await controller.start()
+                await self.connectWindowModel(socket: prepared.runFiles.socketURL)
             } catch {
                 FileHandle.standardError.write(Data("VMPaneVM: cannot bind the control socket: \(error)\n".utf8))
                 await controller.shutdown()
@@ -133,9 +138,25 @@ extension HelperDelegate {
         }
     }
 
+    @MainActor fileprivate func connectWindowModel(socket: URL) async {
+        guard let client = try? UDSClient.connect(to: socket) else { return }
+        let model = HelperViewModel(channel: client)
+        windowModel = model
+        await model.start()
+    }
+
+    /// Wraps a display window in the VM window's content (toolbar, overlays), once the model is there.
+    @MainActor fileprivate func dress(_ window: NSWindow, display: NSView) {
+        guard let windowModel else { return }
+        VMWindowContent.install(in: window, display: display, model: windowModel)
+    }
+
     /// Shows the VM's window when it starts (unless headless) or when `vm.display.show` asks for it.
     fileprivate func observeDisplay(_ controller: HelperController, backend: VZBackend, config: VMConfigV1) {
         let headless = arguments.headless
+        Task { @MainActor in
+            backend.onDisplayCreated = { [weak self] window, view in self?.dress(window, display: view) }
+        }
         showWindow = { backend.showDisplay() }
         Task { @MainActor in
             var selfTested = false
@@ -267,6 +288,11 @@ extension HelperDelegate {
         let size = CGSize(width: max(config.display.widthPx / 2, 640), height: max(config.display.heightPx / 2, 400))
         let display = SpiceDisplay(socket: backend.displaySocket, title: config.name, size: size)
         showWindow = { display.show() }
+        Task { @MainActor in
+            // The model connects right after the control socket is up; the SPICE window exists from launch.
+            for _ in 0..<50 where windowModel == nil { try? await Task.sleep(for: .milliseconds(100)) }
+            dress(display.window, display: display.displayView)
+        }
         let headless = arguments.headless
         let capture = ProcessInfo.processInfo.environment["VMPANE_TEST_SPICE_CAPTURE"].map { URL(fileURLWithPath: $0) }
         Task { await backend.setBeforeQuit { await display.disconnectAndWait() } }

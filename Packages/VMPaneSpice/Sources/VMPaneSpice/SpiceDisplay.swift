@@ -18,6 +18,8 @@ public final class SpiceDisplay: NSObject {
 
     public let window: NSWindow
     private let view: SpiceView
+    /// The view that shows the guest (to embed the window's own content around it).
+    public var displayView: NSView { view }
     private let renderer: CSMetalRenderer
     private let socket: URL
     private var connection: CSConnection?

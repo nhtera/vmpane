@@ -128,6 +128,10 @@ targets:
         product: VMPaneVZ
       - package: VMPaneKit
         product: VMPaneCore
+      - package: VMPaneKit
+        product: VMPaneControl
+      - package: VMPaneKit
+        product: VMPaneUI
   # Target name differs from the product: `vmpane` and `VMPane` collide on case-insensitive APFS (build dirs).
   VMPaneCLI:
     type: tool

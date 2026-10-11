@@ -1,0 +1,94 @@
+import Foundation
+import Testing
+import VMPaneControl
+import VMPaneCore
+
+@testable import VMPaneUI
+
+/// A helper the test scripts: answers by method, records calls, pushes notifications.
+final class FakeChannel: HelperChannel, @unchecked Sendable {
+    let notifications: AsyncStream<RPCRequest>
+    private let continuation: AsyncStream<RPCRequest>.Continuation
+    private let lock = NSLock()
+    private var answers: [String: Result<JSONValue, RPCError>] = [:]
+    private var recorded: [String] = []
+    private var lastParams: [String: JSONValue] = [:]
+
+    init() {
+        (notifications, continuation) = AsyncStream.makeStream(of: RPCRequest.self)
+    }
+
+    func answer(_ method: String, _ result: Result<JSONValue, RPCError>) { lock.withLock { answers[method] = result } }
+    func push(_ method: String, _ params: JSONValue) { continuation.yield(RPCRequest(id: nil, method: method, params: params)) }
+    var calls: [String] { lock.withLock { recorded } }
+    func params(of method: String) -> JSONValue? { lock.withLock { lastParams[method] } }
+
+    func call(_ method: String, params: JSONValue?, timeout: Duration) async throws -> JSONValue {
+        let answer = lock.withLock { () -> Result<JSONValue, RPCError> in
+            recorded.append(method)
+            if let params { lastParams[method] = params }
+            return answers[method] ?? .success([:])
+        }
+        return try answer.get()
+    }
+}
+
+@MainActor
+private func eventually(_ condition: @MainActor () -> Bool) async -> Bool {
+    for _ in 0..<100 {
+        if condition() { return true }
+        try? await Task.sleep(for: .milliseconds(20))
+    }
+    return condition()
+}
+
+@Test @MainActor func windowFollowsTheHelpersEvents() async {
+    let channel = FakeChannel()
+    channel.answer("vm.info", .success(["state": "stopped", "allowedRequests": ["start"]]))
+    channel.answer("agent.status", .success(["connected": false]))
+    let model = HelperViewModel(channel: channel)
+    await model.start()
+    #expect(channel.calls.prefix(2) == ["events.subscribe", "vm.info"])
+    #expect(channel.params(of: "events.subscribe") == ["topics": ["vm", "install", "agent"]])
+    #expect(model.state == .stopped && model.can(.start) && !model.can(.shutDown))
+
+    channel.answer("vm.info", .success(["state": "running", "allowedRequests": ["pause", "suspend", "stop"]]))
+    channel.push("vm.stateChanged", ["state": "running"])
+    #expect(await eventually { model.state == .running && model.can(.shutDown) && !model.can(.start) })
+    #expect(model.can(.snapshot))
+
+    channel.push("install.progress", ["phase": "setupRunning", "percent": 40, "message": "Windows Setup is installing"])
+    #expect(await eventually { model.install?.percent == 40 && model.install?.isActive == true })
+    channel.push("install.progress", ["phase": "done", "percent": 100, "message": "Windows is installed"])
+    #expect(await eventually { model.install?.isActive == false })
+
+    channel.push("agent.connectionChanged", ["connected": true])
+    #expect(await eventually { model.agentConnected })
+    model.stop()
+}
+
+@Test @MainActor func actionsCallTheHelperAndKeepFailures() async {
+    let channel = FakeChannel()
+    let model = HelperViewModel(channel: channel)
+    await model.perform(.shutDown)
+    #expect(channel.params(of: "vm.stop") == ["mode": "graceful"])
+    await model.perform(.snapshot)
+    #expect(channel.params(of: "vm.snapshot.create")?["kind"] == "live")
+    channel.answer("vm.suspend", .failure(RPCError(.invalidState, "a VM installing Windows cannot be suspended")))
+    await model.perform(.suspend)
+    #expect(model.lastError == "a VM installing Windows cannot be suspended")
+}
+
+@Test @MainActor func screenshotsLandAsPNGFiles() async throws {
+    let channel = FakeChannel()
+    let png = Data([0x89, 0x50, 0x4E, 0x47])
+    channel.answer("vm.screenshot", .success(["dataB64": .string(png.base64EncodedString()), "width": 4, "height": 3]))
+    let directory = URL(fileURLWithPath: "/tmp/vp-shot-\(UUID().uuidString.prefix(8))", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let model = HelperViewModel(channel: channel)
+    await model.screenshot(to: directory)
+    let saved = try #require(model.lastScreenshot)
+    #expect(try Data(contentsOf: saved) == png)
+    #expect(saved.lastPathComponent.hasPrefix("VM Screenshot "))
+}
