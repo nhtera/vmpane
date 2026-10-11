@@ -36,20 +36,18 @@ struct LibraryWindow: View {
                 Task { await store.importBundles(bundles) }
                 return true
             }
-            .overlay {
-                if store.rows.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Virtual Machines", systemImage: "square.stack.3d.up")
-                    } description: {
-                        Text("Create a VM to get started.")
-                    } actions: {
-                        Button("New VM…") { showingWizard = true }
-                    }
-                }
-            }
         } detail: {
             if let id = store.selection, let row = store.row(id) {
                 VMDetailView(store: store, row: row)
+            } else if store.rows.isEmpty {
+                // In the detail area: on the sidebar's translucent background the title fails contrast, and it wraps.
+                ContentUnavailableView {
+                    Text("No Virtual Machines")
+                } description: {
+                    Text("Create a VM to get started.")
+                } actions: {
+                    Button("New VM…") { showingWizard = true }
+                }
             } else {
                 Text("Select a VM").foregroundStyle(.secondary)
             }

@@ -44,16 +44,34 @@ final class LibraryUITests: XCTestCase {
         XCTAssertFalse(sheet.buttons["Continue"].isEnabled, "no installer chosen")
         sheet.buttons["Back"].click()
         sheet.buttons["Cancel"].click()
-        XCTAssertFalse(sheet.exists)
+        XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Cancel closes the wizard")
     }
 
     @MainActor
     func testLibraryAndWizardPassTheAccessibilityAudit() throws {
         let app = launch()
-        XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10))
-        try app.performAccessibilityAudit()
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 10))
+        // The window and its sheets are audited, not the menu bar. Not the app's to fix: SwiftUI's window and sheet
+        // hosts and the split view's column hosts are unnamed groups the size of their window or sheet (VoiceOver
+        // names them by the window); the title bar's buttons and title are macOS's own. Everything else is audited.
+        let titleBarButtons = window.buttons.matching(NSPredicate(format: "identifier BEGINSWITH '_XCUI:'"))
+        let windowHost: (XCUIAccessibilityAuditIssue) -> Bool = { issue in
+            guard let element = issue.element else { return false }
+            if !window.frame.intersects(element.frame) { return true }  // the menu bar: this test audits the window
+            if issue.auditType == .parentChild {
+                return titleBarButtons.allElementsBoundByIndex.contains { $0.frame.contains(element.frame) }
+            }
+            if issue.auditType == .contrast {  // the title macOS draws in the title bar
+                return element.elementType == .staticText && element.value as? String == window.title
+            }
+            guard issue.auditType == .sufficientElementDescription, element.elementType == .group else { return false }
+            let sheetHost = app.sheets.allElementsBoundByIndex.contains { $0.frame == element.frame }
+            return sheetHost || (element.frame.minY == window.frame.minY && element.frame.height == window.frame.height)
+        }
+        try app.performAccessibilityAudit(for: .all, windowHost)
         app.typeKey("n", modifierFlags: .command)
         XCTAssertTrue(app.sheets.firstMatch.waitForExistence(timeout: 5))
-        try app.performAccessibilityAudit()
+        try app.performAccessibilityAudit(for: .all, windowHost)
     }
 }

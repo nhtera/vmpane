@@ -168,6 +168,8 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: app.vmpane.mac.uitests
+        # The runner loads the ad-hoc-signed test bundle: library validation (hardened runtime) would refuse it.
+        ENABLE_HARDENED_RUNTIME: NO
     dependencies:
       - target: VMPane
 schemes:

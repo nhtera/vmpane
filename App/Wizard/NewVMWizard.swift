@@ -125,6 +125,7 @@ private struct StepHeader: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Step \((steps.firstIndex(of: current) ?? 0) + 1) of \(steps.count): \(current.title)")
+        .accessibilityAddTraits(.isStaticText)  // read as text: without a role VoiceOver cannot say what it is
     }
 }
 
