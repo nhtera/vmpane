@@ -7,7 +7,7 @@ import VMPaneCore
 /// `vmpane mcp` process.
 public actor VMAccess {
     let ops: LibraryOps
-    let connector: HelperConnector
+    var connector: HelperConnector
     /// The last screenshot's scale per VM: tools take coordinates in screenshot pixels.
     private var scales: [UUID: Double] = [:]
     private var sessions: [UUID: HelperDiscovery.Session] = [:]
@@ -15,6 +15,13 @@ public actor VMAccess {
     public init(ops: LibraryOps, connector: HelperConnector) {
         self.ops = ops
         self.connector = connector
+    }
+
+    /// The MCP client's name, as it gave it: helpers record it (as claimed) and name its snapshots after it.
+    public func setClient(_ name: String) {
+        guard connector.clientName != name else { return }
+        connector = connector.named(name)
+        sessions = [:]  // later connections say the new name
     }
 
     public func list() throws -> [VMLibrary.Item] {

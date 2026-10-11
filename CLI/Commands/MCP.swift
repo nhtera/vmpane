@@ -47,6 +47,7 @@ struct MCPServe: AsyncParsableCommand {
         }
         for try await line in FileHandle.standardInput.bytes.lines where !line.isEmpty {
             await server.receive(Data(line.utf8))
+            if let client = await server.clientName { await access.setClient(client) }
         }
         try? await Task.sleep(for: .seconds(1))  // stdin closed: let answers in flight go out
     }

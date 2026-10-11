@@ -29,6 +29,13 @@ public struct HelperConnector: Sendable {
         self.launch = launch
     }
 
+    /// The same connector for a client of another name (an MCP client's own, once it said it).
+    public func named(_ name: String) -> HelperConnector {
+        HelperConnector(
+            paths: paths, clientName: name, clientVersion: clientVersion, kind: kind, operatorClaim: operatorClaim,
+            sessionId: sessionId, launch: launch)
+    }
+
     /// A session with the VM's running helper; `notRunning` when there is none.
     public func connect(_ vmID: UUID) async throws -> HelperDiscovery.Session {
         try await HelperDiscovery.connect(
