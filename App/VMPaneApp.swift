@@ -2,19 +2,15 @@ import SwiftUI
 import VMPaneCore
 import VMPaneUI
 
-/// VMPane main app: VM library, wizard and settings (filled in by later phases).
+/// VMPane main app: the VM library (wizard, onboarding and preferences follow in Phase 08's later steps).
 @main
 struct VMPaneApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        WindowGroup("VMPane") {
-            VStack(spacing: 8) {
-                Text("VMPane").font(.largeTitle)
-                Text("Version \(VMPane.version)").foregroundStyle(.secondary)
-                Text("Apache-2.0").font(.footnote).foregroundStyle(.secondary)
-            }
-            .padding(40)
+        Window("VMPane", id: "library") {
+            LibraryWindow(store: appDelegate.library)
+                .frame(minWidth: 640, minHeight: 400)
         }
     }
 }
@@ -22,8 +18,18 @@ struct VMPaneApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let supervisor = HelperSupervisor()
+    lazy var library: LibraryStore = {
+        let supervisor = supervisor
+        return LibraryStore(
+            library: VMLibrary(paths: supervisor.paths), links: HelperLinks(paths: supervisor.paths),
+            launch: { bundle, headless in try await supervisor.launch(bundle, headless: headless) })
+    }()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         supervisor.start()
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        Task { await library.reload() }
     }
 }
