@@ -42,7 +42,31 @@ final class FakeAgent: @unchecked Sendable {
     }
 
     /// The next frame from the host, or nil at EOF / after `seconds`.
-    func next(within seconds: Double = 5) -> AgentFrame? {
+    func next(within seconds: Double = 5) async -> AgentFrame? {
+        await offPool { self.nextBlocking(within: seconds) }
+    }
+
+    func nextMessage(within seconds: Double = 5) async -> RPCMessage? {
+        while let frame = await next(within: seconds) {
+            if case .message(let data) = frame { return try? AgentCodec.decode(data).get() }
+        }
+        return nil
+    }
+
+    /// True when the host closed its end (EOF within `seconds`).
+    func sawClose(within seconds: Double = 5) async -> Bool {
+        await offPool { self.sawCloseBlocking(within: seconds) }
+    }
+
+    /// Runs a blocking wait on a GCD thread: `poll` on a cooperative-pool thread can starve the host actors the
+    /// test is waiting on when many such tests run at once (the full suite), and the wait times out.
+    private func offPool<T: Sendable>(_ wait: @escaping @Sendable () -> T) async -> T {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global().async { continuation.resume(returning: wait()) }
+        }
+    }
+
+    private func nextBlocking(within seconds: Double) -> AgentFrame? {
         let deadline = Date().addingTimeInterval(seconds)
         while true {
             if let frame = try? decoder.next() { return frame }
@@ -56,15 +80,7 @@ final class FakeAgent: @unchecked Sendable {
         }
     }
 
-    func nextMessage(within seconds: Double = 5) -> RPCMessage? {
-        while let frame = next(within: seconds) {
-            if case .message(let data) = frame { return try? AgentCodec.decode(data).get() }
-        }
-        return nil
-    }
-
-    /// True when the host closed its end (EOF within `seconds`).
-    func sawClose(within seconds: Double = 5) -> Bool {
+    private func sawCloseBlocking(within seconds: Double) -> Bool {
         let deadline = Date().addingTimeInterval(seconds)
         while Date() < deadline {
             var poller = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
@@ -89,7 +105,7 @@ private func connected(token: String? = nil, range: ClosedRange<UInt32> = 1...1)
     let peer = Task { try await connection.open(helloTimeout: .seconds(5)) }
     try agent.hello(token: token)
     let accepted = try await peer.value
-    _ = agent.nextMessage()  // the hello response
+    _ = await agent.nextMessage()  // the hello response
     return Connected(connection: connection, agent: agent, peer: accepted)
 }
 
@@ -99,7 +115,7 @@ private func connected(token: String? = nil, range: ClosedRange<UInt32> = 1...1)
     async let peer = connection.open(helloTimeout: .seconds(5))
     try agent.hello(proto: 5, minProto: 2)
     #expect(try await peer.proto == 3)
-    guard case .response(let response)? = agent.nextMessage() else { Issue.record("no hello response"); return }
+    guard case .response(let response)? = await agent.nextMessage() else { Issue.record("no hello response"); return }
     #expect(response.outcome == .success(["proto": 3, "hostVersion": "h"]))
 }
 
@@ -109,13 +125,13 @@ private func connected(token: String? = nil, range: ClosedRange<UInt32> = 1...1)
     let peer = Task { try await connection.open(helloTimeout: .seconds(5)) }
     try agent.hello(proto: 3, minProto: 2)
     await #expect(throws: AgentConnection.ConnectionError.self) { try await peer.value }
-    guard case .response(let response)? = agent.nextMessage(), case .failure(let error) = response.outcome else {
+    guard case .response(let response)? = await agent.nextMessage(), case .failure(let error) = response.outcome else {
         Issue.record("no error response")
         return
     }
     #expect(error.code == AgentErrorCode.protoUnsupported.rawValue)
     #expect(error.data == ["proto": 1, "minProto": 1])
-    #expect(agent.sawClose())
+    #expect(await agent.sawClose())
 }
 
 @Test func tokenIsCheckedWhenRequired() async throws {
@@ -124,12 +140,12 @@ private func connected(token: String? = nil, range: ClosedRange<UInt32> = 1...1)
     let peer = Task { try await connection.open(helloTimeout: .seconds(5)) }
     try agent.hello(token: "wrong")
     await #expect(throws: AgentConnection.ConnectionError.self) { try await peer.value }
-    guard case .response(let response)? = agent.nextMessage(), case .failure(let error) = response.outcome else {
+    guard case .response(let response)? = await agent.nextMessage(), case .failure(let error) = response.outcome else {
         Issue.record("no error response")
         return
     }
     #expect(error.code == AgentErrorCode.unauthorized.rawValue)
-    #expect(agent.sawClose())
+    #expect(await agent.sawClose())
     let accepted = try await connected(token: "secret")
     #expect(accepted.peer.hello.agentVersion == "test")
 }
@@ -146,7 +162,7 @@ private func connected(token: String? = nil, range: ClosedRange<UInt32> = 1...1)
     await #expect(throws: AgentConnection.ConnectionError.violation("no hello in time")) {
         try await waiting.open(helloTimeout: .milliseconds(200))
     }
-    #expect(silent.sawClose())
+    #expect(await silent.sawClose())
 }
 
 /// Each guest misbehaviour after hello drops the connection.
@@ -172,7 +188,7 @@ func violationsAfterHelloCloseTheConnection(_ violation: String) async throws {
         }
     default: try agent.send(.message(Data("{\"jsonrpc\":".utf8)))
     }
-    #expect(agent.sawClose(), "\(violation)")
+    #expect(await agent.sawClose(), "\(violation)")
     #expect(await !connection.isOpen)
 }
 
@@ -182,7 +198,7 @@ func violationsAfterHelloCloseTheConnection(_ violation: String) async throws {
         [result["stdout"]?.intValue, result["stderr"]?.intValue].compactMap { $0.map(UInt32.init) }
     })
     async let started = connection.call(AgentMethod.execStart, ["argv": ["true"]], streams: names)
-    guard case .request(let request)? = agent.nextMessage(), let id = request.id else {
+    guard case .request(let request)? = await agent.nextMessage(), let id = request.id else {
         Issue.record("no request")
         return
     }
@@ -209,13 +225,13 @@ func violationsAfterHelloCloseTheConnection(_ violation: String) async throws {
     await #expect(throws: AgentConnection.ConnectionError.timeout) {
         try await connection.call(AgentMethod.agentPing, timeout: .milliseconds(100))
     }
-    guard case .request(let late)? = agent.nextMessage(), let id = late.id else {
+    guard case .request(let late)? = await agent.nextMessage(), let id = late.id else {
         Issue.record("no request")
         return
     }
     try agent.send(.response(RPCResponse(id: id, result: [:])))
     let next = Task { try await connection.call(AgentMethod.agentPing) }
-    guard case .request(let ping)? = agent.nextMessage(), let pingID = ping.id else {
+    guard case .request(let ping)? = await agent.nextMessage(), let pingID = ping.id else {
         Issue.record("no second request")
         return
     }
@@ -238,7 +254,7 @@ func violationsAfterHelloCloseTheConnection(_ violation: String) async throws {
     }
     defer { sending.cancel() }
     var sizes: [Int] = []
-    while let frame = agent.next(within: 2) {
+    while let frame = await agent.next(within: 2) {
         switch frame {
         case .chunk(let id, let data):
             #expect(id == stream)
@@ -264,8 +280,10 @@ func violationsAfterHelloCloseTheConnection(_ violation: String) async throws {
     let waiting = [firstFD, secondFD].map { fd in Task { await hub.serve(fd: fd, helloTimeout: .seconds(2)) } }
     try await Task.sleep(for: .milliseconds(100))
     await hub.serve(fd: thirdFD, helloTimeout: .seconds(2))
-    #expect(third.sawClose(within: 1))
-    #expect(!first.sawClose(within: 0.2) && !second.sawClose(within: 0.2))
+    #expect(await third.sawClose(within: 1))
+    let firstClosed = await first.sawClose(within: 0.2)
+    let secondClosed = await second.sawClose(within: 0.2)
+    #expect(!firstClosed && !secondClosed)
     for task in waiting { await task.value }  // both time out without hello
     #expect(await hub.status.connected == false)
 }
