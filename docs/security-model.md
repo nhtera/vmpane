@@ -52,6 +52,12 @@ files, sign binaries or drive the app's UI like the user.
   (`vmpane operator grant`, a tagged `operator.grant` file; `revoke` removes it). The helper believes the
   operator claim only from a peer signed as the CLI. An agent faking a terminal (e.g. `script`) with a grant
   in place passes; that agent has a shell, and every operator call is audited as `operator`.
+- **Kill switch**: `vmpane mcp kill`, the menu bar or ⌃⌥⌘. (while VMPane runs), or `mcp.disableAll` from any
+  client, writes a tagged `killswitch` file every helper watches (and reads at launch), so it works with no app
+  running. While engaged, every non-app call is refused (helpers and Core-direct library operations), agent
+  connections close, commands agents started are killed, their file transfers stop, and port forwards agents
+  added go down (measured: all within 0.15 s). Only the app releases it. The file is written released when the
+  policy key is made; after that a missing or edited file counts as engaged.
 - **Audit**: every call by a non-app client, and every refusal, is one line in the VM's
   `logs/mcp-audit.jsonl` (synced before the answer; typed text and clipboard contents as SHA-256 unless the
   VM records typed text; 10 MB × 5). It is a record, not tamper-proof.

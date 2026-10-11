@@ -17,11 +17,17 @@ public actor VMAccess {
         self.connector = connector
     }
 
-    public func list() throws -> [VMLibrary.Item] { try ops.list() }
+    public func list() throws -> [VMLibrary.Item] {
+        do {
+            return try ops.list()
+        } catch let denied as LibraryOps.PolicyDenied {
+            throw ToolFailure(denied.reason)
+        }
+    }
 
     func item(_ selector: String) throws -> VMLibrary.Item {
         do {
-            return try VMSelector.resolve(selector, in: try ops.list())
+            return try VMSelector.resolve(selector, in: try list())
         } catch let failure as VMSelector.Failure {
             throw ToolFailure(failure.description)
         }

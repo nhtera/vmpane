@@ -56,3 +56,34 @@ private func entries(_ helper: Harness) throws -> [AuditEntry] {
     #expect(try entries(helper).last?.policy == "off")
     await helper.tearDown()
 }
+
+@Test func theKillSwitchStopsAgentsButNotTheApp() async throws {
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.settings.apply", params: ["patch": ["mcp": ["policy": "admin"]]])
+    await helper.controller.setClassifier(strangers)
+    #expect(try await helper.client.call("vm.info")["state"] == "stopped", "an agent at admin")
+    // Anyone may stop agents, the agent itself included.
+    _ = try await helper.client.call("mcp.disableAll")
+    #expect(KillSwitch.isEngaged(paths: helper.paths))
+    // Its connection was closed; a new one is refused.
+    let agent = try UDSClient.connect(to: await helper.controller.prepared.runFiles.socketURL)
+    defer { agent.close() }
+    await #expect(throws: RPCError.self) { try await agent.call("vm.info") }
+    await #expect(throws: RPCError.self) { try await agent.call("mcp.enableAll") }  // only the app releases it
+    #expect(try entries(helper).last?.reason?.contains("kill switch") == true)
+    await helper.tearDown()
+}
+
+@Test func anEngagedSwitchWrittenElsewhereIsNoticed() async throws {
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.settings.apply", params: ["patch": ["mcp": ["policy": "admin"]]])
+    await helper.controller.setClassifier(strangers)
+    try KillSwitch.engage(paths: helper.paths)  // vmpane mcp kill, with no app running
+    try await Task.sleep(for: .milliseconds(1200))
+    #expect(await helper.controller.killSwitchEngaged)
+    await #expect(throws: RPCError.self) { try await helper.client.call("vm.info") }
+    try KillSwitch.release(paths: helper.paths)
+    try await Task.sleep(for: .milliseconds(1200))
+    #expect(await !helper.controller.killSwitchEngaged)
+    await helper.tearDown()
+}

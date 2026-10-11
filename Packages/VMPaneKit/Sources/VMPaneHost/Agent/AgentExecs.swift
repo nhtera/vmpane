@@ -106,6 +106,15 @@ actor AgentExecs {
         exits[key] = nil
     }
 
+    /// Kills every process started through the connections in `owners` (the kill switch's agents).
+    func kill(ownedBy owners: Set<ObjectIdentifier>) async {
+        let doomed = routes.filter { _, route in route.owner.map { owners.contains(ObjectIdentifier($0)) } ?? false }
+        for (key, route) in doomed {
+            let params = RPCParams.encode(AgentExecSignalParams(execId: key.execId, signal: .kill))
+            _ = try? await route.connection.call(AgentMethod.execSignal, try? params.get(), timeout: .seconds(2))
+        }
+    }
+
     /// `exec.exited` from the agent. It can come before `start` has recorded the route (a quick process), so
     /// it is kept until asked for; a guest cannot grow the table past a small bound.
     func exited(_ notice: AgentExecExited, on connection: AgentConnection) {

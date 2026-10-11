@@ -47,6 +47,12 @@ public actor HelperController {
     var classifier: PeerClassifier
     var policyKey: SymmetricKey?
     let auditLog: AuditLog
+    /// The agent kill switch (`HelperController+KillSwitch`): its state, the watch on VMPane's folder, and a
+    /// counter agents' transfers compare against to notice it.
+    var killSwitchEngaged = false
+    var killSwitchWatch: DispatchSourceFileSystemObject?
+    var killSwitchPoll: Task<Void, Never>?
+    var agentGeneration = 0
     /// The file drop in progress (`vm.files.cancel` stops it).
     var dropTask: Task<Result<JSONValue, RPCError>, Never>?
     /// The connection that started it (only it may cancel it).
@@ -109,6 +115,7 @@ public actor HelperController {
         }
         try server.start()
         self.server = server
+        startKillSwitch()
         startEventPump()
         startAgentPump()
     }
@@ -119,6 +126,7 @@ public actor HelperController {
         shuttingDown = true
         await stopBackendForShutdown()  // the VM must be down before its disks' lock is released
         pumpTask?.cancel()
+        stopKillSwitchWatch()
         for task in agentTasks { task.cancel() }
         await agentLink?.stop()
         await agentHub.disconnect("the helper is shutting down")
@@ -184,9 +192,11 @@ public actor HelperController {
             }
             dropTask?.cancel()
             return .success([:])
+        case .mcpDisableAll?: return await killSwitchRequest(engage: true)
+        case .mcpEnableAll?: return await killSwitchRequest(engage: false)
         case .vmClipboardRead?: return await clipboardRead(request.params)
         case .vmClipboardWrite?: return await clipboardWrite(request.params)
-        case .vmSettingsApply?: return await applySettings(request.params)
+        case .vmSettingsApply?: return await applySettings(request.params, byApp: identity(of: connection).identity == .ui)
         case .vmStart?, .vmPause?, .vmResume?, .vmSuspend?, .vmStop?:
             return await lifecycle(request.method, request.params)
         case .vmSnapshotList?, .vmSnapshotCreate?, .vmSnapshotDelete?, .vmSnapshotRestore?:

@@ -4,6 +4,7 @@ import VMPaneUI
 /// The menu bar extra: running VMs with their quick actions, and the way back to the library.
 struct MenuBarExtraView: View {
     let store: LibraryStore
+    let killSwitch: AgentKillSwitch
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -23,6 +24,8 @@ struct MenuBarExtraView: View {
                 }
             }
         }
+        Divider()
+        AgentKillSwitchMenu(killSwitch: killSwitch)
         Divider()
         Button("Open VMPane") {
             openWindow(id: "library")

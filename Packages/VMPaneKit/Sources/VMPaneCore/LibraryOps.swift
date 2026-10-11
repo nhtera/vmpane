@@ -75,6 +75,12 @@ public struct LibraryOps: Sendable {
     }
 
     private func gate(_ method: String, vm: UUID?, level: PolicyLevel) throws {
+        // The kill switch stops agents here too (operators and the app are not agents).
+        if identity == .automated, method != "mcp.disableAll", KillSwitch.isEngaged(paths: library.paths) {
+            let decision = PolicyDecision.deny("AI agents are stopped (VMPane's kill switch)")
+            audit(method, vm, decision)
+            throw PolicyDenied(reason: "AI agents are stopped (VMPane's kill switch)")
+        }
         let decision = PolicyEnforcer.decide(
             method: method, params: nil, level: level, identity: identity,
             context: PolicyContext(clipboardAllowWithAgents: false))

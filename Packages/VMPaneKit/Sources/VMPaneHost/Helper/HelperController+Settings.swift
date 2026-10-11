@@ -8,7 +8,8 @@ import VMPaneCore
 extension HelperController {
     private struct ApplyParams: Decodable { var patch: JSONValue }
 
-    func applySettings(_ params: JSONValue?) async -> Result<JSONValue, RPCError> {
+    /// `byApp`: the change comes from VMPane's app; port forwards anyone else adds are marked as an agent's.
+    func applySettings(_ params: JSONValue?, byApp: Bool = true) async -> Result<JSONValue, RPCError> {
         let patch: JSONValue
         switch RPCParams.decode(ApplyParams.self, from: params) {
         case .success(let decoded): patch = decoded.patch
@@ -23,36 +24,27 @@ extension HelperController {
             let old = try Self.json(config)
             let (saved, rejected) = Self.screen(old, SettingsPatch.merge(old, patch))
             let accepted = SettingsPatch.changedPaths(old, saved)
-            let merged = try Self.config(from: saved)
-            // A new agent policy is tagged here (only VMPane's UI may change it: policy uiOnly), so it counts.
-            let policyChanged = accepted.contains { $0.hasPrefix("mcp") || $0 == "clipboard.allowWithAgents" }
-            let key = policyChanged ? PolicyKeyFile(paths: prepared.runFiles.paths).key(create: true) : nil
-            let updated = key.map { PolicyIntegrity.signed(merged, key: $0) } ?? merged
+            let updated = try newConfig(from: saved, accepted: accepted, byApp: byApp)
             let lock = prepared.lock
             try await Blocking.run { try ConfigStore.save(updated, holding: lock) }
             config = updated
 
             // Port forwards are host settings, but a QEMU guest's live in QEMU's NAT: the backend applies them too.
             let livePaths = accepted.filter { SettingsPatch.kind(of: $0) == .live || $0.hasPrefix("portForwards") }
-            var live = running ? await backend?.applyLive(updated, paths: livePaths) ?? [] : []
+            // While agents are stopped, their forwards stay down.
+            var allowed = updated
+            allowed.portForwards = forwardsAllowedNow()
+            var live = running ? await backend?.applyLive(allowed, paths: livePaths) ?? [] : []
             // A running Windows VM's shares are the helper's WebDAV server.
             if accepted.contains("shares"), updateWebDAVShares(updated.shares) { live.insert("shares") }
             // A running VZ VM's forwards are the helper's own listeners.
             let forwardsLive =
                 running && backend?.kind == .vz && accepted.contains { $0.hasPrefix("portForwards") }
-                ? await applyForwards((try? PortRule.rules(updated.portForwards)) ?? []) : false
+                ? await applyForwards((try? PortRule.rules(allowed.portForwards)) ?? []) : false
             var outcomes = rejected.mapValues { _ in JSONValue.string(SettingOutcome.rejected.rawValue) }
             var inEffect: [String] = []
             for path in accepted {
-                let now: Bool =
-                    switch SettingsPatch.kind(of: path) {
-                    // A running QEMU VM's forwards are in QEMU: in effect only if it took them.
-                    case .host where path.hasPrefix("portForwards") && running && backend?.kind == .qemu: live.contains(path)
-                    case .host where path.hasPrefix("portForwards") && running && backend?.kind == .vz: forwardsLive
-                    case .host: true
-                    case .live: !running || live.contains(path)
-                    default: !running
-                    }
+                let now = inEffectNow(path, running: running, live: live, forwardsLive: forwardsLive)
                 outcomes[path] = .string(now ? SettingOutcome.applied.rawValue : SettingOutcome.nextBoot.rawValue)
                 if now { inEffect.append(path) }
             }
@@ -64,6 +56,36 @@ extension HelperController {
             return .failure(RPCError(.invalidParams, "the patched config is not valid: \(error)"))
         } catch {
             return .failure(RPCError(.invalidParams, "cannot apply: \(error)"))
+        }
+    }
+
+    /// The config to save: agents' new forwards marked as theirs, a changed agent policy tagged.
+    private func newConfig(from saved: JSONValue, accepted: [String], byApp: Bool) throws -> VMConfigV1 {
+        var merged = try Self.config(from: saved)
+        if !byApp {
+            // The kill switch takes down what agents opened: rules a non-app client adds are theirs.
+            let before = config.portForwards
+            merged.portForwards = merged.portForwards.map { rule in
+                var rule = rule
+                if !before.contains(rule) { rule.origin = .agent }
+                return rule
+            }
+        }
+        // A new agent policy is tagged here (only VMPane's UI may change it: policy uiOnly), so it counts.
+        let policyChanged = accepted.contains { $0.hasPrefix("mcp") || $0 == "clipboard.allowWithAgents" }
+        let key = policyChanged ? PolicyKeyFile(paths: prepared.runFiles.paths).key(create: true) : nil
+        return key.map { PolicyIntegrity.signed(merged, key: $0) } ?? merged
+    }
+
+    /// Whether a changed setting is in effect now (else at the next start).
+    private func inEffectNow(_ path: String, running: Bool, live: Set<String>, forwardsLive: Bool) -> Bool {
+        switch SettingsPatch.kind(of: path) {
+        // A running QEMU VM's forwards are in QEMU: in effect only if it took them.
+        case .host where path.hasPrefix("portForwards") && running && backend?.kind == .qemu: live.contains(path)
+        case .host where path.hasPrefix("portForwards") && running && backend?.kind == .vz: forwardsLive
+        case .host: true
+        case .live: !running || live.contains(path)
+        default: !running
         }
     }
 

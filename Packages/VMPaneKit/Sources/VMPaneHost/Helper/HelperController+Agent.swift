@@ -130,10 +130,10 @@ extension HelperController {
                 return .success([:])
             case .agentFilePush?:
                 let files = try RPCParams.decode(FileTransfer.self, from: params).get()
-                return .success(["bytes": .int(Int64(try await Self.push(files, on: connection)))])
+                return .success(["bytes": .int(Int64(try await Self.push(files, on: connection, stop: agentStop(owner))))])
             default:
                 let files = try RPCParams.decode(FileTransfer.self, from: params).get()
-                return .success(["bytes": .int(Int64(try await Self.pull(files, on: connection)))])
+                return .success(["bytes": .int(Int64(try await Self.pull(files, on: connection, stop: agentStop(owner))))])
             }
         } catch let error as RPCError {
             return .failure(error)
@@ -172,7 +172,8 @@ extension HelperController {
     /// Host file → guest: hashed first (the agent checks size and SHA-256 before renaming into place).
     /// Pushes a host file to the guest; `progress` hears the bytes sent so far.
     static func push(
-        _ files: FileTransfer, on connection: AgentConnection, progress: (@Sendable (UInt64) -> Void)? = nil
+        _ files: FileTransfer, on connection: AgentConnection, progress: (@Sendable (UInt64) -> Void)? = nil,
+        stop: (@Sendable () async -> Bool)? = nil
     ) async throws -> UInt64 {
         let url = URL(fileURLWithPath: files.hostPath)
         guard url.path.hasPrefix("/") else { throw RPCError(.invalidParams, "hostPath must be absolute") }
@@ -195,6 +196,7 @@ extension HelperController {
         defer { try? handle.close() }
         var sent: UInt64 = 0
         while sent < size, !Task.isCancelled, await !connection.isAnswered(call) {
+            if let stop, await stop() { break }  // the kill switch: the stream ends as failed
             let data = try await Blocking.run { try handle.read(upToCount: fileChunk) ?? Data() }
             guard !data.isEmpty else { break }
             try await connection.send(data, on: stream)
@@ -208,7 +210,9 @@ extension HelperController {
 
     /// Guest file → host: written to a new private file beside the target (never through a symlink), synced and
     /// renamed once exactly the announced size arrived. An existing target is replaced only with `overwrite`.
-    private static func pull(_ files: FileTransfer, on connection: AgentConnection) async throws -> UInt64 {
+    private static func pull(_ files: FileTransfer, on connection: AgentConnection, stop: (@Sendable () async -> Bool)? = nil)
+        async throws -> UInt64
+    {
         let url = URL(fileURLWithPath: files.hostPath)
         guard url.path.hasPrefix("/") else { throw RPCError(.invalidParams, "hostPath must be absolute") }
         let overwrite = files.overwrite ?? false
@@ -234,6 +238,7 @@ extension HelperController {
             while let data = try await stream.next() {
                 received += UInt64(data.count)
                 guard received <= size else { throw RPCError(.internalError, "the guest sent more than announced") }
+                if let stop, await stop() { throw RPCError(.policyDenied, "agents were stopped (kill switch)") }
                 try handle.write(contentsOf: data)
             }
             guard received == size else { throw RPCError(.internalError, "the guest sent \(received) of \(size) bytes") }

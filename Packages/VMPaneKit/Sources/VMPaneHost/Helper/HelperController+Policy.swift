@@ -64,6 +64,13 @@ extension HelperController {
     /// Nil when `caller` may make `request`; else the refusal (audited).
     func authorize(_ request: RPCRequest, _ caller: CallerIdentity) -> RPCError? {
         let policy = effectivePolicy()
+        if killSwitchEngaged, caller.identity != .ui, request.method != ControlMethod.mcpDisableAll.rawValue,
+            request.method != ControlMethod.helperHello.rawValue
+        {
+            let reason = "AI agents are stopped (VMPane's kill switch); the app can let them act again"
+            writeAudit(request, caller, policy: policy.level, AuditOutcome(result: "denied", reason: reason, durationMs: nil))
+            return RPCError(.policyDenied, reason)
+        }
         let decision = PolicyEnforcer.decide(
             method: request.method, params: request.params, level: policy.level, identity: caller.identity,
             context: PolicyContext(clipboardAllowWithAgents: policy.clipboardAllowWithAgents))

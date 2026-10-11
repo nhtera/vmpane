@@ -21,7 +21,7 @@ extension HelperController {
                 }
             }
             portForwarder = forwarder
-            let rules = (try? PortRule.rules(config.portForwards)) ?? []
+            let rules = (try? PortRule.rules(forwardsAllowedNow())) ?? []
             Task { await forwarder.apply(rules) }
         case .stopped, .error:
             guard let forwarder = portForwarder else { return }

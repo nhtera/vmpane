@@ -16,7 +16,7 @@ struct VMPaneApp: App {
             PreferencesView(paths: appDelegate.supervisor.paths)
         }
         MenuBarExtra("VMPane", systemImage: "square.stack.3d.up") {
-            MenuBarExtraView(store: appDelegate.library)
+            MenuBarExtraView(store: appDelegate.library, killSwitch: appDelegate.killSwitch)
         }
     }
 }
@@ -31,8 +31,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             launch: { bundle, headless in try await supervisor.launch(bundle, headless: headless) })
     }()
 
+    lazy var killSwitch = AgentKillSwitch(paths: supervisor.paths)
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         supervisor.start()
+        killSwitch.registerHotKey()
     }
 
     /// A .vmpane bundle opened from Finder (double-click, Open With, or dropped on the Dock icon).

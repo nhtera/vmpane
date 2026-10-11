@@ -82,3 +82,32 @@ private func config(_ level: PolicyLevel) -> VMConfigV1 {
     #expect(InteractiveSession.parentPID(of: getpid()) == getppid())
     #expect(!InteractiveSession.underMCP())
 }
+
+@Test func theKillSwitchCanOnlyBeTamperedOn() throws {
+    let root = URL(fileURLWithPath: "/tmp/vp-ks-\(UUID().uuidString.prefix(8))")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let paths = VMPanePaths(root: root)
+    #expect(!KillSwitch.isEngaged(paths: paths), "no key: nothing to stop")
+    _ = PolicyKeyFile(paths: paths).key(create: true)
+    #expect(!KillSwitch.isEngaged(paths: paths), "released when the key is made")
+    try KillSwitch.engage(paths: paths)
+    #expect(KillSwitch.isEngaged(paths: paths))
+    try KillSwitch.release(paths: paths)
+    #expect(!KillSwitch.isEngaged(paths: paths))
+    try FileManager.default.removeItem(at: KillSwitch.url(paths))
+    #expect(KillSwitch.isEngaged(paths: paths), "removed: engaged")
+    try Data("released\nAAAA\n".utf8).write(to: KillSwitch.url(paths))
+    #expect(KillSwitch.isEngaged(paths: paths), "forged: engaged")
+}
+
+@Test func theKillSwitchStopsAgentsInTheLibraryToo() throws {
+    let root = URL(fileURLWithPath: "/tmp/vp-ksl-\(UUID().uuidString.prefix(8))")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let paths = VMPanePaths(root: root)
+    let agent = LibraryOps(library: VMLibrary(paths: paths), identity: .automated)
+    let human = LibraryOps(library: VMLibrary(paths: paths), identity: .operator)
+    #expect(try agent.list().isEmpty)
+    try KillSwitch.engage(paths: paths)
+    #expect(throws: LibraryOps.PolicyDenied.self) { try agent.list() }
+    #expect(try human.list().isEmpty, "an operator is not an agent")
+}

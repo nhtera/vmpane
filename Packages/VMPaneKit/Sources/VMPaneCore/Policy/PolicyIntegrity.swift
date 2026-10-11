@@ -13,8 +13,10 @@ public protocol PolicyKeyProvider: Sendable {
 
 public struct PolicyKeyFile: PolicyKeyProvider {
     public let url: URL
+    let paths: VMPanePaths
 
     public init(paths: VMPanePaths) {
+        self.paths = paths
         url = paths.root.appendingPathComponent("policy.key")
     }
 
@@ -28,7 +30,11 @@ public struct PolicyKeyFile: PolicyKeyProvider {
             let data = fresh.withUnsafeBytes { Data($0) }
             let written = data.withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }
             close(fd)
-            if written == 32 { return fresh }
+            if written == 32 {
+                // From now on a missing kill-switch file means engaged: start released.
+                try? KillSwitch.write(engaged: false, paths: paths)
+                return fresh
+            }
             unlink(url.path)
             return nil
         }

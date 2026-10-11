@@ -8,7 +8,28 @@ import VMPaneMCP
 /// process is one agent session. It is always policy-bound, never operator, even started from a terminal: each
 /// VM allows agents what its owner set in VMPane.
 struct MCP: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(abstract: "Serve VMPane to an AI agent over MCP (stdio).")
+    static let configuration = CommandConfiguration(
+        abstract: "Serve VMPane to an AI agent over MCP (stdio), or stop all agents.",
+        subcommands: [MCPServe.self, MCPKill.self], defaultSubcommand: MCPServe.self)
+}
+
+/// Stops every AI agent at once (any VM, any helper), with or without the app running; only the app lets them
+/// act again.
+struct MCPKill: ParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "kill", abstract: "Stop every AI agent now.")
+
+    func run() {
+        do {
+            try KillSwitch.engage(paths: CLI.paths)
+        } catch {
+            CLI.fail("cannot engage the kill switch: \(error)", .failure)
+        }
+        print("AI agents are stopped. VMPane (menu bar) lets them act again.")
+    }
+}
+
+struct MCPServe: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "serve", abstract: "Serve VMPane over MCP on stdin/stdout (the default).")
 
     func run() async throws {
         let session = UUID().uuidString.lowercased()
