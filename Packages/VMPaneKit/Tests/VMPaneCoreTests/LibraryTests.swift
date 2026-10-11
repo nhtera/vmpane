@@ -78,3 +78,23 @@ import Testing
         #expect(Set(index.bundles.map(\.id)).count == 2)
     }
 }
+
+/// The same bundle reached by another spelling of its path (/tmp is /private/tmp, a folder through a link) is not
+/// a copy: it keeps its identity, and the library keeps one entry.
+@Test func aBundleReachedThroughALinkKeepsItsIdentity() throws {
+    let root = URL(fileURLWithPath: "/tmp/vp-link-\(UUID().uuidString.prefix(8))")
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let library = VMLibrary(paths: VMPanePaths(root: root.appendingPathComponent("support")))
+    let real = URL(fileURLWithPath: "/private" + root.path).appendingPathComponent("A.vmpane")
+    let bundle = try VMBundle.create(at: real, config: makeConfig(name: "A"))
+    let id = try ConfigStore.load(bundle).id
+    try library.register(bundle)
+    let viaLink = try VMBundle.open(root.appendingPathComponent("A.vmpane"))
+    #expect(viaLink.url.path != bundle.url.path)
+    let lock = try #require(try viaLink.tryLock(retryingFor: 5))
+    defer { lock.release() }
+    let adopted = try library.adopt(holding: lock)
+    #expect(!adopted.regenerated && adopted.config.id == id)
+    #expect(try library.readIndex().bundles.count == 1)
+}

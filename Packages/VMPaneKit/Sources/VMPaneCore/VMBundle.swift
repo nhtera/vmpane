@@ -42,6 +42,16 @@ public struct VMBundle: Sendable, Equatable {
         return url.appendingPathComponent(relativePath)
     }
 
+    /// Whether two paths name the same bundle directory, however they were spelled (`/tmp` is `/private/tmp`, a
+    /// folder may be reached through a link): the same file on the same volume. Plain comparison when either is gone.
+    public static func samePlace(_ first: String, _ second: String) -> Bool {
+        if first == second { return true }
+        var a = stat()
+        var b = stat()
+        guard stat(first, &a) == 0, stat(second, &b) == 0 else { return false }
+        return a.st_dev == b.st_dev && a.st_ino == b.st_ino
+    }
+
     /// No checks: use `create` or `open`. Internal for error reporting on unreadable paths.
     init(uncheckedURL url: URL) {
         // One canonical form (standardized, directory URL) so bundles compare equal however they were reached.

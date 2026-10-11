@@ -2,14 +2,13 @@
   "core": [
     "smoke", "helper-lifecycle", "linux-boot", "linux-snapshot", "vz-suspend", "macos-boot", "qemu-smoke",
     "win-boot", "win-snapshot", "win-crash", "agent-linux", "agent-windows", "cli-e2e", "mcp-e2e",
-    "mcp-killswitch", "security"
+    "mcp-killswitch", "security", "update-under-load"
   ],
   "full": [
     "vz-capture", "vz-devices", "win-display", "win-install", "win-install-resume", "disk-full", "ports-linux",
     "shares-linux", "dnd", "ui-smoke", "perf", "qemu-sandbox"
   ],
   "planned": {
-    "core": ["update-under-load"],
     "full": ["agent-macos", "clipboard-matrix", "import-parallels", "macos-install"]
   },
   "tiers": {

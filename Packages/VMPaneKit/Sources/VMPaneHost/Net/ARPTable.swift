@@ -48,7 +48,9 @@ public struct ARPEntry: Sendable, Equatable {
                 guard family == UInt8(AF_LINK), addressLength == 6, macStart + 6 <= offset + length else { continue }
                 let mac = (0..<6).map { String(format: "%02x", raw[macStart + $0]) }.joined(separator: ":")
                 var name = [CChar](repeating: 0, count: Int(IF_NAMESIZE))
-                let interface = if_indextoname(index, &name) != nil ? String(cString: name) : ""
+                let interface =
+                    if_indextoname(index, &name) != nil
+                    ? String(bytes: name.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, encoding: .utf8) ?? "" : ""
                 entries.append(
                     ARPEntry(
                         ipAddress: IPv4(value: UInt32(bigEndian: destination.sin_addr.s_addr)), macAddress: mac, interface: interface))

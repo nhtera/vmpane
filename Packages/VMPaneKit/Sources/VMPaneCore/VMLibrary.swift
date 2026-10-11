@@ -82,7 +82,7 @@ public struct VMLibrary: Sendable {
         let bundle = lock.bundle
         return try updateIndex { index in
             var config = try ConfigStore.load(bundle)
-            let others = index.bundles.filter { $0.path != bundle.url.path }
+            let others = index.bundles.filter { !VMBundle.samePlace($0.path, bundle.url.path) }
             var clash = others.contains { $0.id == config.id }
             if !clash {
                 let macs = Set(config.network.map { MachineIdentity.normalizedMAC($0.macAddress) })
@@ -92,7 +92,7 @@ public struct VMLibrary: Sendable {
                 }
             }
             if clash { config = try FullClone.regenerateIdentity(holding: lock) }
-            index.bundles.removeAll { $0.path == bundle.url.path || ($0.id == config.id && $0.path == bundle.url.path) }
+            index.bundles.removeAll { VMBundle.samePlace($0.path, bundle.url.path) }
             index.bundles.append(.init(id: config.id, path: bundle.url.path, bookmark: try? bundle.url.bookmarkData()))
             return (config, clash)
         }

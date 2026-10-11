@@ -58,7 +58,7 @@ public enum LaunchCoordinator {
     ) throws -> PreparedBundle {
         var run = RunFiles(paths: paths, sid: ShortID(try ConfigStore.load(bundle).id))
         func ownedHelper(_ run: RunFiles) -> HelperRecord? {
-            run.readHelper().flatMap { $0.bundlePath == bundle.url.path ? $0 : nil }
+            run.readHelper().flatMap { VMBundle.samePlace($0.bundlePath, bundle.url.path) ? $0 : nil }
         }
 
         let lock = try acquireLock(bundle, run: run, process: process)
@@ -66,7 +66,7 @@ public enum LaunchCoordinator {
         try SnapshotStore(lock: lock).recover()
         var config = try ConfigStore.loadAndMigrate(lock)
         var regenerated = false
-        if let other = run.readHelper(), other.bundlePath != bundle.url.path {
+        if let other = run.readHelper(), !VMBundle.samePlace(other.bundlePath, bundle.url.path) {
             // Our sid belongs to another bundle's helper: we are a copy of that VM.
             config = try FullClone.regenerateIdentity(holding: lock)
             regenerated = true
@@ -97,7 +97,7 @@ public enum LaunchCoordinator {
     /// that took over meanwhile is not mistaken for the dead one) before retrying.
     private static func acquireLock(_ bundle: VMBundle, run: RunFiles, process: ProcessRecord) throws -> BundleLock {
         if let lock = try bundle.tryLock() { return lock }
-        let helper = run.readHelper().flatMap { $0.bundlePath == bundle.url.path ? $0 : nil }
+        let helper = run.readHelper().flatMap { VMBundle.samePlace($0.bundlePath, bundle.url.path) ? $0 : nil }
         if let helper, !helper.process.matches(process) {
             if helper.process.isAlive { throw LaunchError.alreadyRunning(pid: helper.process.pid) }
             guard run.readHelper() == helper else { throw LaunchError.lockedByUnknownProcess }
