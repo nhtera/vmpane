@@ -164,11 +164,13 @@ private func eventually(_ condition: @MainActor () -> Bool) async -> Bool {
             "rules": [
                 ["id": "web", "status": "listening"],
                 ["id": "dns", "status": "failed", "reason": "bind: Address already in use"],
-            ]
+            ],
+            "listening": [["proto": "tcp", "port": 8000, "process": "python3"], ["proto": "udp", "port": 5353]],
         ]))
     await model.refreshPorts()
     #expect(model.portStatuses["web"] == SettingsModel.PortStatus(state: "listening", reason: nil))
     #expect(model.portStatuses["dns"]?.reason == "bind: Address already in use")
+    #expect(model.listening == [.init(proto: .tcp, port: 8000, process: "python3"), .init(proto: .udp, port: 5353, process: nil)])
 }
 
 @Test @MainActor func droppedFilesGoToTheHelperWithProgress() async throws {

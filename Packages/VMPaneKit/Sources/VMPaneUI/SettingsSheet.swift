@@ -60,7 +60,9 @@ public struct SettingsSheet: View {
                 }
                 if model.draft.network.contains(where: { $0.mode == .nat }) {
                     Section("Port Forwarding") {
-                        row("portForwards") { PortForwardsEditor(rules: $model.draft.portForwards, statuses: model.portStatuses) }
+                        row("portForwards") {
+                            PortForwardsEditor(rules: $model.draft.portForwards, statuses: model.portStatuses, listening: model.listening)
+                        }
                     }
                 }
                 if !model.draft.network.isEmpty {

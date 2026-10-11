@@ -81,7 +81,30 @@ extension HelperController {
             }
             return .object(entry)
         }
-        return .success(["rules": .array(rules)])
+        return .success(["rules": .array(rules), "listening": .array(await guestListening())])
+    }
+
+    /// What the guest listens on beyond its own loopback, from the agent (suggestions for new forwards; the
+    /// guest's word, so only shown). Empty without an agent that reports ports.
+    private func guestListening() async -> [JSONValue] {
+        guard let connection = await agentHub.connection, await agentHub.status.peer?.hello.caps?.contains(AgentCap.ports) == true,
+            let reply = try? await connection.call(AgentMethod.portsListening, timeout: .seconds(2)),
+            case .success(let listening) = RPCParams.decode(AgentPortsListening.self, from: reply.result)
+        else { return [] }
+        var seen: Set<String> = []
+        var ports: [JSONValue] = []
+        // DHCP clients (UDP 68, 546) listen too but serve nothing.
+        let clients: Set<UInt16> = [68, 546]
+        for port in listening.ports
+        where !port.address.hasPrefix("127.") && port.address != "::1" && port.port > 0
+            && !(port.proto == .udp && clients.contains(port.port))
+        {
+            guard seen.insert("\(port.proto.rawValue)/\(port.port)").inserted, ports.count < 64 else { continue }
+            var entry: [String: JSONValue] = ["proto": .string(port.proto.rawValue), "port": .int(Int64(port.port))]
+            if let process = port.process { entry["process"] = .string(String(process.prefix(64))) }
+            ports.append(.object(entry))
+        }
+        return ports
     }
 
     /// The guest agent's IPv4 addresses on the NAT NIC (matched by MAC), as hints for the resolver.

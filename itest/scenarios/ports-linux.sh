@@ -58,6 +58,11 @@ scenario_run() {
     [[ $(it_status_of web) == listening && $(it_status_of echo) == listening ]] \
         || it_fail "not listening: $(it_rpc "$socket" vm.ports.list | jq -c .)" || return 1
 
+    # The guest's services are suggested for forwarding (from the agent).
+    out=$(it_rpc "$socket" vm.ports.list | jq -c '[.listening[] | "\(.proto)/\(.port)"]')
+    [[ $out == *'"tcp/8000"'* && $out == *'"udp/5353"'* ]] || it_fail "listening ports not suggested: $out" || return 1
+    echo "ports-linux: the guest's listening ports are suggested ($out)"
+
     # 2. TCP: a 64 MiB download, byte-identical.
     guest_sum=$(it_agent_exec 'sha256sum /root/www/big.bin' | cut -d' ' -f1)
     start=$(/usr/bin/python3 -c 'import time; print(time.time())')

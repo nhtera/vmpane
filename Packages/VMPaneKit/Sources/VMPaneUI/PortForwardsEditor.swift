@@ -6,7 +6,13 @@ import VMPaneCore
 struct PortForwardsEditor: View {
     @Binding var rules: [Extensible<PortForwardConfig>]
     let statuses: [String: SettingsModel.PortStatus]
+    var listening: [SettingsModel.ListeningPort] = []
     @State private var adding = false
+
+    /// Listening guest ports no rule forwards yet.
+    private var suggestions: [SettingsModel.ListeningPort] {
+        listening.filter { port in !rules.contains { $0.proto == port.proto && $0.guestPort == port.port } }
+    }
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -22,9 +28,29 @@ struct PortForwardsEditor: View {
                 }
                 .accessibilityElement(children: .combine)
             }
+            if !suggestions.isEmpty {
+                Text("The VM listens on").font(.caption).foregroundStyle(.secondary)
+                ForEach(suggestions, id: \.self) { port in
+                    HStack {
+                        Text("\(port.proto.rawValue.uppercased()) \(port.port)" + (port.process.map { " (\($0))" } ?? "")).monospacedDigit()
+                        Spacer()
+                        Button("Forward") { forward(port) }.buttonStyle(.borderless)
+                    }
+                }
+            }
             Button("Add Port Forward…") { adding = true }
                 .popover(isPresented: $adding) { AddPortForward(rules: $rules) { adding = false } }
         }
+    }
+
+    /// Forwards a listening guest port from the same port on this Mac (privileged ones from 10000 up).
+    private func forward(_ port: SettingsModel.ListeningPort) {
+        let used = Set(rules.map(\.id))
+        let id = (1...).lazy.map { "pf-\($0)" }.first { !used.contains($0) } ?? "pf"
+        let host = port.port >= 1024 ? port.port : port.port + 10000
+        let rule = PortForwardConfig(
+            id: id, proto: port.proto, hostAddress: "127.0.0.1", hostPort: host, guestPort: port.port, origin: .user)
+        if (try? PortRule.rules(rules + [Extensible(rule)])) != nil { rules.append(Extensible(rule)) }
     }
 
     /// "TCP 127.0.0.1:8080 → guest 80".

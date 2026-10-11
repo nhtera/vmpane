@@ -17,6 +17,15 @@ public final class SettingsModel {
     /// Each saved port forward's state (`vm.ports.list`), by rule id.
     public private(set) var portStatuses: [String: PortStatus] = [:]
 
+    /// Ports the guest listens on (from its agent), for one-click forwards.
+    public private(set) var listening: [ListeningPort] = []
+
+    public struct ListeningPort: Equatable, Sendable, Hashable {
+        public let proto: PortForwardConfig.Proto
+        public let port: Int
+        public let process: String?
+    }
+
     public struct PortStatus: Equatable, Sendable {
         /// listening, blocked, failed or inactive.
         public let state: String
@@ -63,6 +72,14 @@ public final class SettingsModel {
             statuses[id] = PortStatus(state: state, reason: rule["reason"]?.stringValue)
         }
         portStatuses = statuses
+        if case .array(let ports)? = result["listening"] {
+            listening = ports.compactMap { entry in
+                guard let proto = entry["proto"]?.stringValue.flatMap(PortForwardConfig.Proto.init(rawValue:)),
+                    let port = entry["port"]?.intValue
+                else { return nil }
+                return ListeningPort(proto: proto, port: Int(port), process: entry["process"]?.stringValue)
+            }
+        }
     }
 
     public func revert() {
