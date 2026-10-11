@@ -44,6 +44,17 @@ scenario_run() {
     [[ $("$cli" exec "$id" --as admin --env GREETING=hi -- sh -c 'echo $GREETING') == hi ]] || it_fail "--env" || return 1
     echo "cli-e2e: exec output, exit codes 1 and 42, stdin, --env"
 
+    # cp both ways
+    echo "copied by vmpane" >"$work/up.txt"
+    "$cli" cp "$work/up.txt" "$id:/root/" >/dev/null || it_fail "cp to the VM failed" || return 1
+    "$cli" cp "$id:/root/up.txt" "$work/back/" >/dev/null 2>&1 || { mkdir -p "$work/back"; "$cli" cp "$id:/root/up.txt" "$work/back/" >/dev/null; } \
+        || it_fail "cp from the VM failed" || return 1
+    [[ $(cat "$work/back/up.txt") == "copied by vmpane" ]] || it_fail "cp round trip changed the file" || return 1
+    out=$("$cli" doctor --json || true)  # exit 1 here: the itest's VMPane folder is not private
+    jq -e '[.[] | select(.check | startswith("VM ")) | select(.ok)] | length == 1' <<<"$out" >/dev/null \
+        || it_fail "doctor does not see the VM: $out" || return 1
+    echo "cli-e2e: cp both ways; doctor sees the running VM"
+
     # 3. ports
     "$cli" exec "$id" --as admin -- sh -c 'mkdir -p /root/w && echo served >/root/w/f && setsid -f python3 -m http.server 8000 --directory /root/w >/dev/null 2>&1 </dev/null; sleep 1' \
         || it_fail "cannot start a web server" || return 1
