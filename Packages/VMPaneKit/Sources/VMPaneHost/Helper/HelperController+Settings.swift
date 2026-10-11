@@ -23,7 +23,11 @@ extension HelperController {
             let old = try Self.json(config)
             let (saved, rejected) = Self.screen(old, SettingsPatch.merge(old, patch))
             let accepted = SettingsPatch.changedPaths(old, saved)
-            let updated = try Self.config(from: saved)
+            let merged = try Self.config(from: saved)
+            // A new agent policy is tagged here (only VMPane's UI may change it: policy uiOnly), so it counts.
+            let policyChanged = accepted.contains { $0.hasPrefix("mcp") || $0 == "clipboard.allowWithAgents" }
+            let key = policyChanged ? PolicyKeyFile(paths: prepared.runFiles.paths).key(create: true) : nil
+            let updated = key.map { PolicyIntegrity.signed(merged, key: $0) } ?? merged
             let lock = prepared.lock
             try await Blocking.run { try ConfigStore.save(updated, holding: lock) }
             config = updated
@@ -73,6 +77,7 @@ extension HelperController {
             case .immutable where path == "install" && SettingsPatch.value(at: path, in: merged) == nil:
                 saved = SettingsPatch.copy(path, from: merged, into: saved)
             case .immutable: rejected[path] = "cannot be changed"
+            case .host where path == "mcp.tag": rejected[path] = "written by VMPane"
             case .host where path == "portForwards":
                 // One bad rule refuses the list: forwards are built only from rules that check out.
                 do {

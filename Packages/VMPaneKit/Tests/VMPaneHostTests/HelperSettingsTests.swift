@@ -173,3 +173,19 @@ private func httpGet(_ url: String) async -> String? {
         }
     }
 }
+
+/// An agent policy set through the settings is tagged, so it counts; a patch cannot write the tag itself, and a
+/// policy raised in config.json by hand reads as off.
+@Test func agentPoliciesAreTaggedWhenSaved() async throws {
+    let helper = try await Harness.make()
+    let result = try await helper.client.call(
+        "vm.settings.apply", params: ["patch": ["mcp": ["policy": "exec", "tag": "forged"]]])
+    #expect(result["fields"]?["mcp.policy"] == "applied" && result["fields"]?["mcp.tag"] == "rejected")
+    let saved = try ConfigStore.load(helper.bundle)
+    let ops = LibraryOps(library: VMLibrary(paths: helper.paths), identity: .automated)
+    #expect(ops.policy(saved).level == .exec && !ops.policy(saved).tampered)
+    var edited = saved
+    edited.mcp.policy = .admin
+    #expect(ops.policy(edited).level == .off && ops.policy(edited).tampered)
+    await helper.tearDown()
+}

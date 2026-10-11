@@ -14,20 +14,9 @@ scenario_run() {
     [[ -x $cli ]] || { it_fail "no vmpane in the app"; return 1; }
     [[ -f "$APP/Contents/Resources/GuestTools/linux/SHA256SUMS" ]] \
         || { echo "cli-e2e: the app has no Linux guest tools (guest-tools/build-linux.sh, then rebuild)" >&2; return 77; }
-    # The clone at policy admin (the CLI here is a non-interactive client; until policy tags are enforced the
-    # level is written straight into the clone's config).
-    local golden
-    golden=$(it_golden_linux) || return 1
-    work=$(mktemp -d /tmp/vp-it.XXXXXX)
-    export VMPANE_SUPPORT_DIR="$work/s"
-    mkdir -p "$VMPANE_SUPPORT_DIR/VMs"
-    bundle="$VMPANE_SUPPORT_DIR/VMs/L.vmpane"
-    it_clone_bundle "$golden" "$bundle"
-    jq '.mcp.policy = "admin"' "$bundle/config.json" >"$work/c.json" && mv "$work/c.json" "$bundle/config.json"
-    pid=$(it_start_helper "$bundle") || return 1
-    socket=$(it_socket "$bundle")
-    it_rpc "$socket" vm.start '{"headless": true}' >/dev/null || { it_fail "vm.start failed"; return 1; }
-    it_wait_for 60 grep -q VMPANE-ITEST-READY "$bundle/logs/serial.log" || { it_fail "no ready marker"; return 1; }
+    it_boot_linux_clone || return 1
+    # Agents' level for this VM, set as the app sets it (the bridge is the app to a development helper): tagged.
+    it_rpc "$socket" vm.settings.apply '{"patch": {"mcp": {"policy": "admin"}}}' >/dev/null || it_fail "cannot set the policy" || return 1
     trap 'set +e; [[ -n ${pid:-} ]] && kill -9 "$pid" 2>/dev/null; rm -rf "$work"; true' RETURN
     it_rpc "$socket" vm.input.text '{"text": "VMPANE-INSTALL-AGENT\n"}' >/dev/null
     it_wait_for 60 grep -qa 'VMPANE-AGENT-INSTALLED rc=0' "$bundle/logs/serial.log" || it_fail "the agent did not install" || return 1

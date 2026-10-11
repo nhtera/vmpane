@@ -44,12 +44,14 @@ struct Info: AsyncParsableCommand {
         try await CLI.guarded {
             let item = try CLI.item(vm)
             guard let config = item.config else { throw RPCError(.invalidState, item.error ?? "the VM's settings cannot be read") }
+            let policy = CLI.ops.policy(config)
+            let policyText = policy.level.rawValue + (policy.tampered ? " (\(config.mcp.policy.rawValue) was set outside VMPane: off)" : "")
             let info: JSONValue = [
                 "id": .string(config.id.uuidString), "name": .string(config.name), "os": .string(config.os.rawValue),
                 "backend": .string(config.backend.rawValue), "state": .string(await CLI.state(item)),
                 "cpus": .int(Int64(config.cpu.count)), "memoryMiB": .int(Int64(config.memory.mib)),
                 "disks": .array(config.disks.map { ["id": .string($0.id), "sizeGiB": .int(Int64($0.sizeGiB))] }),
-                "policy": .string(config.mcp.policy.rawValue), "path": .string(item.bundle.url.path),
+                "policy": .string(policy.level.rawValue), "policyTampered": .bool(policy.tampered), "path": .string(item.bundle.url.path),
             ]
             CLI.print(info, json: output.json) {
                 let disks = config.disks.map { "\($0.sizeGiB) GB" }.joined(separator: ", ")
@@ -58,7 +60,7 @@ struct Info: AsyncParsableCommand {
                     [
                         ["Name", config.name], ["ID", config.id.uuidString], ["System", config.os.rawValue],
                         ["State", info["state"]?.stringValue ?? "?"], ["Processors", "\(config.cpu.count)"],
-                        ["Memory", "\(config.memory.mib >> 10) GB"], ["Disks", disks], ["Agent policy", config.mcp.policy.rawValue],
+                        ["Memory", "\(config.memory.mib >> 10) GB"], ["Disks", disks], ["Agent policy", policyText],
                         ["Location", item.bundle.url.path],
                     ]
                 ).split(separator: "\n").dropFirst().joined(separator: "\n")

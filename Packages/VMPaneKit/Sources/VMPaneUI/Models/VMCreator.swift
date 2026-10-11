@@ -64,7 +64,9 @@ public struct VMCreator: Sendable {
         }
         progress(.preparing)
         let tools = windowsTools
-        let configured = config
+        // The app chose the agent policy: tagged, so it counts (PolicyIntegrity).
+        let key = PolicyKeyFile(paths: ops.library.paths).key(create: true)
+        let configured = key.map { PolicyIntegrity.signed(config, key: $0) } ?? config
         try await Blocking.run {
             guard let lock = try bundle.tryLock() else { throw CreateError.bundleBusy }
             defer { lock.release() }

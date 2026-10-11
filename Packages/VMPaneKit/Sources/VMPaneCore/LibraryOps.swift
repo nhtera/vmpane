@@ -23,8 +23,13 @@ public struct LibraryOps: Sendable {
     public func list() throws -> [VMLibrary.Item] {
         try gate("library.list", vm: nil, level: .off)
         return try library.items().filter { item in
-            identity == .ui || identity == .operator || (item.config?.mcp.policy ?? .off) >= .observe
+            identity == .ui || identity == .operator || (item.config.map(policy)?.level ?? .off) >= .observe
         }
+    }
+
+    /// The agent policy that applies to `config` (its saved level only with a valid tag).
+    public func policy(_ config: VMConfigV1) -> PolicyIntegrity.Effective {
+        PolicyIntegrity.effective(config, key: PolicyKeyFile(paths: library.paths).key(create: false))
     }
 
     /// Creates a bundle in the default library directory, with an empty sparse root disk.
@@ -44,7 +49,7 @@ public struct LibraryOps: Sendable {
     /// Clones a stopped VM as a new machine.
     public func clone(_ bundle: VMBundle, name: String) throws -> VMBundle {
         let config = try ConfigStore.load(bundle)
-        try gate("vm.clone", vm: config.id, level: config.mcp.policy)
+        try gate("vm.clone", vm: config.id, level: policy(config).level)
         guard let lock = try bundle.tryLock(retryingFor: 0.5) else { throw VMRunning() }
         defer { lock.release() }
         let clone = try FullClone.clone(holding: lock, to: uniqueURL(for: name), name: name)
@@ -55,7 +60,7 @@ public struct LibraryOps: Sendable {
     /// Deletes a stopped VM and removes it from the library.
     public func delete(_ bundle: VMBundle) throws {
         let config = try ConfigStore.load(bundle)
-        try gate("vm.delete", vm: config.id, level: config.mcp.policy)
+        try gate("vm.delete", vm: config.id, level: policy(config).level)
         guard let lock = try bundle.tryLock(retryingFor: 0.5) else { throw VMRunning() }
         try bundle.delete(holding: lock)
         try library.unregister(id: config.id)

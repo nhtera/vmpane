@@ -35,7 +35,9 @@ private func makeLibrary(_ dir: URL) -> VMLibrary {
         let lock = try #require(try visible.tryLock(retryingFor: 5))
         var config = try ConfigStore.load(visible)
         config.mcp.policy = .observe
-        try ConfigStore.save(config, holding: lock)
+        // As the app saves it: tagged (an untagged level counts as off).
+        let key = try #require(PolicyKeyFile(paths: library.paths).key(create: true))
+        try ConfigStore.save(PolicyIntegrity.signed(config, key: key), holding: lock)
         lock.release()
 
         let agent = LibraryOps(library: library, identity: .automated)
