@@ -86,6 +86,12 @@ extension WebDAVServer {
         guard let destinationHeader = request.headers["destination"] else { throw Status.badRequest }
         let destination = try resolve(destinationHeader)
         guard destination.share == target.share, let newName = destination.parts.last else { throw Status.badGateway }
+        // Never into its own subtree, nor onto itself, except a MOVE that changes only the name's case (names
+        // compared as the file system does: case-insensitively).
+        let fold = { (parts: [String]) in parts.map { $0.precomposedStringWithCanonicalMapping.lowercased() } }
+        let (source, sink) = (fold(target.parts), fold(destination.parts))
+        let caseRename = sink == source && destination.parts != target.parts && request.method == "MOVE"
+        guard !sink.starts(with: source) || caseRename else { throw Status.forbidden }
         try jail.checkWritable()
         let overwrite = request.headers["overwrite"]?.uppercased() != "F"
         let from = try jail.openParent(target.parts)
@@ -98,7 +104,7 @@ extension WebDAVServer {
             throw Status.conflict
         }
         defer { close(to) }
-        let existed = PathJail.info(to, newName) != nil
+        let existed = !caseRename && PathJail.info(to, newName) != nil
         if existed {
             guard overwrite else { throw Status.preconditionFailed }
             try Self.remove(newName, in: to)

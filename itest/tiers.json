@@ -1,0 +1,19 @@
+{
+  "core": [
+    "smoke", "helper-lifecycle", "linux-boot", "linux-snapshot", "vz-suspend", "macos-boot", "qemu-smoke",
+    "win-boot", "win-snapshot", "win-crash", "agent-linux", "agent-windows", "cli-e2e", "mcp-e2e",
+    "mcp-killswitch", "security"
+  ],
+  "full": [
+    "vz-capture", "vz-devices", "win-display", "win-install", "win-install-resume", "disk-full", "ports-linux",
+    "shares-linux", "dnd", "ui-smoke", "perf", "qemu-sandbox"
+  ],
+  "planned": {
+    "core": ["update-under-load"],
+    "full": ["agent-macos", "clipboard-matrix", "import-parallels", "macos-install"]
+  },
+  "tiers": {
+    "beta": {"scenarios": ["core"], "hosts": 1},
+    "release": {"scenarios": ["core", "full"], "hosts": 2, "note": "≥ 2 chips incl. one M3 or later; latest macOS 26.x and 27"}
+  }
+}

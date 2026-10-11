@@ -60,6 +60,7 @@ extension HelperController {
     /// (both waits can be long, and agents may have been stopped meanwhile).
     func agentChecks(_ request: RPCRequest, _ caller: CallerIdentity) async -> RPCError? {
         guard caller.identity != .ui else { return nil }
+        if let refusal = hostPathRefusal(request) { return refusal }
         if caller.identity != .operator, config.mcp.confirmExec, request.method == ControlMethod.agentExec.rawValue,
             request.params?["stdin"] == true
         {

@@ -2,6 +2,7 @@ import CryptoKit
 import Foundation
 import Testing
 import VMPaneCore
+import VMPaneQEMU
 
 @testable import VMPaneHost
 
@@ -150,4 +151,31 @@ func parallelsDisksConvertToTheSameBytes() async throws {
     #expect(size == 1 << 30, "rounded up to the whole GiB the config states")
     #expect(SHA256.hash(data: try Data(contentsOf: hds)) == before, "the .pvm is only read")
     #expect(progress.completedUnitCount == 100)
+}
+
+/// The import's qemu-img reads only the image's folder: another file of the user's is out of its reach.
+@Test(.enabled(if: qemuImgBuilt, "build the QEMU bundle: qemu/scripts/package.sh"))
+func importConversionIsSandboxed() throws {
+    let root = URL(fileURLWithPath: try QEMUSandbox.realPath(URL(fileURLWithPath: "/tmp")) + "/vp-sbi-\(UUID().uuidString.prefix(8))")
+    let (source, other) = (root.appendingPathComponent("source"), root.appendingPathComponent("other"))
+    for folder in [source, other] {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data(count: 1 << 20).write(to: folder.appendingPathComponent("disk.raw"))
+    }
+    defer { try? FileManager.default.removeItem(at: root) }
+    /// `qemu-img info <file>` sandboxed for an import of source/disk.raw into source/.
+    func info(_ file: URL) throws -> Int32 {
+        let process = Process()
+        process.executableURL = QEMUSandbox.sandboxExec
+        process.arguments = try QEMUSandbox.importArguments(
+            qemuImg: qemuImg, source: source.appendingPathComponent("disk.raw"), target: source.appendingPathComponent("out.raw"),
+            arguments: ["info", file.path])
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        process.waitUntilExit()
+        return process.terminationStatus
+    }
+    #expect(try info(source.appendingPathComponent("disk.raw")) == 0)
+    #expect(try info(other.appendingPathComponent("disk.raw")) != 0, "qemu-img read a file outside the import's folders")
 }

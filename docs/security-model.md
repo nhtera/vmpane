@@ -1,7 +1,43 @@
 # Security model
 
-This page covers Windows VMs (QEMU, Phase 05) and the agent policy for control sockets (Phase 10). The guest
-agent and integration features are covered in `agent-protocol.md` and the phase plans.
+What VMPane protects, from whom, and where the limits are. The guest agent's wire format is in
+`agent-protocol.md`; the control sockets' in `control-protocol.md`.
+
+## Assets and actors
+
+Assets: the Mac's files and credentials; each VM's data (disks, saved memory and snapshots, which are plain
+files like the disks); a Windows VM's TPM and UEFI variables; the agent policy and its key.
+
+| actor | trusted? | reaches VMPane through |
+|---|---|---|
+| a guest OS | no: it may own QEMU (Windows) or VMPane's guest agent | QEMU's emulated devices, QMP and SPICE; the agent's vsock or virtio-serial channel; shared folders (virtiofs, or WebDAV for Windows); addresses and file names it reports |
+| an AI agent | bounded by the VM's policy | MCP (`vmpane mcp`), and `vmpane` run without a terminal |
+| the person at the Mac | yes | the app; `vmpane` at a terminal (`operator`, once granted) |
+| other processes of the same user | out of scope | everything the user can; VMPane only detects edits of the policy files |
+| other users of the Mac | no | nothing: VMPane's folder is 0700, sockets 0600, and helpers check the peer's uid |
+| the network | no | only port forwards the person bound to all interfaces |
+
+## Threat: any guest
+
+- **Guest tools channel.** The host decodes the agent's frames with fixed caps (1 MiB JSON frames, bounded
+  streams); a violation closes the channel. A file copied out of a guest goes where the host side named it:
+  `vmpane cp` wherever you say, an agent's `vm_file_pull` only inside `~/VMPane Exchange/<vm>/`. Names the
+  guest chooses (files copied or dragged out of it) go through `HostFileSink`: only under
+  `~/Downloads/VMPane/<vm>/`, checked (`SafeName`), opened with `O_NOFOLLOW` and `O_EXCL` relative to that
+  folder, quarantined, with count and size caps.
+- **Addresses the guest reports** (DHCP leases, agent hints) only nominate: the helper uses an address only when
+  the host's ARP table maps it to the VM's MAC on the VM's bridge, inside the NAT subnet.
+- **Shared folders for Windows** are served by a WebDAV server on 127.0.0.1 behind a random 128-bit path,
+  jailed to the share (`PathJail`: walk with `openat` and `O_NOFOLLOW`), with connection and idle limits.
+- **Clipboard and drag and drop** move data only while the person has the VM window in front (clipboard) or
+  drops on it; files from the guest go through `HostFileSink`.
+- **Imported Parallels VMs** come from elsewhere: their settings are parsed with external entities off and
+  sizes bounded, and `qemu-img` converts the disk under a deny-by-default sandbox
+  (`VMPaneQEMU/Sandbox/qemu-img-import.sb`: read the image's folder, write the new VM's, no network).
+- **File copies named by clients other than the app** (`agent.file.push/pull`, `vm.files.drop`) never touch
+  VMPane's own folder or a VM bundle (the policy key, the kill switch, configs), links resolved.
+- **Control sockets** accept only the same uid, at most 128 connections, 1 MiB lines; a malformed request gets
+  an error, an oversized one closes the connection (`itest/scenarios/security.sh`).
 
 ## Threat: a hostile Windows guest
 
@@ -79,5 +115,8 @@ files, sign binaries or drive the app's UI like the user.
 - **The guest reaches the Mac's loopback services** through slirp's host alias 10.0.2.2 (any service that
   listens on 127.0.0.1, as for every slirp/NAT VM). A later option is slirp's `restrict` mode with only the
   agent's forward.
-- **Integration-test hooks** (`VMPANE_TEST_*` environment variables) exist in release helpers; they are
-  read from the helper's own environment only.
+- **Integration-test hooks** (`VMPANE_TEST_*` environment variables) and `VMPANE_SUPPORT_DIR` work in release
+  builds, because the release tier's integration tests run against the notarized app. They are read from the
+  process's own environment, which only someone with a shell sets. A different `VMPANE_SUPPORT_DIR` has no
+  policy key, so every VM's agent level reads as `off` there. The Windows-install hook reads (and deletes) only
+  a private regular file of the user's.

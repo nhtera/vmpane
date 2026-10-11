@@ -35,8 +35,10 @@ final class HTTPConnection {
     func nextRequest() throws -> Request? {
         try drainBody()
         var end: Int?
+        var scanned = 0  // bytes already searched: each read is searched once
         while end == nil {
-            end = Self.headerEnd(buffer)
+            end = Self.headerEnd(buffer, from: max(0, scanned - 3))
+            scanned = buffer.count
             if end == nil {
                 guard buffer.count < Self.maxHeaderBytes else { throw Failure.tooLarge }
                 guard try fill() else {
@@ -74,8 +76,10 @@ final class HTTPConnection {
             chunkRemaining = 0
             bodyDone = false
         } else {
-            let length = Int(headers["content-length"] ?? "0") ?? -1
-            guard length >= 0 else { throw Failure.malformed }
+            let field = headers["content-length"] ?? "0"
+            guard (1...18).contains(field.count), field.allSatisfy({ $0.isASCII && $0.isNumber }), let length = Int(field) else {
+                throw Failure.malformed
+            }
             bodyRemaining = length
             bodyDone = length == 0
         }
@@ -86,10 +90,7 @@ final class HTTPConnection {
         guard !bodyDone else { return [] }
         if chunked {
             if chunkRemaining == 0 {
-                let line = try readLine()
-                guard let size = Int(line.split(separator: ";")[0].trimmingCharacters(in: .whitespaces), radix: 16) else {
-                    throw Failure.malformed
-                }
+                guard let size = Self.chunkSize(try readLine()) else { throw Failure.malformed }
                 if size == 0 {
                     while try !readLine().isEmpty {}  // trailers
                     bodyDone = true
@@ -112,6 +113,13 @@ final class HTTPConnection {
         return chunk
     }
 
+    /// A chunk-size line's size: 1–15 hex digits (extensions after `;` ignored); nil for anything else.
+    static func chunkSize(_ line: String) -> Int? {
+        let field = (line.split(separator: ";", omittingEmptySubsequences: false).first ?? "").trimmingCharacters(in: .whitespaces)
+        guard (1...15).contains(field.count), field.allSatisfy(\.isHexDigit) else { return nil }
+        return Int(field, radix: 16)
+    }
+
     /// The whole body, refused past `limit` bytes.
     func readWholeBody(limit: Int = 1 << 20) throws -> Data {
         var data = Data()
@@ -129,6 +137,7 @@ final class HTTPConnection {
     }
 
     private func take(_ count: Int) throws -> [UInt8] {
+        guard count > 0 else { return [] }
         if buffer.isEmpty { guard try fill() else { throw Failure.closed } }
         let chunk = Array(buffer.prefix(count))
         buffer.removeFirst(chunk.count)
@@ -159,9 +168,9 @@ final class HTTPConnection {
         }
     }
 
-    private static func headerEnd(_ bytes: [UInt8]) -> Int? {
-        guard bytes.count >= 4 else { return nil }
-        for index in 0...(bytes.count - 4)
+    private static func headerEnd(_ bytes: [UInt8], from start: Int) -> Int? {
+        guard bytes.count >= 4, start <= bytes.count - 4 else { return nil }
+        for index in start...(bytes.count - 4)
         where bytes[index] == 13 && bytes[index + 1] == 10 && bytes[index + 2] == 13 && bytes[index + 3] == 10 {
             return index
         }

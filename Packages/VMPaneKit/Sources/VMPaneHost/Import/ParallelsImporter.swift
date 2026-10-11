@@ -1,5 +1,6 @@
 import Foundation
 import VMPaneCore
+import VMPaneQEMU
 
 /// Makes a VMPane VM from a Parallels `.pvm` (Linux and Windows guests): a new machine (its own id, MAC
 /// addresses, EFI variables and, for Windows, TPM) whose disk is the Parallels boot disk converted to a sparse
@@ -58,15 +59,21 @@ public struct ParallelsImporter: Sendable {
     /// `qemu-img convert -p -f <parallels|raw> -O raw -S 4k`: sparse output, progress on stdout as "(12.34/100%)".
     private func convert(_ disk: ParallelsDisk, to target: URL, progress: @escaping @Sendable (Double) -> Void) async throws {
         let process = Process()
-        process.executableURL = qemuImg
-        process.arguments = [
-            "convert", "-p", "-f", disk.format == .plain ? "raw" : "parallels", "-O", "raw", "-S", "4k", disk.image.path, target.path,
-        ]
-        let output = Pipe()
+        process.executableURL = QEMUSandbox.sandboxExec
+        // The sandbox's rules match resolved paths: qemu-img gets them resolved too (/tmp is a link).
+        let image = URL(fileURLWithPath: try QEMUSandbox.realPath(disk.image))
+        let output = URL(fileURLWithPath: try QEMUSandbox.realPath(target.deletingLastPathComponent())).appendingPathComponent(
+            target.lastPathComponent)
+        process.arguments = try QEMUSandbox.importArguments(
+            qemuImg: qemuImg, source: image, target: output,
+            arguments: [
+                "convert", "-p", "-f", disk.format == .plain ? "raw" : "parallels", "-O", "raw", "-S", "4k", image.path, output.path,
+            ])
+        let progressPipe = Pipe()
         let errors = Pipe()
-        process.standardOutput = output
+        process.standardOutput = progressPipe
         process.standardError = errors
-        output.fileHandleForReading.readabilityHandler = { handle in
+        progressPipe.fileHandleForReading.readabilityHandler = { handle in
             let text = String(bytes: handle.availableData, encoding: .utf8) ?? ""
             if let percent = Self.lastPercent(text) { progress(percent / 100 * 0.99) }
         }
@@ -78,7 +85,7 @@ public struct ParallelsImporter: Sendable {
         } onCancel: {
             process.terminate()
         }
-        output.fileHandleForReading.readabilityHandler = nil
+        progressPipe.fileHandleForReading.readabilityHandler = nil
         try Task.checkCancellation()
         guard status == 0 else {
             let message = String(bytes: errors.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""

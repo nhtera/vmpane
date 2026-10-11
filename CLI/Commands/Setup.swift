@@ -133,6 +133,15 @@ enum Diagnostics {
         }
         system += "== vmpane\n\(VMPane.version)\n"
         try Data(system.utf8).write(to: folder.appendingPathComponent("system.txt"))
+        // MetricKit's crash and hang reports (call stacks, no user data), as the app and helpers kept them.
+        let reports = CLI.paths.root.appendingPathComponent("diagnostics", isDirectory: true)  // CrashReports.folder
+        if let files = try? fm.contentsOfDirectory(at: reports, includingPropertiesForKeys: nil), !files.isEmpty {
+            let target = folder.appendingPathComponent("crash-reports", isDirectory: true)
+            try fm.createDirectory(at: target, withIntermediateDirectories: true)
+            for file in files where file.pathExtension == "json" {
+                try? fm.copyItem(at: file, to: target.appendingPathComponent(file.lastPathComponent))
+            }
+        }
         for item in (try? CLI.library.items()) ?? [] {
             let name = SafeName.component(item.config?.name ?? "") ?? ShortID(item.id).rawValue
             let target = folder.appendingPathComponent("vms/\(name)-\(ShortID(item.id))", isDirectory: true)

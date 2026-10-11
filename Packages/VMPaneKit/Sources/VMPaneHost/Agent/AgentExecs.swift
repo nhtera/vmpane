@@ -33,8 +33,8 @@ actor AgentExecs {
     private var exits: [Key: Exit] = [:]
 
     static let streamNames = AgentConnection.StreamNames(
-        inbound: { [$0["stdout"]?.intValue, $0["stderr"]?.intValue].compactMap { $0.map(UInt32.init) } },
-        outbound: { [$0["stdin"]?.intValue].compactMap { $0.map(UInt32.init) } })
+        inbound: { [$0["stdout"]?.intValue, $0["stderr"]?.intValue].compactMap { $0.flatMap { UInt32(exactly: $0) } } },
+        outbound: { [$0["stdin"]?.intValue].compactMap { $0.flatMap { UInt32(exactly: $0) } } })
 
     /// Starts the process and its output forwarding; returns the exec id.
     func start(_ params: AgentExecStartParams, owner: ControlConnection, on connection: AgentConnection) async throws
@@ -91,7 +91,8 @@ actor AgentExecs {
             let params: JSONValue = [
                 "execId": .int(Int64(execId)), "stream": .string(name), "dataB64": .string(data.base64EncodedString()),
             ]
-            owner.send(.request(RPCRequest(id: nil, method: ControlNotification.execOutput.rawValue, params: params)))
+            // At the client's pace: a fast guest and a slow reader must not pile output up in the helper.
+            await owner.sendWhenWritten(.request(RPCRequest(id: nil, method: ControlNotification.execOutput.rawValue, params: params)))
         }
     }
 

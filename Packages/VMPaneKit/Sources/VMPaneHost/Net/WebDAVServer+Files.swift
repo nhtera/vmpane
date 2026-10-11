@@ -31,15 +31,19 @@ extension WebDAVServer {
         return names.sorted()
     }
 
+    /// How deep a recursive copy or removal goes: each level holds descriptors, and the helper needs its own.
+    static let maxDepth = 64
+
     /// Removes `name` (a file, a link itself, or a folder and everything in it) without following links.
-    static func remove(_ name: String, in directory: Int32) throws {
+    static func remove(_ name: String, in directory: Int32, depth: Int = 0) throws {
+        guard depth < maxDepth else { throw PathJail.Failure.system(ENAMETOOLONG) }
         var info = Darwin.stat()
         guard fstatat(directory, name, &info, AT_SYMLINK_NOFOLLOW) == 0 else { throw PathJail.Failure.system(errno) }
         if info.st_mode & S_IFMT == S_IFDIR {
             let child = openat(directory, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
             guard child >= 0 else { throw PathJail.Failure.system(errno) }
             defer { close(child) }
-            for entry in try entries(child) { try remove(entry, in: child) }
+            for entry in try entries(child) { try remove(entry, in: child, depth: depth + 1) }
             guard unlinkat(directory, name, AT_REMOVEDIR) == 0 else { throw PathJail.Failure.system(errno) }
         } else {
             guard unlinkat(directory, name, 0) == 0 else { throw PathJail.Failure.system(errno) }
@@ -47,7 +51,8 @@ extension WebDAVServer {
     }
 
     /// Copies `name` (file or folder; links are skipped) into `target` as `newName`.
-    static func copy(_ name: String, in source: Int32, to newName: String, in target: Int32) throws {
+    static func copy(_ name: String, in source: Int32, to newName: String, in target: Int32, depth: Int = 0) throws {
+        guard depth < maxDepth else { throw PathJail.Failure.system(ENAMETOOLONG) }
         guard let info = PathJail.info(source, name) else { return }
         if info.st_mode & S_IFMT == S_IFDIR {
             guard mkdirat(target, newName, 0o755) == 0 else { throw PathJail.Failure.system(errno) }
@@ -58,7 +63,7 @@ extension WebDAVServer {
                 close(to)
             }
             guard from >= 0, to >= 0 else { throw PathJail.Failure.system(errno) }
-            for entry in try entries(from) { try copy(entry, in: from, to: entry, in: to) }
+            for entry in try entries(from) { try copy(entry, in: from, to: entry, in: to, depth: depth + 1) }
             return
         }
         let input = openat(source, name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)

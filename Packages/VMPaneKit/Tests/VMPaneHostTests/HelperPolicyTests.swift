@@ -263,3 +263,25 @@ private actor Person {
     #expect(try await agentSnapshots(helper).count == 1)
     await helper.tearDown()
 }
+
+/// Even at admin, a client other than the app cannot copy files into VMPane's own folder or a VM bundle (the
+/// policy key, kill switch, configs), also not through a link.
+@Test func agentsCannotCopyIntoVMPanesOwnFiles() async throws {
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.settings.apply", params: ["patch": ["mcp": ["policy": "admin", "confirmExec": false]]])
+    await helper.controller.setClassifier(strangers)
+    let link = helper.root.appendingPathComponent("innocent")
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: helper.paths.root)
+    let targets = [
+        PolicyKeyFile(paths: helper.paths).url.path, helper.bundle.url.appendingPathComponent("config.json").path,
+        link.appendingPathComponent("killswitch").path, helper.paths.root.appendingPathComponent("new/../policy.key").path,
+    ]
+    for target in targets {
+        await #expect(throws: RPCError.self, "\(target)") {
+            try await helper.client.call("agent.file.pull", params: ["guestPath": "/etc/hostname", "hostPath": .string(target)])
+        }
+    }
+    let refusals = AuditLog(bundle: helper.bundle).recent(limit: 10).filter { $0.reason?.contains("VMPane's own files") == true }
+    #expect(refusals.count == targets.count)
+    await helper.tearDown()
+}

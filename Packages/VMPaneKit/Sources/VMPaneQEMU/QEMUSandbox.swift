@@ -30,7 +30,22 @@ public enum QEMUSandbox {
         ] + arguments
     }
 
-    static func realPath(_ url: URL) throws -> String {
+    /// The `sandbox-exec` arguments that run `qemu-img arguments…` for an import: reading only `source`'s folder,
+    /// writing only `target`'s (`Sandbox/qemu-img-import.sb`).
+    public static func importArguments(qemuImg: URL, source: URL, target: URL, arguments: [String]) throws -> [String] {
+        guard let profile = Bundle.module.url(forResource: "qemu-img-import", withExtension: "sb", subdirectory: "Sandbox") else {
+            throw QEMUConfigError.missingFile("Sandbox/qemu-img-import.sb")
+        }
+        return [
+            "-f", profile.path,
+            "-D", "SOURCE=\(try realPath(source.deletingLastPathComponent()))",
+            "-D", "TARGET=\(try realPath(target.deletingLastPathComponent()))",
+            "-D", "RUNTIME=\(try realPath(qemuImg.deletingLastPathComponent().deletingLastPathComponent()))",
+            qemuImg.path,
+        ] + arguments
+    }
+
+    public static func realPath(_ url: URL) throws -> String {
         guard let resolved = realpath(url.path, nil) else { throw POSIXError.current() }
         defer { free(resolved) }
         return String(cString: resolved)

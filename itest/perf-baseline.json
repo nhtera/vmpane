@@ -1,0 +1,13 @@
+{
+  "Apple M4 Pro": {
+    "appLaunchMs": 870,
+    "linuxBootS": 6.003,
+    "screenshotMs": 22.47,
+    "helperRSSMB": 116,
+    "forwardMbps": 16393,
+    "guestReadRatio": 0.96,
+    "diskSnapshotS": 0.096,
+    "windowsBootS": 21.607,
+    "windowsIdleCPU": 1.3
+  }
+}

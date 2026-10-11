@@ -187,3 +187,52 @@ private let base = "http://vm"
         #expect(status == "200")
     }
 }
+
+/// Bytes straight to the server's socket; the reply until the server closes or 2 s pass.
+private func raw(_ socket: URL, _ bytes: String) throws -> String {
+    let fd = try UnixSocket.make()
+    defer { close(fd) }
+    try UnixSocket.connect(fd, to: UnixSocketAddress(socket))
+    var timeout = timeval(tv_sec: 2, tv_usec: 0)
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+    _ = Array(bytes.utf8).withUnsafeBytes { send(fd, $0.baseAddress, $0.count, 0) }
+    var reply = [UInt8]()
+    var chunk = [UInt8](repeating: 0, count: 4096)
+    while true {
+        let count = recv(fd, &chunk, chunk.count, 0)
+        guard count > 0 else { break }
+        reply += chunk[0..<count]
+    }
+    return String(bytes: reply, encoding: .utf8) ?? ""
+}
+
+/// Broken chunked bodies, with or without the token, end only that connection (the guest reaches this port).
+@Test func malformedChunksDoNotStopTheServer() async throws {
+    let dav = try DAV.start(prefix: "/t0ken")
+    defer { dav.stop() }
+    for size in ["\r\n", "-1\r\n", "+5\r\n", "FFFFFFFFFFFFFFFFF\r\n", "zz\r\n"] {
+        for target in ["/wrong/Projects/x", "/t0ken/Projects/x"] {
+            _ = try raw(dav.socket, "PUT \(target) HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n\(size)abc\r\n0\r\n\r\n")
+        }
+    }
+    let wrong = try raw(dav.socket, "GET /wrong/Projects/ HTTP/1.1\r\nHost: x\r\n\r\nGET /t0ken/Projects/ HTTP/1.1\r\nHost: x\r\n\r\n")
+    #expect(wrong.hasPrefix("HTTP/1.1 404") && wrong.components(separatedBy: "HTTP/1.1").count == 2, "nothing more after a wrong token")
+    #expect(await dav.curl(["-X", "PROPFIND", "-H", "Depth: 0", "http://x/t0ken/Projects/"]).status == 207)
+    #expect(HTTPConnection.chunkSize("1a;name=v") == 26 && HTTPConnection.chunkSize("") == nil && HTTPConnection.chunkSize("-1") == nil)
+}
+
+/// A folder is never copied into itself (that recursion would use up the helper's descriptors); renaming only
+/// the case of a name keeps the file.
+@Test func copiesIntoThemselvesAreRefusedAndCaseRenamesWork() async throws {
+    let dav = try DAV.start()
+    defer { dav.stop() }
+    let base = "http://x"
+    #expect(await dav.curl(["-X", "MKCOL", "\(base)/Projects/a"]).status == 201)
+    #expect(await dav.curl(["-X", "COPY", "-H", "Destination: \(base)/Projects/a/b", "\(base)/Projects/a"]).status == 403)
+    #expect(await dav.curl(["-X", "COPY", "-H", "Destination: \(base)/Projects/A/b", "\(base)/Projects/a"]).status == 403)
+    #expect(await dav.curl(["-X", "COPY", "-H", "Destination: \(base)/Projects/a", "\(base)/Projects/a"]).status == 403)
+    _ = await dav.curl(["-T", "-", "\(base)/Projects/a/note.txt"], input: Data("hi".utf8))
+    #expect(await dav.curl(["-X", "MOVE", "-H", "Destination: \(base)/Projects/a/NOTE.txt", "\(base)/Projects/a/note.txt"]).status < 300)
+    let names = try FileManager.default.contentsOfDirectory(atPath: dav.root.appendingPathComponent("Projects/a").path)
+    #expect(names == ["NOTE.txt"])
+}

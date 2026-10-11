@@ -226,7 +226,7 @@ extension HelperController {
         let overwrite = files.overwrite ?? false
         var info = stat()
         if !overwrite, lstat(url.path, &info) == 0 { throw RPCError(.invalidParams, "\(url.path) exists (pass overwrite: true)") }
-        let names = AgentConnection.StreamNames(inbound: { [$0["stream"]?.intValue].compactMap { $0.map(UInt32.init) } })
+        let names = AgentConnection.StreamNames(inbound: { [$0["stream"]?.intValue].compactMap { $0.flatMap { UInt32(exactly: $0) } } })
         let call = try await connection.call(
             AgentMethod.filePull, RPCParams.encode(AgentFilePullParams(path: files.guestPath, maxBytes: 1 << 40)).get(),
             timeout: .seconds(30), streams: names)
@@ -266,7 +266,7 @@ extension HelperController {
 
     /// Copies guest file `path` into `handle` (a file `sink` made), counting its size against the sink's budget.
     static func pull(_ path: String, into handle: FileHandle, sink: HostFileSink, on connection: AgentConnection) async throws {
-        let names = AgentConnection.StreamNames(inbound: { [$0["stream"]?.intValue].compactMap { $0.map(UInt32.init) } })
+        let names = AgentConnection.StreamNames(inbound: { [$0["stream"]?.intValue].compactMap { $0.flatMap { UInt32(exactly: $0) } } })
         let call = try await connection.call(
             AgentMethod.filePull, RPCParams.encode(AgentFilePullParams(path: path, maxBytes: UInt64(HostFileSink.defaultMaxBytes))).get(),
             timeout: .seconds(30), streams: names)

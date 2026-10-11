@@ -58,6 +58,8 @@ public final class WebDAVServer: @unchecked Sendable {
                 setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &enabled, socklen_t(MemoryLayout<Int32>.size))
                 var idle = timeval(tv_sec: 300, tv_usec: 0)  // a silent client lets its thread go after 5 minutes
                 setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &idle, socklen_t(MemoryLayout<timeval>.size))
+                var stuck = timeval(tv_sec: 30, tv_usec: 0)  // a client that stops reading is dropped
+                setsockopt(client, SOL_SOCKET, SO_SNDTIMEO, &stuck, socklen_t(MemoryLayout<timeval>.size))
                 let connection = Thread { [self] in
                     serve(client)
                     close(client)
@@ -86,6 +88,11 @@ public final class WebDAVServer: @unchecked Sendable {
         let connection = HTTPConnection(fd: fd)
         do {
             while let request = try connection.nextRequest() {
+                // Without the token nothing else is read from this client (not even the rest of its body).
+                guard hasToken(request.target) else {
+                    try connection.respond(404, "Not Found", headers: [("Connection", "close")])
+                    return
+                }
                 try handle(request, on: connection)
                 if !request.keepAlive { return }
             }
@@ -275,5 +282,21 @@ public final class WebDAVServer: @unchecked Sendable {
         defer { close(directory) }
         guard mkdirat(directory, name, 0o755) == 0 else { throw errno == EEXIST ? Status.notAllowed : PathJail.Failure.system(errno) }
         try connection.respond(201, "Created")
+    }
+}
+
+extension WebDAVServer {
+    /// Whether `target` starts with the token prefix (compared in constant time), as an absolute path or URL.
+    func hasToken(_ target: String) -> Bool {
+        guard !prefix.isEmpty else { return true }
+        var path = Substring(target)
+        if let schemeEnd = path.range(of: "://"), let slash = path[schemeEnd.upperBound...].firstIndex(of: "/") { path = path[slash...] }
+        let given = Array(path.utf8.prefix(prefix.utf8.count + 1))
+        let wanted = Array(prefix.utf8)
+        guard given.count >= wanted.count else { return false }
+        var difference: UInt8 = 0
+        for (a, b) in zip(given, wanted) { difference |= a ^ b }
+        let boundary = given.count == wanted.count || given[wanted.count] == UInt8(ascii: "/") || given[wanted.count] == UInt8(ascii: "?")
+        return difference == 0 && boundary
     }
 }

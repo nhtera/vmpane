@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import Observation
 import VMPaneControl
 import VMPaneCore
@@ -43,6 +44,7 @@ public final class LibraryStore {
     @ObservationIgnored private let links: LiveVMLink
     @ObservationIgnored private let launch: @Sendable (VMBundle, Bool) async throws -> Void
     @ObservationIgnored private var watches: [UUID: Task<Void, Never>] = [:]
+    @ObservationIgnored private var listedOnce = false
     @ObservationIgnored private var watchTokens: [UUID: UUID] = [:]
 
     /// `launch(bundle, headless)` starts a VM's helper (the app's supervisor, via the runtime copy).
@@ -122,6 +124,17 @@ public final class LibraryStore {
         await perform(.start(headless: false), on: id)
     }
 
+    /// Milliseconds since this process started.
+    static func sinceLaunchMs() -> Int {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.size
+        var name: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
+        guard sysctl(&name, 4, &info, &size, nil, 0) == 0 else { return -1 }
+        let start = info.kp_proc.p_un.__p_starttime
+        let started = Double(start.tv_sec) + Double(start.tv_usec) / 1e6
+        return Int((Date().timeIntervalSince1970 - started) * 1000)
+    }
+
     /// Re-reads the library (bundles added, moved or removed), attaches to helpers that started since, and
     /// measures disk usage in the background.
     public func reload() async {
@@ -134,6 +147,12 @@ public final class LibraryStore {
             return
         }
         let known = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
+        if !listedOnce {
+            listedOnce = true
+            // The perf itest reads the app's launch time here.
+            Logger(subsystem: VMPane.SigningIdentifier.app, category: "library").notice(
+                "library listed \(items.count, privacy: .public) VMs \(Self.sinceLaunchMs(), privacy: .public) ms after launch")
+        }
         rows = items.map { item in
             Row(
                 id: item.id, name: item.config?.name ?? item.bundle.url.deletingPathExtension().lastPathComponent,

@@ -86,6 +86,9 @@ for name in "${scenarios[@]}"; do
     [[ -f "$file" ]] || { echo "error: no scenario $file" >&2; exit 2; }
     start=$(date +%s)
     helpers_before=$(pgrep -f 'VMPaneVM.app/Contents/MacOS/VMPaneVM' | sort || true)
+    # A scenario may record measurements here (a JSON object); they go into its result.
+    export IT_METRICS_FILE="$PWD/itest/results/.metrics-$name.json"
+    rm -f "$IT_METRICS_FILE"
     set +e
     (
         set -euo pipefail
@@ -112,6 +115,10 @@ for name in "${scenarios[@]}"; do
         --arg result "$result" --argjson duration "$duration" --arg build "$macos_build" --arg chip "$chip" \
         '{artifactSha256: $sha, gitSha: $git, dirty: $dirty, scenario: $scenario, result: $result,
           durationS: $duration, macOSBuild: $build, chip: $chip}' >"$out"
+    if [[ -s $IT_METRICS_FILE ]]; then
+        jq --slurpfile m "$IT_METRICS_FILE" '. + {metrics: $m[0]}' "$out" >"$out.tmp" && mv "$out.tmp" "$out"
+    fi
+    rm -f "$IT_METRICS_FILE"
     echo "itest $name: $result (${duration}s) -> $out"
 done
 if ((failed)); then exit 1; fi

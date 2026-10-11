@@ -5,7 +5,8 @@ import VMPaneCore
 /// JSON-RPC server on a Unix socket (the helper's `run/<sid>.sock`).
 ///
 /// - The socket is created 0600 inside a 0700 directory.
-/// - Every accepted peer must have our uid (`LOCAL_PEERCRED`); others are closed at once.
+/// - Every accepted peer must have our uid (`LOCAL_PEERCRED`); others, and any beyond `maxConnections`, are
+///   closed at once.
 /// - Requests run concurrently; responses carry the request id. Notifications get no response.
 public final class UDSServer: @unchecked Sendable {
     /// Handles one request. The result is sent back unless the request was a notification.
@@ -14,6 +15,8 @@ public final class UDSServer: @unchecked Sendable {
     public let socketURL: URL
     /// A client that does not read for this long is disconnected.
     static let sendTimeoutSeconds = 10
+    /// Connections beyond this are closed at once, so a flood cannot use up the descriptors the VM needs.
+    static let maxConnections = 128
     private let handler: Handler
     private let queue = DispatchQueue(label: "app.vmpane.control.server")
     private var listenFD: Int32 = -1
@@ -89,7 +92,7 @@ public final class UDSServer: @unchecked Sendable {
             setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &enabled, socklen_t(MemoryLayout<Int32>.size))
             var timeout = timeval(tv_sec: Self.sendTimeoutSeconds, tv_usec: 0)
             setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
-            guard let peer = try? PeerCredentials.of(socket: fd), peer.uid == geteuid() else {
+            guard connections.count < Self.maxConnections, let peer = try? PeerCredentials.of(socket: fd), peer.uid == geteuid() else {
                 close(fd)
                 continue
             }

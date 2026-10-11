@@ -24,13 +24,16 @@ public final class AgentInbound: @unchecked Sendable {
 
     init(id: UInt32) { self.id = id }
 
-    /// Nobody will read this stream: drop its data as it arrives.
+    /// Nobody will read this stream: drop its data as it arrives (and let a paused connection read again).
     public func discard() {
-        lock.withLock {
+        let waiter = lock.withLock { () -> CheckedContinuation<Void, Never>? in
             discarding = true
             chunks.removeAll()
             buffered = 0
+            defer { roomWaiter = nil }
+            return roomWaiter
         }
+        waiter?.resume()
     }
 
     /// Adds data; true when the buffer is above the high-water mark (wait with `waitForRoom`).
@@ -115,9 +118,14 @@ public final class AgentInbound: @unchecked Sendable {
     /// Everything up to the end of the stream; throws `tooLarge`-style errors past `limit` bytes.
     public func collect(limit: Int) async throws -> Data {
         var all = Data()
-        while let data = try await next() {
-            all.append(data)
-            guard all.count <= limit else { throw Failure.ended(.cancelled) }
+        do {
+            while let data = try await next() {
+                all.append(data)
+                guard all.count <= limit else { throw Failure.ended(.cancelled) }
+            }
+        } catch {
+            discard()  // the rest must not hold the connection up
+            throw error
         }
         return all
     }

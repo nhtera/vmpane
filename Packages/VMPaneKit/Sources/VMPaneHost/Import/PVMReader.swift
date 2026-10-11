@@ -156,6 +156,8 @@ public struct ParallelsDisk: Sendable, Equatable {
         }
         guard FileManager.default.fileExists(atPath: url.path) else { throw PVMImportError.missingImage(url.lastPathComponent) }
         let sectors = root.child("Disk_Parameters")?.child("Disk_size").flatMap { UInt64($0.value) } ?? 0
+        // At most 64 TiB (the file is the guest's or the person's, not ours: no overflowing arithmetic on it).
+        guard sectors <= (64 << 40) / 512 else { throw PVMImportError.unreadable("the disk's size (\(sectors) sectors) is not plausible") }
         return ParallelsDisk(
             image: url, format: Format(rawValue: image.child("Type")?.value ?? "") ?? .expanding, sizeBytes: sectors * 512)
     }

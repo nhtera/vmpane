@@ -1,5 +1,6 @@
 import SwiftUI
 import VMPaneCore
+import VMPaneHost
 import VMPaneUI
 
 /// VMPane main app: the VM library (wizard, onboarding and preferences follow in Phase 08's later steps).
@@ -39,7 +40,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     lazy var killSwitch = AgentKillSwitch(paths: supervisor.paths)
 
+    lazy var crashReports = CrashReports(paths: supervisor.paths, process: "app")
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        crashReports.start()
         supervisor.start()
         killSwitch.registerHotKey()
     }

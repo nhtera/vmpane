@@ -46,10 +46,11 @@ enum AgentClipboard {
     static func get(_ connection: AgentConnection, types: [AgentClipboardType]) async throws -> ClipboardContent {
         let names = AgentConnection.StreamNames(inbound: { result in
             guard case .array(let items)? = result["items"] else { return [] }
-            return items.compactMap { $0["stream"]?.intValue.map(UInt32.init) }
+            return items.compactMap { $0["stream"]?.intValue.flatMap { UInt32(exactly: $0) } }
         })
         let call = try await connection.call(
             AgentMethod.clipboardGet, RPCParams.encode(AgentClipboardGetParams(types: types)).get(), timeout: .seconds(30), streams: names)
+        defer { for stream in call.inbound.values { stream.discard() } }  // any the guest named but we do not read
         let items = try RPCParams.decode(AgentClipboardContents.self, from: call.result).get().items
         var content = ClipboardContent()
         for item in items {
@@ -106,6 +107,9 @@ public actor ClipboardBridge {
     private var connection: AgentConnection?
     private var seenChangeCount: Int?
     private var lastApplied: Data?
+    /// Files from the guest's clipboard share one budget per hour (`HostFileSink`'s caps), so a guest that keeps
+    /// changing its clipboard cannot fill the Mac's disk.
+    private var fileBudget: (sink: HostFileSink, since: ContinuousClock.Instant)?
     private var guestChangedWhileAway = false
     private var poller: Task<Void, Never>?
     /// Bumped by every focus change: work started under an older focus does not start a poller.
@@ -217,7 +221,10 @@ public actor ClipboardBridge {
 
     /// Copies the guest's files into the VM's downloads folder; returns their host paths.
     private func pullFiles(_ paths: [String], on connection: AgentConnection) async throws -> [String] {
-        let sink = HostFileSink(root: downloads)
+        if fileBudget.map({ ContinuousClock.now - $0.since > .seconds(3600) }) ?? true {
+            fileBudget = (HostFileSink(root: downloads), .now)
+        }
+        guard let sink = fileBudget?.sink else { return [] }
         var pulled: [String] = []
         for path in paths {
             let name = path.split(whereSeparator: { $0 == "/" || $0 == "\\" }).last.map(String.init) ?? path

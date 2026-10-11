@@ -77,6 +77,10 @@ public final class QMPClient: @unchecked Sendable {
                 Darwin.close(fd)
                 throw error
             }
+            // A QEMU that stops reading (perhaps the guest's now) must not block the helper's commands, `quit`
+            // included: a write that waits this long fails and closes the connection.
+            var stuck = timeval(tv_sec: 10, tv_usec: 0)
+            setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &stuck, socklen_t(MemoryLayout<timeval>.size))
             let client = QMPClient(fd: fd)
             client.start()
             do {
