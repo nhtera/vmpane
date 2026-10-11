@@ -14,6 +14,14 @@ public final class SettingsModel {
     public private(set) var reasons: [String: String] = [:]
     public private(set) var applying = false
     public var lastError: String?
+    /// Each saved port forward's state (`vm.ports.list`), by rule id.
+    public private(set) var portStatuses: [String: PortStatus] = [:]
+
+    public struct PortStatus: Equatable, Sendable {
+        /// listening, blocked, failed or inactive.
+        public let state: String
+        public let reason: String?
+    }
 
     @ObservationIgnored private let channel: HelperChannel
 
@@ -44,6 +52,19 @@ public final class SettingsModel {
     /// Some saved change waits for the next start.
     public var needsRestart: Bool { outcomes.values.contains(.nextBoot) }
 
+    /// Reads the forwards' states from the helper.
+    public func refreshPorts() async {
+        guard let result = try? await channel.call(ControlMethod.vmPortsList.rawValue, params: nil, timeout: .seconds(10)),
+            case .array(let rules)? = result["rules"]
+        else { return }
+        var statuses: [String: PortStatus] = [:]
+        for rule in rules {
+            guard let id = rule["id"]?.stringValue, let state = rule["status"]?.stringValue else { continue }
+            statuses[id] = PortStatus(state: state, reason: rule["reason"]?.stringValue)
+        }
+        portStatuses = statuses
+    }
+
     public func revert() {
         draft = original
     }
@@ -69,6 +90,7 @@ public final class SettingsModel {
             let accepted = try CanonicalJSON.decoder().decode(VMConfigV1.self, from: CanonicalJSON.encoder().encode(baseline))
             original = accepted
             draft = accepted
+            if outcomes.keys.contains(where: { $0.hasPrefix("portForwards") }) { await refreshPorts() }
         } catch let error as RPCError {
             lastError = error.message
         } catch {

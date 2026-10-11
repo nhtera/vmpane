@@ -151,3 +151,20 @@ private func eventually(_ condition: @MainActor () -> Bool) async -> Bool {
     #expect(linux != (try pixels(DockIcon.image(os: .linux, state: .paused))))
     #expect(DockIcon.badge(.paused) == "Paused" && DockIcon.badge(.running) == nil)
 }
+
+@Test @MainActor func portStatusesComeFromTheHelper() async throws {
+    let channel = FakeChannel()
+    let config = VMConfigV1(VMConfigFields.new(name: "VM", os: .linux, macAddress: MachineIdentity.randomMACAddress()))
+    let model = SettingsModel(config: config, channel: channel)
+    channel.answer(
+        "vm.ports.list",
+        .success([
+            "rules": [
+                ["id": "web", "status": "listening"],
+                ["id": "dns", "status": "failed", "reason": "bind: Address already in use"],
+            ]
+        ]))
+    await model.refreshPorts()
+    #expect(model.portStatuses["web"] == SettingsModel.PortStatus(state: "listening", reason: nil))
+    #expect(model.portStatuses["dns"]?.reason == "bind: Address already in use")
+}

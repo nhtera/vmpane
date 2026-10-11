@@ -58,6 +58,11 @@ public struct SettingsSheet: View {
                     row("audio.input") { Toggle("Microphone", isOn: $model.draft.audio.input) }
                     row("shares") { SharedFoldersEditor(shares: $model.draft.shares) }
                 }
+                if model.draft.network.contains(where: { $0.mode == .nat }) {
+                    Section("Port Forwarding") {
+                        row("portForwards") { PortForwardsEditor(rules: $model.draft.portForwards, statuses: model.portStatuses) }
+                    }
+                }
                 if !model.draft.network.isEmpty {
                     Section("Network") {
                         row("network.0.mode") {
@@ -89,6 +94,7 @@ public struct SettingsSheet: View {
             .padding()
         }
         .frame(width: 520, height: 600)
+        .task { await model.refreshPorts() }
         .alert("Settings not saved", isPresented: errorShown) {
             Button("OK", role: .cancel) {}
         } message: {
