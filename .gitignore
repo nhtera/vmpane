@@ -27,3 +27,7 @@ agent/target/
 
 # Per-developer agent memory
 .claude/agent-memory/
+agent/fuzz/target/
+agent/fuzz/corpus/
+agent/fuzz/artifacts/
+agent/fuzz/coverage/

@@ -1,0 +1,32 @@
+# cargo-fuzz targets for the agent protocol decoders (nightly only; not part of the agent workspace).
+#   cargo +nightly fuzz run frame_decode -- -max_total_time=300   (or scripts/fuzz.sh)
+[package]
+name = "vmpane-agent-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4.10"
+bytes = "1.12.1"
+vmpane-agent-proto = { path = "../crates/vmpane-agent-proto" }
+
+[[bin]]
+name = "frame_decode"
+path = "fuzz_targets/frame_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "jsonrpc_parse"
+path = "fuzz_targets/jsonrpc_parse.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
