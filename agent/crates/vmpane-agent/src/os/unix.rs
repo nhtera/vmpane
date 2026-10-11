@@ -73,6 +73,15 @@ pub fn open_serial(path: &Path) -> std::io::Result<std::fs::File> {
         .open(path)
 }
 
+/// The daemon's socket for user-session helpers.
+pub fn session_socket() -> std::path::PathBuf {
+    std::path::PathBuf::from(if cfg!(target_os = "macos") {
+        "/var/run/vmpane-agent.sock"
+    } else {
+        "/run/vmpane-agent.sock"
+    })
+}
+
 /// Interfaces with their MAC and IP addresses (loopback left out).
 pub fn interfaces() -> std::io::Result<Vec<NetInterface>> {
     let mut by_name: BTreeMap<String, NetInterface> = BTreeMap::new();

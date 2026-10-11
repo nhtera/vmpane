@@ -21,31 +21,65 @@ use vmpane_agent_proto::methods::{
     Empty, ExecExited, ExecSignalParams, ExecStartParams, ExecStartResult, RunAs, Signal, method,
 };
 
+use crate::agent::Role;
 use crate::connection::{Conn, Incoming, OutStream, Reply};
 use crate::dispatch::io_error;
+use crate::session_link::{SessionLink, StreamNames, relay_params};
 
 /// Output read per chunk.
 const READ_SIZE: usize = 64 << 10;
 /// After the process exits, how long its output streams may stay open (background children holding them).
 const OUTPUT_GRACE: Duration = Duration::from_secs(5);
 
-/// Running processes of one connection: exec id → process (group) id.
+/// A running exec: a local process (group), or one the user-session helper runs for us.
+#[derive(Clone)]
+enum Running {
+    Local(u32),
+    Session {
+        link: Arc<SessionLink>,
+        exec_id: u32,
+    },
+}
+
+impl Running {
+    fn signal(&self, signal: Signal) {
+        match self {
+            Running::Local(pid) => crate::os::signal_tree(*pid, signal),
+            Running::Session { link, exec_id } => {
+                let (link, params) = (
+                    Arc::clone(link),
+                    ExecSignalParams {
+                        exec_id: *exec_id,
+                        signal,
+                    },
+                );
+                tokio::spawn(async move {
+                    let _ = link
+                        .call(method::EXEC_SIGNAL, relay_params(&params), |_| Vec::new())
+                        .await;
+                });
+            }
+        }
+    }
+}
+
+/// Running execs of one connection, by exec id.
 #[derive(Default)]
 pub struct Registry {
-    running: Mutex<HashMap<u32, u32>>,
+    running: Mutex<HashMap<u32, Running>>,
     next: AtomicU32,
 }
 
 impl Registry {
-    fn map(&self) -> std::sync::MutexGuard<'_, HashMap<u32, u32>> {
+    fn map(&self) -> std::sync::MutexGuard<'_, HashMap<u32, Running>> {
         self.running
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    fn add(&self, pid: u32) -> u32 {
+    fn add(&self, running: Running) -> u32 {
         let id = self.next.fetch_add(1, Ordering::Relaxed) + 1;
-        self.map().insert(id, pid);
+        self.map().insert(id, running);
         id
     }
 
@@ -55,8 +89,8 @@ impl Registry {
 
     /// Kills every process still running (the connection ended).
     pub fn kill_all(&self) {
-        for (_, pid) in self.map().drain() {
-            crate::os::signal_tree(pid, Signal::Kill);
+        for (_, running) in self.map().drain() {
+            running.signal(Signal::Kill);
         }
     }
 }
@@ -93,11 +127,9 @@ fn command(params: &ExecStartParams) -> Result<Command, ErrorObject> {
 }
 
 pub async fn start(conn: &Arc<Conn>, params: ExecStartParams) -> Result<Reply, ErrorObject> {
-    if params.run_as == RunAs::User {
-        return Err(ErrorObject::new(
-            ErrorCode::NoSession,
-            "no user session helper is connected",
-        ));
+    // The daemon relays `as: "user"` to the session helper; the helper runs everything as its own user.
+    if params.run_as == RunAs::User && conn.agent.role == Role::Daemon {
+        return start_in_session(conn, params).await;
     }
     let mut child = command(&params)?
         .spawn()
@@ -120,7 +152,7 @@ pub async fn start(conn: &Arc<Conn>, params: ExecStartParams) -> Result<Reply, E
             return Err(err);
         }
     };
-    let exec_id = conn.execs.add(pid);
+    let exec_id = conn.execs.add(Running::Local(pid));
     let result = ExecStartResult {
         exec_id,
         stdout: stdout.id,
@@ -258,13 +290,136 @@ async fn feed(mut rx: mpsc::Receiver<Incoming>, mut pipe: ChildStdin) {
 }
 
 pub fn signal(conn: &Conn, params: ExecSignalParams) -> Result<Reply, ErrorObject> {
-    let pid = conn.execs.map().get(&params.exec_id).copied();
-    let pid = pid.ok_or_else(|| {
+    let running = conn.execs.map().get(&params.exec_id).cloned();
+    let running = running.ok_or_else(|| {
         ErrorObject::new(
             ErrorCode::NotFound,
             format!("no running exec {}", params.exec_id),
         )
     })?;
-    crate::os::signal_tree(pid, params.signal);
+    running.signal(params.signal);
     Reply::ok(&Empty {})
+}
+
+/// `exec.start {as: "user"}` on the daemon: started by the session helper, whose output and exit are relayed to
+/// the host under the daemon's own exec and stream ids.
+async fn start_in_session(conn: &Arc<Conn>, params: ExecStartParams) -> Result<Reply, ErrorObject> {
+    let link = conn.agent.session.current().ok_or_else(|| {
+        ErrorObject::new(ErrorCode::NoSession, "no user session helper is connected")
+    })?;
+    let names: StreamNames = |v| {
+        [&v["stdout"], &v["stderr"]]
+            .iter()
+            .filter_map(|id| id.as_u64())
+            .filter_map(|id| u32::try_from(id).ok())
+            .collect()
+    };
+    let (value, mut helper_streams) = link
+        .call(method::EXEC_START, relay_params(&params), names)
+        .await?;
+    let started: ExecStartResult = serde_json::from_value(value).map_err(|err| {
+        ErrorObject::new(
+            ErrorCode::InternalError,
+            format!("bad helper result: {err}"),
+        )
+    })?;
+    let helper = Running::Session {
+        link: Arc::clone(&link),
+        exec_id: started.exec_id,
+    };
+    let streams = (|| {
+        let stdout = conn.open_outbound()?;
+        let stderr = conn.open_outbound()?;
+        let stdin = if params.stdin {
+            Some(conn.open_inbound()?)
+        } else {
+            None
+        };
+        Ok::<_, ErrorObject>((stdout, stderr, stdin))
+    })();
+    let (stdout, stderr, stdin) = match streams {
+        Ok(streams) => streams,
+        Err(err) => {
+            helper.signal(Signal::Kill);
+            return Err(err);
+        }
+    };
+    let exec_id = conn.execs.add(helper);
+    let result = ExecStartResult {
+        exec_id,
+        stdout: stdout.id,
+        stderr: stderr.id,
+        stdin: stdin.as_ref().map(|(id, _)| *id),
+    };
+    let (helper_out, helper_err) = (
+        helper_streams.remove(&started.stdout),
+        helper_streams.remove(&started.stderr),
+    );
+    let conn = Arc::clone(conn);
+    Reply::then(&result, async move {
+        let feed = stdin.zip(started.stdin).map(|((id, rx), helper_stdin)| {
+            let (conn, link) = (Arc::clone(&conn), Arc::clone(&link));
+            tokio::spawn(async move {
+                relay_stdin(rx, &link, helper_stdin).await;
+                conn.close_inbound(id);
+            })
+        });
+        let (_, _, exited) = tokio::join!(
+            relay_output(helper_out, stdout),
+            relay_output(helper_err, stderr),
+            link.exited(started.exec_id)
+        );
+        if let Some(feed) = feed {
+            feed.abort();
+        }
+        conn.execs.remove(exec_id);
+        let notice = match exited {
+            Some(exited) => ExecExited { exec_id, ..exited },
+            None => ExecExited {
+                exec_id,
+                code: None,
+                signal: Some("disconnected".into()),
+                timed_out: false,
+            },
+        };
+        let _ = conn.out.notify(method::EXEC_EXITED, &notice).await;
+    })
+}
+
+/// Copies a helper stream onto a host stream, ending it the way the helper ended its own.
+async fn relay_output(helper: Option<mpsc::Receiver<Incoming>>, out: OutStream) {
+    let Some(mut helper) = helper else {
+        let _ = out.finish(StreamStatus::Error).await;
+        return;
+    };
+    while let Some(item) = helper.recv().await {
+        match item {
+            Incoming::Data(data) => {
+                if out.send(data).await.is_err() {
+                    return;
+                }
+            }
+            Incoming::End(status) => {
+                let _ = out.finish(status).await;
+                return;
+            }
+        }
+    }
+    let _ = out.finish(StreamStatus::Error).await; // the helper went away
+}
+
+async fn relay_stdin(mut host: mpsc::Receiver<Incoming>, link: &SessionLink, helper_stdin: u32) {
+    while let Some(item) = host.recv().await {
+        match item {
+            Incoming::Data(data) => {
+                if !link.send(helper_stdin, data).await {
+                    return;
+                }
+            }
+            Incoming::End(status) => {
+                link.end(helper_stdin, status).await;
+                return;
+            }
+        }
+    }
 }

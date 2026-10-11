@@ -621,13 +621,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "vmpane-session"
-version = "0.1.0"
-dependencies = [
- "vmpane-agent-proto",
-]
-
-[[package]]
 name = "vsock"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -89,6 +89,14 @@ pub fn open_serial(path: &Path) -> std::io::Result<std::fs::File> {
         .open(path)
 }
 
+/// Selects `path` in Explorer.
+pub fn reveal(path: &Path) -> std::io::Result<()> {
+    std::process::Command::new("explorer.exe")
+        .raw_arg(format!("/select,\"{}\"", path.display()))
+        .spawn()?;
+    Ok(())
+}
+
 pub fn set_clock(when: SystemTime) -> std::io::Result<()> {
     // FILETIME counts 100 ns intervals since 1601-01-01.
     const EPOCH_DIFF_100NS: u64 = 116_444_736_000_000_000;

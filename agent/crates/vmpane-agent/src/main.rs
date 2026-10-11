@@ -1,8 +1,12 @@
-//! VMPane guest agent: a system daemon (root / LocalSystem) that dials the host and serves its requests.
+//! VMPane guest agent: a system daemon (root / LocalSystem) that dials the host and serves its requests, and,
+//! as `vmpane-agent session`, the helper in each user session that runs what must run as that user.
 //!
-//! Usage: vmpane-agent [--connect <spec>]... [--token-file <path>] [--once] [--verbose] [--version]
+//! Usage: vmpane-agent [--connect <spec>]... [--token-file <path>] [--session-socket <path>] [--once]
+//!                     [--verbose] [--version]
+//!        vmpane-agent session [--socket <path>] [--once] [--verbose]
 //!   spec: auto (default) | vsock[:cid:port] | serial[:path] | tcp:host:port | unix:path
 //!   --once: exit when the first connection ends (tests)
+//!   --session-uid <uid>: accept session helpers of this uid instead of the console user's (tests)
 #![deny(unsafe_code)]
 
 mod agent;
@@ -16,6 +20,7 @@ mod netinfo;
 mod os;
 mod ports;
 mod power;
+mod session_link;
 mod timesync;
 mod transport;
 
@@ -26,7 +31,7 @@ use std::time::{Duration, Instant};
 
 use vmpane_agent_proto::error::ErrorCode;
 
-use crate::agent::Agent;
+use crate::agent::{Agent, Role};
 use crate::connection::ConnError;
 use crate::transport::Endpoint;
 
@@ -38,8 +43,11 @@ const STABLE_CONNECTION: Duration = Duration::from_secs(10);
 const REFUSED_DELAY: Duration = Duration::from_secs(300);
 
 struct Args {
+    role: Role,
     specs: Vec<String>,
     token_file: PathBuf,
+    session_socket: PathBuf,
+    session_uid: Option<u32>,
     once: bool,
     verbose: bool,
 }
@@ -54,16 +62,41 @@ fn default_token_file() -> PathBuf {
     })
 }
 
+fn default_session_socket() -> PathBuf {
+    #[cfg(unix)]
+    {
+        os::session_socket()
+    }
+    #[cfg(not(unix))]
+    {
+        PathBuf::from(r"\\.\pipe\vmpane-agent")
+    }
+}
+
 fn parse_args() -> Result<Option<Args>, String> {
     let mut args = Args {
+        role: Role::Daemon,
         specs: Vec::new(),
         token_file: default_token_file(),
+        session_socket: default_session_socket(),
+        session_uid: None,
         once: false,
         verbose: false,
     };
-    let mut it = std::env::args().skip(1);
+    let mut it = std::env::args().skip(1).peekable();
+    if it.peek().map(String::as_str) == Some("session") {
+        it.next();
+        args.role = Role::Session;
+    }
     while let Some(flag) = it.next() {
         match flag.as_str() {
+            "--session-socket" | "--socket" => {
+                args.session_socket = it.next().ok_or("--socket needs a path")?.into()
+            }
+            "--session-uid" => {
+                let uid = it.next().ok_or("--session-uid needs a uid")?;
+                args.session_uid = Some(uid.parse().map_err(|_| "--session-uid needs a number")?);
+            }
             "--connect" => args.specs.push(it.next().ok_or("--connect needs a spec")?),
             "--token-file" => {
                 args.token_file = it.next().ok_or("--token-file needs a path")?.into()
@@ -109,7 +142,12 @@ fn main() -> ExitCode {
         }
     };
     runtime.block_on(async {
-        let agent = Arc::new(Agent::new());
+        let agent = Arc::new(Agent::new(args.role));
+        #[cfg(unix)]
+        if args.role == Role::Daemon {
+            let hub = Arc::clone(&agent.session);
+            tokio::spawn(hub.listen(args.session_socket.clone(), args.session_uid));
+        }
         tokio::select! {
             code = serve(Arc::clone(&agent), args) => code,
             () = stop_signal() => {
@@ -144,22 +182,23 @@ async fn stop_signal() {
 }
 
 async fn serve(agent: Arc<Agent>, args: Args) -> ExitCode {
-    let endpoints: Vec<Endpoint> =
-        if args.specs.is_empty() || args.specs.iter().any(|s| s == "auto") {
-            Endpoint::auto(&args.token_file)
-        } else {
-            let mut list = Vec::new();
-            for spec in &args.specs {
-                match Endpoint::parse(spec, &args.token_file) {
-                    Some(endpoint) => list.push(endpoint),
-                    None => {
-                        tracing::error!(spec, "bad --connect spec");
-                        return ExitCode::from(2);
-                    }
+    let endpoints: Vec<Endpoint> = if args.role == Role::Session {
+        vec![Endpoint::Unix(args.session_socket.clone())]
+    } else if args.specs.is_empty() || args.specs.iter().any(|s| s == "auto") {
+        Endpoint::auto(&args.token_file)
+    } else {
+        let mut list = Vec::new();
+        for spec in &args.specs {
+            match Endpoint::parse(spec, &args.token_file) {
+                Some(endpoint) => list.push(endpoint),
+                None => {
+                    tracing::error!(spec, "bad --connect spec");
+                    return ExitCode::from(2);
                 }
             }
-            list
-        };
+        }
+        list
+    };
     tracing::info!(version = env!("CARGO_PKG_VERSION"), endpoints = ?endpoints.iter().map(ToString::to_string).collect::<Vec<_>>(), "starting");
     let mut backoff = BACKOFF_MIN;
     loop {
@@ -173,6 +212,8 @@ async fn serve(agent: Arc<Agent>, args: Args) -> ExitCode {
                 backoff = BACKOFF_MIN;
                 BACKOFF_MIN
             }
+            // A helper the daemon refuses is out of date: its service manager starts the installed binary.
+            Outcome::Refused if args.role == Role::Session => return ExitCode::SUCCESS,
             Outcome::Refused => REFUSED_DELAY,
         };
         if args.once {

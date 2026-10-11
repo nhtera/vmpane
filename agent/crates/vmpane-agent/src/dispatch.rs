@@ -5,9 +5,11 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use vmpane_agent_proto::error::ErrorCode;
 use vmpane_agent_proto::jsonrpc::{ErrorObject, Request};
-use vmpane_agent_proto::methods::{Empty, FilePushParams, cap, method};
+use vmpane_agent_proto::methods::{Empty, FilePushParams, PathParams, cap, method};
 
+use crate::agent::Role;
 use crate::connection::{Conn, Incoming, Reply};
+use crate::session_link::relay_params;
 use crate::{exec, files, netinfo, ports, power, timesync};
 
 /// The cap a method needs, if any.
@@ -46,6 +48,9 @@ pub async fn handle(
     inbound: Option<mpsc::Receiver<Incoming>>,
 ) -> Result<Reply, ErrorObject> {
     let name = request.method.as_str();
+    if conn.agent.role == Role::Session {
+        return handle_in_session(conn, request).await;
+    }
     if let Some(needed) = required_cap(name)
         && !conn.agent.has_cap(needed)
     {
@@ -74,13 +79,22 @@ pub async fn handle(
         method::PORTS_LISTENING => ports::listening().await,
         method::FS_FREEZE => conn.agent.freeze.freeze(request.decode_params()?).await,
         method::FS_THAW => conn.agent.freeze.thaw().await,
-        method::SESSION_REVEAL
-        | method::CLIPBOARD_GET
-        | method::CLIPBOARD_SET
-        | method::DISPLAY_SET => Err(ErrorObject::new(
-            ErrorCode::NoSession,
-            "no user session helper is connected",
-        )),
+        method::SESSION_REVEAL => {
+            let link = conn.agent.session.current().ok_or_else(|| {
+                ErrorObject::new(ErrorCode::NoSession, "no user session helper is connected")
+            })?;
+            let params: PathParams = request.decode_params()?;
+            let (value, _) = link
+                .call(name, relay_params(&params), |_| Vec::new())
+                .await?;
+            Ok(Reply {
+                result: value,
+                then: None,
+            })
+        }
+        method::CLIPBOARD_GET | method::CLIPBOARD_SET | method::DISPLAY_SET => Err(
+            ErrorObject::new(ErrorCode::NoSession, "no user session helper is connected"),
+        ),
         method::HELLO => Err(ErrorObject::new(
             ErrorCode::InvalidRequest,
             "hello is sent by the agent",
@@ -88,6 +102,26 @@ pub async fn handle(
         _ => Err(ErrorObject::new(
             ErrorCode::MethodNotFound,
             format!("unknown method {name}"),
+        )),
+    }
+}
+
+/// What a user-session helper serves the daemon: processes as its user, and revealing files in its desktop.
+async fn handle_in_session(conn: &Arc<Conn>, request: &Request) -> Result<Reply, ErrorObject> {
+    match request.method.as_str() {
+        method::AGENT_PING => Reply::ok(&Empty {}),
+        method::AGENT_INFO => Reply::ok(&conn.agent.info(conn.proto)),
+        method::EXEC_START => exec::start(conn, request.decode_params()?).await,
+        method::EXEC_SIGNAL => exec::signal(conn, request.decode_params()?),
+        method::SESSION_REVEAL => {
+            let params: PathParams = request.decode_params()?;
+            crate::os::reveal(std::path::Path::new(&params.path))
+                .map_err(|err| io_error("cannot reveal it", &err))?;
+            Reply::ok(&Empty {})
+        }
+        name => Err(ErrorObject::new(
+            ErrorCode::MethodNotFound,
+            format!("{name} is not served by the session helper"),
         )),
     }
 }

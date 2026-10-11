@@ -49,11 +49,23 @@ struct Host {
 
 impl Host {
     async fn start() -> Host {
+        Host::start_in(scratch(), &[]).await
+    }
+
+    /// A daemon that also accepts session helpers of this test's uid on `<dir>/session.sock`.
+    async fn start_with_sessions() -> Host {
+        let uid = nix::unistd::getuid().as_raw().to_string();
         let dir = scratch();
+        let socket = dir.join("session.sock").display().to_string();
+        Host::start_in(dir, &["--session-socket", &socket, "--session-uid", &uid]).await
+    }
+
+    async fn start_in(dir: PathBuf, extra: &[&str]) -> Host {
         let socket = dir.join("s");
         let listener = UnixListener::bind(&socket).unwrap();
         let child = tokio::process::Command::new(env!("CARGO_BIN_EXE_vmpane-agent"))
             .args(["--connect", &format!("unix:{}", socket.display()), "--once"])
+            .args(extra)
             .stderr(Stdio::null())
             .kill_on_drop(true)
             .spawn()
@@ -508,4 +520,103 @@ async fn freeze_thaw_and_bad_frames() {
         .unwrap()
         .unwrap();
     assert!(status.success());
+}
+
+fn session_helper(dir: &std::path::Path, pretend_version: Option<&str>) -> tokio::process::Child {
+    let mut cmd = tokio::process::Command::new(env!("CARGO_BIN_EXE_vmpane-agent"));
+    let socket = dir.join("session.sock").display().to_string();
+    cmd.args(["session", "--socket", &socket, "--once"])
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
+    if let Some(version) = pretend_version {
+        cmd.env("VMPANE_TEST_AGENT_VERSION", version);
+    }
+    cmd.spawn().unwrap()
+}
+
+async fn wait_for_session(host: &mut Host, connected: bool) {
+    for _ in 0..100 {
+        if host.call("agent.info", json!({})).await.unwrap()["session"] == connected {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    panic!("the session helper never became connected={connected}");
+}
+
+#[tokio::test]
+async fn user_execs_run_in_the_session_helper() {
+    let mut host = Host::start_with_sessions().await;
+    assert_eq!(
+        host.call("exec.start", json!({"argv": ["id", "-u"]}))
+            .await
+            .unwrap_err()
+            .0,
+        -32048
+    );
+    let dir = host.dir.clone();
+    let mut helper = session_helper(&dir, None);
+    wait_for_session(&mut host, true).await;
+    let caps = host.call("agent.info", json!({})).await.unwrap()["caps"].clone();
+    assert!(caps.as_array().unwrap().contains(&json!("reveal")));
+
+    let me = nix::unistd::getuid().as_raw().to_string();
+    let (out, _, exited) = host.exec(json!({"shell": "id -u; exit 5"})).await;
+    assert_eq!(String::from_utf8(out).unwrap().trim(), me);
+    assert_eq!(exited["code"], 5);
+
+    // stdin relayed through the daemon to the helper's process.
+    let started = host
+        .call("exec.start", json!({"argv": ["/bin/cat"], "stdin": true}))
+        .await
+        .unwrap();
+    let stdin = started["stdin"].as_u64().unwrap() as u32;
+    host.send_frame(Frame::Chunk {
+        stream: stdin,
+        data: Bytes::from_static(b"through two hops"),
+    })
+    .await;
+    host.send_frame(Frame::End {
+        stream: stdin,
+        status: StreamStatus::Ok,
+    })
+    .await;
+    let exited = host.exited(started["execId"].as_u64().unwrap()).await;
+    assert_eq!(exited["code"], 0);
+    let stdout = started["stdout"].as_u64().unwrap() as u32;
+    assert_eq!(host.streams.remove(&stdout).unwrap(), b"through two hops");
+
+    // A signal reaches the helper's process.
+    let running = host
+        .call("exec.start", json!({"argv": ["/bin/sleep", "30"]}))
+        .await
+        .unwrap();
+    let exec_id = running["execId"].as_u64().unwrap();
+    host.call("exec.signal", json!({"execId": exec_id, "signal": "term"}))
+        .await
+        .unwrap();
+    assert_eq!(host.exited(exec_id).await["signal"], "SIGTERM");
+
+    // A helper of another version is refused and exits (its service manager would start the installed one);
+    // the connected helper stays.
+    let mut stale = session_helper(&dir, Some("0.0.0-old"));
+    let status = tokio::time::timeout(Duration::from_secs(10), stale.wait())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(status.success());
+    assert_eq!(
+        host.call("agent.info", json!({})).await.unwrap()["session"],
+        true
+    );
+
+    // The helper going away ends its user execs and the session.
+    let orphan = host
+        .call("exec.start", json!({"argv": ["/bin/sleep", "30"]}))
+        .await
+        .unwrap();
+    helper.kill().await.unwrap();
+    let exited = host.exited(orphan["execId"].as_u64().unwrap()).await;
+    assert_eq!(exited["signal"], "disconnected");
+    wait_for_session(&mut host, false).await;
 }

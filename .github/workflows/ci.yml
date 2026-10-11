@@ -182,7 +182,6 @@ jobs:
           name: vmpane-agent-windows-arm64
           path: |
             agent/target/aarch64-pc-windows-msvc/release/vmpane-agent.exe
-            agent/target/aarch64-pc-windows-msvc/release/vmpane-session.exe
           retention-days: 7
 
   rust-supply-chain:

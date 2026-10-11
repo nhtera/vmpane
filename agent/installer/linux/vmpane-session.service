@@ -1,0 +1,12 @@
+[Unit]
+Description=VMPane user-session helper (runs what the host asks to run as you)
+Documentation=https://github.com/nhtera/vmpane
+
+[Service]
+ExecStart=/usr/local/bin/vmpane-agent session
+# The daemon refuses a helper of another version; it exits and comes back as the installed binary.
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

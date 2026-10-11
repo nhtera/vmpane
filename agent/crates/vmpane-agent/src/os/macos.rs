@@ -63,6 +63,22 @@ pub fn vsock_connect(cid: u32, port: u32) -> std::io::Result<OwnedFd> {
     Ok(owned)
 }
 
+/// Whether `uid` is the user logged in at the console (owner of /dev/console).
+pub fn is_console_user(uid: u32) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::metadata("/dev/console").is_ok_and(|m| m.uid() == uid && uid != 0)
+}
+
+/// Selects `path` in Finder.
+pub fn reveal(path: &std::path::Path) -> std::io::Result<()> {
+    let status = Command::new("/usr/bin/open").arg("-R").arg(path).status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(std::io::Error::other("open -R failed"))
+    }
+}
+
 pub fn set_clock(when: SystemTime) -> std::io::Result<()> {
     let since = when
         .duration_since(SystemTime::UNIX_EPOCH)

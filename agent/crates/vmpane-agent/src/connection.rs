@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use bytes::{Bytes, BytesMut};
 use serde::Serialize;
 use serde_json::Value;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use vmpane_agent_proto::error::ErrorCode;
@@ -294,15 +294,22 @@ impl Drop for OutStream {
     }
 }
 
-/// Runs one connection until it ends. `token` goes into `hello` (TCP only).
-pub async fn run(agent: Arc<Agent>, io: BoxIo, token: Option<String>) -> Result<(), ConnError> {
-    let (mut reader, mut writer) = tokio::io::split(io);
+/// The writing half of a connection: an ordered queue drained by one task, which records when a write started
+/// (for the heartbeat's "stuck write" check).
+pub struct Writer {
+    pub out: Outbox,
+    pub task: tokio::task::JoinHandle<std::io::Result<()>>,
+    pub epoch: Instant,
+    pub busy_since: Arc<AtomicU64>,
+}
+
+pub fn spawn_writer<W: AsyncWrite + Unpin + Send + 'static>(mut writer: W) -> Writer {
     let (tx, mut rx) = mpsc::channel::<Frame>(OUTBOX_DEPTH);
     // Milliseconds since `epoch` at which the write in progress started; 0 while the writer is idle.
     let epoch = Instant::now();
     let busy_since = Arc::new(AtomicU64::new(0));
     let writer_busy = Arc::clone(&busy_since);
-    let mut writer_task = tokio::spawn(async move {
+    let task = tokio::spawn(async move {
         let mut buf = BytesMut::new();
         while let Some(frame) = rx.recv().await {
             buf.clear();
@@ -323,14 +330,30 @@ pub async fn run(agent: Arc<Agent>, io: BoxIo, token: Option<String>) -> Result<
         }
         Ok::<(), std::io::Error>(())
     });
-    let out = Outbox(tx);
+    Writer {
+        out: Outbox(tx),
+        task,
+        epoch,
+        busy_since,
+    }
+}
+
+/// Runs one connection until it ends. `token` goes into `hello` (TCP only).
+pub async fn run(agent: Arc<Agent>, io: BoxIo, token: Option<String>) -> Result<(), ConnError> {
+    let (mut reader, writer) = tokio::io::split(io);
+    let Writer {
+        out,
+        task: mut writer_task,
+        epoch,
+        busy_since,
+    } = spawn_writer(writer);
 
     let mut decoder = FrameDecoder::new();
     let mut buf = BytesMut::with_capacity(64 << 10);
     let hello = HelloParams {
         proto: PROTO,
         min_proto: MIN_PROTO,
-        agent_version: env!("CARGO_PKG_VERSION").to_owned(),
+        agent_version: agent.version.clone(),
         os: agent.identity.os.clone(),
         arch: agent.identity.arch.clone(),
         os_version: agent.identity.os_version.clone(),
@@ -404,7 +427,7 @@ pub async fn run(agent: Arc<Agent>, io: BoxIo, token: Option<String>) -> Result<
 /// Returns when a single write has been stuck for three periods: a dead connection the writer cannot finish.
 /// A full queue alone is no reason: the host may hold back reading while its client is slow. A write that fails
 /// ends the connection through the writer task.
-async fn heartbeat(out: Outbox, epoch: Instant, busy_since: Arc<AtomicU64>) {
+pub async fn heartbeat(out: Outbox, epoch: Instant, busy_since: Arc<AtomicU64>) {
     let period = Duration::from_secs(HEARTBEAT_SECONDS);
     let stuck_after = u64::try_from((3 * period).as_millis()).unwrap_or(u64::MAX);
     loop {
@@ -428,7 +451,7 @@ fn millis_since(epoch: Instant) -> u64 {
     u64::try_from(epoch.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
-fn closed() -> ConnError {
+pub fn closed() -> ConnError {
     ConnError::Io(std::io::ErrorKind::BrokenPipe.into())
 }
 
@@ -484,8 +507,8 @@ async fn handle_frame(
     }
 }
 
-async fn next_frame(
-    reader: &mut tokio::io::ReadHalf<BoxIo>,
+pub async fn next_frame<R: AsyncRead + Unpin>(
+    reader: &mut R,
     decoder: &mut FrameDecoder,
     buf: &mut BytesMut,
 ) -> Result<Option<Frame>, ConnError> {
@@ -501,8 +524,8 @@ async fn next_frame(
     }
 }
 
-async fn read_message(
-    reader: &mut tokio::io::ReadHalf<BoxIo>,
+pub async fn read_message<R: AsyncRead + Unpin>(
+    reader: &mut R,
     decoder: &mut FrameDecoder,
     buf: &mut BytesMut,
 ) -> Result<Message, ConnError> {

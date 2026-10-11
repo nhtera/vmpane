@@ -53,6 +53,70 @@ pub fn shutdown_command(reboot: bool, force: bool) -> (&'static str, Vec<&'stati
     ("systemctl", args)
 }
 
+/// Whether `uid` owns an active login session (logind's `/run/systemd/sessions/*`): a seat's foreground
+/// session, or, on a guest without seats (servers), any active one. Without logind, any non-root user.
+pub fn is_console_user(uid: u32) -> bool {
+    let Ok(entries) = std::fs::read_dir("/run/systemd/sessions") else {
+        return uid != 0;
+    };
+    let sessions: Vec<String> = entries
+        .flatten()
+        .filter_map(|e| std::fs::read_to_string(e.path()).ok())
+        .collect();
+    session_allows(&sessions, uid)
+}
+
+fn session_allows(sessions: &[String], uid: u32) -> bool {
+    let field = |text: &str, key: &str| {
+        text.lines()
+            .find_map(|l| l.strip_prefix(key).map(str::to_owned))
+    };
+    let owned = |text: &str| field(text, "UID=").and_then(|u| u.parse::<u32>().ok()) == Some(uid);
+    let foreground: Vec<&String> = sessions
+        .iter()
+        .filter(|s| field(s, "ACTIVE=").as_deref() == Some("1"))
+        .collect();
+    if !foreground.is_empty() {
+        return foreground.iter().any(|s| owned(s));
+    }
+    sessions
+        .iter()
+        .any(|s| owned(s) && field(s, "STATE=").as_deref() == Some("active"))
+}
+
+/// Shows `path` in the desktop's file manager (FileManager1 over D-Bus), else opens its folder.
+pub fn reveal(path: &std::path::Path) -> std::io::Result<()> {
+    let uri = format!("file://{}", path.display());
+    let shown = std::process::Command::new("gdbus")
+        .args([
+            "call",
+            "--session",
+            "--dest",
+            "org.freedesktop.FileManager1",
+            "--object-path",
+            "/org/freedesktop/FileManager1",
+        ])
+        .args([
+            "--method",
+            "org.freedesktop.FileManager1.ShowItems",
+            &format!("['{uri}']"),
+            "",
+        ])
+        .status();
+    if shown.is_ok_and(|s| s.success()) {
+        return Ok(());
+    }
+    let folder = path.parent().unwrap_or(path);
+    let status = std::process::Command::new("xdg-open")
+        .arg(folder)
+        .status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(std::io::Error::other("xdg-open failed"))
+    }
+}
+
 // MARK: listening ports
 
 /// Parses one `/proc/net/{tcp,udp}{,6}` table: (address, port, inode) of listening TCP / bound UDP sockets.
@@ -262,6 +326,19 @@ mod tests {
             parse_proc_net(tcp6, true, true),
             vec![("::1".into(), 631, 7)]
         );
+    }
+
+    #[test]
+    fn console_user_follows_logind() {
+        let seat = "UID=1000\nSTATE=active\nACTIVE=1\n".to_owned();
+        let ssh = "UID=1001\nSTATE=active\n".to_owned();
+        assert!(session_allows(&[seat.clone(), ssh.clone()], 1000));
+        assert!(
+            !session_allows(&[seat, ssh.clone()], 1001),
+            "a seat's foreground user wins"
+        );
+        assert!(session_allows(&[ssh], 1001), "no seats: any active session");
+        assert!(!session_allows(&[], 1000));
     }
 
     #[test]

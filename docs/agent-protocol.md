@@ -89,7 +89,8 @@ Host → guest requests unless noted. A method whose cap the agent did not adver
 | `file.push` | file | `{path, size, sha256, stream, mode, overwrite}` + host stream → `{size, sha256}` once the stream ended |
 | `file.pull` | file | `{path, maxBytes}` → `{size, stream}` (guest stream of exactly `size` bytes) |
 | `file.stat` / `file.mkdirTemp` | file | `{path}` → `{kind, size, mode, mtimeUnixNanos}` / `{prefix}` → `{path}` |
-| `session.reveal`, `clipboard.get/set`, `display.set` | reveal / clipboard / display | served by the user-session helper |
+| `session.reveal` | reveal | `{path}` → `{}`: selects it in Finder / Explorer / the file manager (user-session helper) |
+| `clipboard.get/set`, `display.set` | clipboard / display | not implemented yet (macOS guest clipboard, display path C) |
 | `clipboard.changed` (guest → host) | — | `{types, seq}`, at most 10/s |
 | `time.set` | time | `{unixNanos}` → `{}` |
 | `power.shutdown` | power | `{reboot, force}` → `{}` (answered first) |
@@ -120,6 +121,29 @@ Errors are JSON-RPC's standard codes, plus:
 | -32042 | notFound | -32048 | noSession |
 | -32043 | permissionDenied | -32049 | integrity |
 | -32044 | ioError | -32050 | unauthorized |
+
+## User-session helper
+
+`vmpane-agent session` (the same binary) runs in each user session. It is started by:
+- Linux: the global systemd user unit `vmpane-session.service`;
+- macOS: a LaunchAgent;
+- Windows: the service, in the console session.
+
+It dials the daemon's socket (`/run/vmpane-agent.sock`, `/var/run/vmpane-agent.sock` on macOS) and speaks
+this same protocol, with the daemon in the host's role.
+
+The daemon relays to the current helper, mapping exec and stream ids both ways:
+- `exec.start {as: "user"}` and its `exec.signal`, stdin and output;
+- `session.reveal`.
+
+Without a helper these answer `noSession`. The `session` flag in `agent.info` says whether a helper is
+connected now.
+
+The socket is world-writable. Who may stay:
+- the peer's uid must own the active console session: logind's foreground seat session on Linux (any active
+  session on a guest without seats), the owner of `/dev/console` on macOS;
+- the helper must be the daemon's own version. On a mismatch, after a guest-tools update, the daemon refuses
+  its `hello`, the helper exits 0, and its service manager starts the installed binary.
 
 ## Violations
 
