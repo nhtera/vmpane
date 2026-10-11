@@ -176,12 +176,37 @@ jobs:
       - run: cargo clippy --workspace --all-targets --target aarch64-pc-windows-msvc -- -D warnings
       - run: cargo test --workspace --target aarch64-pc-windows-msvc
       - run: cargo build --release --target aarch64-pc-windows-msvc
+      # The agent MSI (WiX 3 through cargo-wix), then a smoke test: installed service present and stopped, starts,
+      # stops, uninstalls cleanly.
+      - name: Install WiX 3 and cargo-wix (pinned)
+        run: |
+          choco install wixtoolset --version 3.14.1 --no-progress -y
+          cargo install --locked cargo-wix --version 0.3.9
+      - name: Build the agent MSI
+        run: |
+          cargo wix -p vmpane-agent --no-build --nocapture --target aarch64-pc-windows-msvc \
+            --include installer/windows/main.wxs --output target/wix/vmpane-agent.msi
+      - name: MSI smoke test
+        shell: pwsh
+        run: |
+          $msi = (Resolve-Path target/wix/vmpane-agent.msi).Path
+          $p = Start-Process msiexec.exe -ArgumentList @('/i', "`"$msi`"", '/qn', '/l*v', 'msi-install.log') -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content msi-install.log -Tail 40; exit 1 }
+          $svc = Get-Service vmpane-agent
+          if ($svc.Status -ne 'Stopped' -or $svc.StartType -ne 'Automatic') { "unexpected: $($svc.Status) $($svc.StartType)"; exit 1 }
+          Start-Service vmpane-agent; Start-Sleep 3
+          if ((Get-Service vmpane-agent).Status -ne 'Running') { Get-Content "$env:ProgramData\VMPane\agent.log"; exit 1 }
+          Stop-Service vmpane-agent
+          $p = Start-Process msiexec.exe -ArgumentList @('/x', "`"$msi`"", '/qn') -Wait -PassThru
+          if ($p.ExitCode -ne 0 -or (Get-Service vmpane-agent -ErrorAction SilentlyContinue)) { 'uninstall failed'; exit 1 }
+          Get-Content "$env:ProgramData\VMPane\agent.log"
       # Development builds only: release artifacts are built by the release workflow, never taken from CI.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vmpane-agent-windows-arm64
           path: |
             agent/target/aarch64-pc-windows-msvc/release/vmpane-agent.exe
+            agent/target/wix/vmpane-agent.msi
           retention-days: 7
 
   rust-supply-chain:

@@ -72,7 +72,15 @@ foreach ($msi in @(Get-ChildItem -Path $root -Filter '*.msi' -Recurse -ErrorActi
     Log ("installer {0}: exit {1}" -f $msi.Name, $process.ExitCode)
 }
 
-if (-not $Unattended) { Log 'done'; exit 0 }
+# The MSI installs the agent service without starting it: during an unattended install this script still needs
+# the agent port (a single-open device) for its reports, and the service starts with the restart that follows.
+# By hand ("Update guest tools"), start it now; an upgrade stopped the old one.
+if (-not $Unattended) {
+    Start-Service -Name vmpane-agent -ErrorAction SilentlyContinue
+    Log ("agent service: {0}" -f (Get-Service -Name vmpane-agent -ErrorAction SilentlyContinue).Status)
+    Log 'done'
+    exit 0
+}
 
 # 4. The install's password, removed again in case a FirstLogonCommand failed, then checked.
 $winlogon = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="windows-1252"?>
+<!--
+  VMPane guest agent for Windows 11 ARM64 (WiX 3, built by cargo-wix on the Windows ARM runner):
+  vmpane-agent.exe in Program Files\VMPane\Agent and the `vmpane-agent` service (LocalSystem, automatic start,
+  started with its service argument). The service is installed but not started: the unattended install's install.ps1 still needs the
+  single-open agent port to report, and the restart that ends the install starts it (install.ps1 starts it when
+  run by hand). Upgrades stop the running service first. The UpgradeCode never changes.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="VMPane Guest Agent" UpgradeCode="6E2B5C1A-4F0D-4B7E-9C3A-2D8F1E6A7B90"
+           Manufacturer="VMPane" Language="1033" Codepage="1252" Version="$(var.Version)">
+    <Package Id="*" InstallerVersion="500" Compressed="yes" InstallScope="perMachine"
+             Description="VMPane Guest Agent" Comments="https://github.com/nhtera/vmpane" />
+    <MajorUpgrade Schedule="afterInstallInitialize"
+                  DowngradeErrorMessage="A newer VMPane Guest Agent is already installed." />
+    <Media Id="1" Cabinet="agent.cab" EmbedCab="yes" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="VMPaneFolder" Name="VMPane">
+          <Directory Id="INSTALLDIR" Name="Agent">
+            <Component Id="AgentService" Guid="3B9D7E21-8A64-4C2F-B1E5-7F0A9C4D2E68">
+              <File Id="AgentExe" Name="vmpane-agent.exe" KeyPath="yes"
+                    Source="$(var.CargoTargetBinDir)\vmpane-agent.exe" />
+              <ServiceInstall Id="AgentServiceInstall" Name="vmpane-agent" DisplayName="VMPane Guest Agent"
+                              Description="Lets the VMPane host run commands, move files and keep the clock in this VM."
+                              Type="ownProcess" Start="auto" Account="LocalSystem" ErrorControl="normal"
+                              Arguments="--service" Vital="yes" />
+              <ServiceControl Id="AgentServiceControl" Name="vmpane-agent" Stop="both" Remove="uninstall"
+                              Wait="yes" />
+            </Component>
+          </Directory>
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <Feature Id="Agent" Title="VMPane Guest Agent" Level="1">
+      <ComponentRef Id="AgentService" />
+    </Feature>
+  </Product>
+</Wix>

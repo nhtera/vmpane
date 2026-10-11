@@ -194,6 +194,9 @@ extension HelperController {
         await Blocking.run { UnattendMedia.remove(from: bundle) }
         state.end(phase, reason: reason)
         await persistInstall(state)
+        // The agent port is free for the guest agent now (the user may finish the install and add the tools).
+        stopInstallWatchers()
+        agentFollowState(from: self.state, to: self.state)
         if phase == .cancelled {
             announceInstall("The Windows install was cancelled.", percent: 0, phase: "cancelled")
         } else {
