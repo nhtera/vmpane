@@ -34,6 +34,8 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Config/Entitlements/VMPane.entitlements
         PRODUCT_BUNDLE_IDENTIFIER: app.vmpane.mac
         GENERATE_INFOPLIST_FILE: NO
+        # App/Assets.xcassets; scripts/gen-app-icon.sh renders it from Config/AppIcon.svg.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # The "Embed QEMU" phase copies whole directory trees; Xcode's script sandbox only allows declared
         # output files.
         ENABLE_USER_SCRIPT_SANDBOXING: NO

@@ -227,7 +227,7 @@ cask "vmpane" do
 
   url "https://github.com/$repo/releases/download/v#{version}/VMPane-#{version}.dmg"
   name "VMPane"
-  desc "Virtual machines for macOS, Linux and Windows 11 ARM, with a CLI and an MCP server"
+  desc "Virtual machine manager with a CLI and an MCP server for AI agents"
   homepage "https://github.com/$repo"
 
   livecheck do
@@ -237,7 +237,7 @@ cask "vmpane" do
 
   auto_updates true
   depends_on arch: :arm64
-  depends_on macos: ">= :sequoia"
+  depends_on macos: :sequoia
 
   app "VMPane.app"
   binary "#{appdir}/VMPane.app/Contents/Helpers/vmpane"

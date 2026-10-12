@@ -5,3 +5,4 @@ brew "jsign"          # Authenticode verification of Windows guest tools
 brew "osslsigncode"   # Authenticode verification
 brew "xorriso"        # reproducible guest-tools ISO (guest-tools/build-iso.sh)
 brew "create-dmg"     # optional: release DMG layout
+brew "librsvg"        # rsvg-convert: the app icon set (scripts/gen-app-icon.sh)

@@ -1,7 +1,7 @@
 # Security policy
 
-Please report vulnerabilities privately through GitHub's private vulnerability reporting ("Report a
-vulnerability" on the [Security tab](https://github.com/nhtera/vmpane/security)).
+Please report vulnerabilities privately, either through GitHub's private vulnerability reporting ("Report a
+vulnerability" on the [Security tab](https://github.com/nhtera/vmpane/security)) or by email to tn@erai.dev.
 
 Include the affected version, macOS version, and steps to reproduce. We aim to acknowledge reports
 within 3 working days. Please do not disclose publicly until a fix is released.
