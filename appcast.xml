@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>VMPane</title>
+        <link>https://github.com/nhtera/vmpane</link>
+        <description>VMPane updates</description>
+        <language>en</language>
+    </channel>
+</rss>
