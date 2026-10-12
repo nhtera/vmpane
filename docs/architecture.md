@@ -1,7 +1,7 @@
 # Architecture
 
 VMPane is a macOS app for Apple silicon that runs macOS, Linux and Windows 11 ARM virtual machines.
-This page describes the intended shape; parts not built yet are marked *planned*.
+This page describes how VMPane is built today. A part not built yet would be marked *planned*; at the moment none is.
 
 ## Processes
 
@@ -11,7 +11,7 @@ This page describes the intended shape; parts not built yet are marked *planned*
 | `VMPaneVM.app` (one per running VM) | Owns one VM: its window, Dock tile, control socket and backend. A crash takes down one VM, not the app. |
 | `vmpane` CLI | Scripting and the MCP server (`vmpane mcp`). Talks to helpers over their control sockets. |
 | `qemu-system-aarch64`, `swtpm` | Child processes of a Windows VM's helper, run under deny-by-default sandbox profiles. |
-| guest agent (Rust, *planned*) | Runs inside the guest: clipboard, exec, file transfer, display resize. Talks to the host over vsock (Linux, macOS) or virtio-serial (Windows). |
+| guest agent (Rust) | Runs inside the guest, installed with the guest tools: clipboard, exec, file transfer, display resize. Talks to the host over vsock (Linux, macOS) or virtio-serial (Windows). |
 
 ## Backends
 

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Concept A reduced for 16-32 px: two panes, no prompt. -->
+  <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5DB4FF"/><stop offset="1" stop-color="#1F4FD8"/></linearGradient></defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#g)"/>
+  <rect x="22" y="12" width="30" height="24" rx="5" fill="#fff" fill-opacity=".45"/>
+  <rect x="12" y="24" width="34" height="27" rx="6" fill="#fff"/>
+  <path d="M19 33l5 3.5-5 3.5" fill="none" stroke="#2F6BFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

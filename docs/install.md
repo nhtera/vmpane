@@ -1,0 +1,79 @@
+# Install VMPane
+
+## Requirements
+
+- A Mac with Apple silicon (VMPane is built for arm64 only).
+- macOS 15 (Sequoia) or later.
+- Disk space for your VMs: a macOS install needs 20 GB free when it starts, and a VM's disk takes only the space
+  its system actually uses.
+
+## Download
+
+Public betas will be on [GitHub Releases](https://github.com/nhtera/vmpane/releases). Each release has:
+
+- `VMPane-<version>.dmg`: the app, signed with a Developer ID and notarized by Apple. Open it and drag VMPane to
+  Applications.
+- `SHA256SUMS`: the SHA-256 of every file of the release. To check your download, in the folder that holds both:
+
+  ```sh
+  shasum -a 256 -c SHA256SUMS --ignore-missing
+  ```
+
+- `vmpane-<version>-corresponding-source.tar.zst`: the source of the QEMU that VMPane bundles for Windows guests
+  (GPL).
+- `vmpane-guest-tools-<version>-windows.iso`: the Windows guest tools (the app carries them too).
+
+Betas are marked as pre-releases.
+
+## Homebrew
+
+<!-- quickstart -->
+
+The cask installs VMPane.app and links the `vmpane` command onto your `PATH`.
+
+## The `vmpane` command
+
+Homebrew links it for you. With the DMG, run the copy inside the app once:
+
+```sh
+/Applications/VMPane.app/Contents/Helpers/vmpane install-cli          # /usr/local/bin, one administrator prompt
+/Applications/VMPane.app/Contents/Helpers/vmpane install-cli --user   # ~/.local/bin, no prompt
+```
+
+The link points into VMPane.app, so it keeps working after updates. `vmpane doctor` says whether `vmpane` is on
+your `PATH`. See [`vmpane` commands](cli.md).
+
+## First launch
+
+VMPane opens with a welcome: what it does, that it sends no telemetry and no crash reports, and that AI agents
+are off until you allow them per VM. Choose **Get Started**, then **New VM** to make your first VM. To see the
+welcome again: **Settings › General › Privacy › Show the Welcome Again**.
+
+## Updates
+
+VMPane checks GitHub for updates and asks before installing one; it never installs an update on its own. Choose
+**VMPane › Check for Updates…** to look now. If VMs are running, VMPane asks whether to update now (they keep
+running on the old version until you restart them), suspend them all and resume them after the update, or wait.
+With Homebrew, `brew upgrade` works too.
+
+**Betas:** turn on **Settings › General › Updates › Get beta versions**. A beta build always offers the next
+betas.
+
+## Uninstall
+
+1. Shut down your VMs and quit VMPane.
+2. Delete VMPane.app, or run `brew uninstall --cask vmpane`. `brew uninstall --zap --cask vmpane` also removes
+   VMPane's caches and preferences; the rest of the list below stays.
+3. Remove what you no longer want. Your VMs are your data, so nothing removes them for you:
+
+| What | Where |
+|---|---|
+| Your VMs, snapshots and the library | `~/Library/Application Support/VMPane` (VMs you opened from elsewhere stay where they are: delete those `.vmpane` bundles too) |
+| Downloaded restore images and ISOs | `~/Library/Caches/app.vmpane.mac` |
+| Preferences | `~/Library/Preferences/app.vmpane.mac.plist` |
+| Files AI agents copied in and out | `~/VMPane Exchange` |
+| Files a VM sent to your Mac | `~/Downloads/VMPane` |
+| The `vmpane` link | `/usr/local/bin/vmpane` or `~/.local/bin/vmpane` |
+| VMPane in your AI clients | `claude mcp remove vmpane`; the `[mcp_servers.vmpane]` table in `~/.codex/config.toml`; `mcpServers.vmpane` in `~/.gemini/settings.json` |
+
+VMPane installs no login items, launch agents or privileged helpers on your Mac.

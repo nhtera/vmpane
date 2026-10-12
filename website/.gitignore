@@ -1,0 +1,13 @@
+/node_modules/
+/deploy/node_modules/
+/.source/
+/.tanstack/
+/content/
+/.cloudflare/
+/.wrangler/
+/dist/
+/.output/
+/.screens/
+*.tsbuildinfo
+/src/routeTree.gen.ts
+/content.*/

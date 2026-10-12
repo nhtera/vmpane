@@ -1,0 +1,70 @@
+{
+  "name": "vmpane-website",
+  "private": true,
+  "version": "0.0.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "npm run sync && vite dev --port 3100",
+    "sync": "node scripts/sync-docs.mjs",
+    "build:site": "npm run sync && cf build && npm run finalize",
+    "finalize": "node scripts/static-404.mjs && node scripts/csp-headers.mjs && node scripts/build-worker.mjs",
+    "preview": "vite preview --port 3100",
+    "typecheck": "node scripts/sync-docs.mjs && fumadocs-mdx && tsr generate && tsc --noEmit",
+    "lint": "eslint .",
+    "test": "node scripts/sync-docs.mjs && node --test \"scripts/**/*.test.mjs\" \"src/**/*.test.ts\"",
+    "test:browser": "node --test --test-concurrency=1 \"test/browser/**/*.test.mjs\"",
+    "check-links": "node scripts/check-links.mjs",
+    "check": "npm run build:site && npm run check-links && npm run test:browser",
+    "check:install-scripts": "node scripts/check-install-scripts.mjs",
+    "check:licenses": "node scripts/check-npm-licenses.mjs",
+    "screens": "node scripts/optimize-screens.mjs",
+    "og": "node test/og-capture.mjs",
+    "deploy:dry": "cf deploy --prebuilt --mode production --dry-run"
+  },
+  "dependencies": {
+    "@fontsource/caveat": "5.3.0",
+    "@tanstack/react-router": "1.170.41",
+    "@tanstack/react-start": "1.168.60",
+    "fumadocs-core": "16.16.2",
+    "fumadocs-mdx": "15.4.6",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@cloudflare/vite-plugin": "2.0.0-beta.sha-52b0dc0e9",
+    "@eslint/js": "10.0.1",
+    "@mdx-js/mdx": "3.1.1",
+    "@tailwindcss/vite": "4.3.3",
+    "@tanstack/router-cli": "1.167.40",
+    "@types/mdast": "4.0.4",
+    "@types/mdx": "2.0.14",
+    "@types/node": "22.20.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "cf": "1.0.0-beta.12",
+    "eslint": "10.11.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.12.0",
+    "playwright": "1.63.0",
+    "remark-gfm": "4.0.1",
+    "remark-parse": "11.0.0",
+    "sharp": "0.35.5",
+    "shiki": "4.5.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.0",
+    "unified": "11.0.5",
+    "vite": "8.3.2",
+    "yaml": "2.9.1"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "overrides": {
+    "sharp": "0.35.5"
+  }
+}

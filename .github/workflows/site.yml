@@ -1,0 +1,192 @@
+name: site
+
+# The website (website/): landing page and docs at https://vmpane.erai.dev.
+# A standalone npm project, outside every Xcode and Swift build: this workflow
+# never builds the app, and no other workflow installs the website.
+#
+#   changes      which paths a pull request touches (SITE_PATHS below)
+#   site-build   no secrets: installs, checks, builds, verifies the output and
+#                uploads it (main only)
+#   site-gate    always runs; the required check
+#   site-deploy  main only, environment "site": deploys the build job's
+#                artifact with the pinned cf CLI; the token is on one step
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # cf needs Node 22.18 or later.
+  NODE_VERSION: "22.18"
+  # No CLI telemetry from CI.
+  DO_NOT_TRACK: "1"
+  # Everything the site build reads. website/scripts/ci-paths.mjs checks the
+  # build's inputs (content/generated/inputs.json) against this list.
+  SITE_PATHS: |
+    website/**
+    docs/**
+    README.md
+    SECURITY.md
+    CONTRIBUTING.md
+    CODE_OF_CONDUCT.md
+    LICENSE
+    Config/AppIcon.svg
+    .github/workflows/site.yml
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      site: ${{ steps.filter.outputs.site }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: filter
+        run: |
+          # A pull request: its changes against the base. A push: the pushed
+          # range (all of it on a new branch or a forced push). Manual runs
+          # always build.
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            range="origin/$BASE_REF...HEAD"
+          elif [ "$GITHUB_EVENT_NAME" = push ] && [ -n "$BEFORE" ] && ! printf '%s' "$BEFORE" | grep -q '^0*$' && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            range="$BEFORE..HEAD"
+          else
+            echo "site=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # No rename pairing: a moved file lists its old path too.
+          git -c core.quotePath=false diff --name-only --no-renames "$range" > "$RUNNER_TEMP/changed.txt"
+          node website/scripts/ci-paths.mjs match "$RUNNER_TEMP/changed.txt" | tee -a "$GITHUB_OUTPUT"
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+
+  site-build:
+    needs: changes
+    if: needs.changes.outputs.site == 'true'
+    # No `environment:` and no secrets: this job runs the project's own
+    # dependencies and code, including a pull request's.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Full history: last-updated dates on the docs pages.
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            website/package-lock.json
+            website/deploy/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run check:install-scripts
+      - run: npm run check:licenses
+      - run: npm audit --audit-level=high
+      # The deploy job's own install (cf only), checked here, without secrets.
+      - run: npm --prefix deploy ci --ignore-scripts --no-audit --no-fund
+      - run: npm --prefix deploy audit --audit-level=high
+      - run: node scripts/check-install-scripts.mjs deploy/package-lock.json
+      - run: npm run sync
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npx cf build
+      # static 404, _headers with per-page CSP, and the 404-only Worker
+      # (fails if the render path or the prerender token reached it).
+      - run: npm run finalize
+      - run: npm run check-links
+      - run: node scripts/ci-paths.mjs covers content/generated/inputs.json
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - name: The build changed no tracked or untracked file
+        working-directory: .
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then git status --porcelain; exit 1; fi
+      # The production pin (deploy/), as the deploy job runs it.
+      - run: deploy/node_modules/.bin/cf deploy --prebuilt --mode production --dry-run
+      - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.SITE_DEPLOY == '1'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: site-output
+          path: website/.cloudflare/output/v0
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  site-gate:
+    if: always()
+    needs: [changes, site-build]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "changes: $CHANGES, site-build: $BUILD"
+          [ "$CHANGES" = success ] || exit 1
+          case "$BUILD" in success|skipped) ;; *) exit 1 ;; esac
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          BUILD: ${{ needs.site-build.result }}
+
+  site-deploy:
+    needs: site-build
+    # Off until the owner has set up Cloudflare (token, environment "site" with
+    # a required reviewer, secrets): then set the repository variable
+    # SITE_DEPLOY=1. Without it, a push to main builds and checks only.
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.SITE_DEPLOY == '1'
+    runs-on: ubuntu-latest
+    environment:
+      name: site
+      url: https://vmpane.erai.dev
+    permissions:
+      contents: read
+    # Never cancel a production deploy that has started.
+    concurrency:
+      group: site-deploy
+      cancel-in-progress: false
+    steps:
+      # Only the deploy manifest and the smoke script: no project code.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: website/deploy
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: website/deploy
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: site-output
+          path: out/.cloudflare/output/v0
+      - name: Deploy
+        working-directory: out
+        run: ../website/deploy/node_modules/.bin/cf deploy --prebuilt --mode production --message "${GITHUB_SHA::12}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # Before the domain is attached (SITE_LIVE unset), smoke the workers.dev
+      # URL if the repository variable SITE_WORKERS_URL names it.
+      - name: Smoke
+        if: vars.SITE_LIVE == '1' || vars.SITE_WORKERS_URL != ''
+        run: website/deploy/smoke.sh "$SMOKE_URL" "$SITE_LIVE"
+        env:
+          SMOKE_URL: ${{ vars.SITE_LIVE == '1' && 'https://vmpane.erai.dev' || vars.SITE_WORKERS_URL }}
+          SITE_LIVE: ${{ vars.SITE_LIVE }}
+          BUILD_ASSETS: out/.cloudflare/output/v0/workers/default/assets

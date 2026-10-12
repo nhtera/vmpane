@@ -13,7 +13,12 @@ Status: early development (pre-alpha). Requires macOS 15 or later on Apple silic
 
 Public betas will be on [GitHub Releases](https://github.com/nhtera/vmpane/releases) as a notarized DMG (with
 `SHA256SUMS` and the GPL corresponding source of the bundled QEMU), and through Homebrew:
-`brew install --cask nhtera/tap/vmpane`. VMPane updates itself (Sparkle) and asks before installing an update.
+
+```sh
+brew install --cask nhtera/tap/vmpane
+```
+
+VMPane updates itself (Sparkle) and asks before installing an update.
 
 ## Limits
 
@@ -27,8 +32,9 @@ Public betas will be on [GitHub Releases](https://github.com/nhtera/vmpane/relea
 
 ## Documentation
 
-[`vmpane` commands](docs/cli.md) · [VMPane for AI agents](docs/mcp.md) · [Security model](docs/security-model.md) ·
-[Releasing](docs/release.md) · [Security policy](SECURITY.md)
+The docs are at [vmpane.erai.dev/docs](https://vmpane.erai.dev/docs) (from [docs/](docs/README.md)):
+[Install](docs/install.md) · [`vmpane` commands](docs/cli.md) · [VMPane for AI agents](docs/mcp.md) ·
+[Security model](docs/security-model.md) · [Releasing](docs/release.md) · [Security policy](SECURITY.md)
 
 ## Building
 

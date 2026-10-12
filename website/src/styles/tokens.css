@@ -1,0 +1,92 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/* VMPane's design tokens, from the design draft v5
+   (plans/261012-2014-website-design/vmpane-site-draft.html): Apple's marketing
+   neutrals and the macOS system colours, light and dark. The only file with
+   colour values; every other stylesheet uses these variables.
+
+   The theme: data-theme on <html> (set before first paint by the init script
+   in src/lib/theme.ts), else the OS setting (no JavaScript). */
+:root {
+  /* surfaces and text; --text-3 is AA on --band too (the draft's #86868B was not), so small print stays readable */
+  --bg: #FFFFFF; --band: #F5F5F7; --card: #F5F5F7; --text: #1D1D1F; --text-2: #6E6E73; --text-3: #707075;
+  --hair: #D2D2D7; --pill: #1D1D1F; --pill-text: #FFFFFF; --nav-line: rgba(0,0,0,.08);
+  --fill: color-mix(in srgb, var(--text) 6%, transparent);
+  --scrim: rgba(0,0,0,.32);
+  /* macOS system colours (fills, badges, dots) */
+  --blue: #007AFF; --green: #34C759; --orange: #FF9500; --red: #FF3B30; --purple: #AF52DE; --indigo: #5856D6;
+  --teal: #30B0C7; --yellow: #FFCC00; --pink: #FF2D55; --gray: #8E8E93;
+  --on-color: #FFFFFF;
+  --accent-soft: color-mix(in srgb, var(--blue) 14%, transparent);
+  /* text tints: AA (4.5:1) on --bg and --band, and on inline code's fill. The draft's #0071E3, #C25000 and
+     #1A8A3C fell short on --band: blue is Apple's link blue, orange and green a shade darker. */
+  --t-blue: #0066CC; --t-orange: #B84A00; --t-green: #1A7F37; --t-purple: #8944D9; --t-red: #D70015;
+  /* the MacBook frame and its HTML scenery (menu bar, Dock, cursor) */
+  --mac-lid: #0E0E10; --mac-bezel: #3A3A3E; --mac-base: linear-gradient(#E3E4E6, #B9BBBF 60%, #8E9095); --mac-notch: #A5A7AB;
+  --menubar-bg: rgba(255,255,255,.4); --menubar-text: rgba(0,0,0,.82); --dock-bg: rgba(255,255,255,.28); --dock-line: rgba(255,255,255,.35);
+  --dock-tile: linear-gradient(160deg, rgba(255,255,255,.9), rgba(255,255,255,.55)); --dock-dot: rgba(0,0,0,.6);
+  --cursor-fill: #111111; --cursor-line: #FFFFFF; --alert-default: #0A7AFF;
+  /* wallpapers: CSS gradients, never Apple's images */
+  --wall-a: radial-gradient(70% 90% at 0% 100%, #1F4CFF 0%, transparent 60%), radial-gradient(60% 70% at 100% 0%, #8FD8FF 0%, transparent 65%), radial-gradient(70% 80% at 70% 90%, #6B45FF 0%, transparent 60%), linear-gradient(155deg, #DCEBFF 0%, #6FA5FF 40%, #2F5BEA 70%, #24288F 100%);
+  --wall-b: radial-gradient(60% 80% at 10% 10%, #FFE0B8 0%, transparent 60%), radial-gradient(70% 90% at 100% 100%, #FF6A3D 0%, transparent 60%), linear-gradient(160deg, #FFD7A8, #FF9C6B 55%, #D9465F);
+  --wall-c: radial-gradient(70% 80% at 90% 10%, #B6F0D6 0%, transparent 60%), radial-gradient(70% 90% at 0% 100%, #148F77 0%, transparent 65%), linear-gradient(160deg, #D9F7EC, #5CCFB1 50%, #0F6E73);
+  --wall-d: radial-gradient(70% 80% at 0% 0%, #E7D9FF 0%, transparent 60%), radial-gradient(70% 90% at 100% 100%, #5B2BD6 0%, transparent 60%), linear-gradient(160deg, #EDE4FF, #A98BFF 50%, #4B2CB8);
+  --wall-e: radial-gradient(70% 80% at 100% 0%, #FFF3B0 0%, transparent 60%), radial-gradient(80% 90% at 0% 100%, #F2994A 0%, transparent 60%), linear-gradient(160deg, #FFF6D6, #FFD36B 50%, #E07B28);
+  /* shadows */
+  --shadow-win: 0 0 0 .5px rgba(0,0,0,.18), 0 10px 30px rgba(0,0,0,.16), 0 30px 60px -20px rgba(0,0,0,.24);
+  --shadow-lift: 0 1px 2px rgba(29,29,31,.06), 0 8px 24px rgba(29,29,31,.08);
+  --shadow-pop: 0 24px 48px -20px rgba(0,0,0,.45);
+  --shadow-nav: 0 10px 30px -12px rgba(0,0,0,.25);
+  --shadow-sticker: drop-shadow(0 14px 18px rgba(0,0,0,.14));
+  --shadow-app: drop-shadow(0 24px 30px rgba(31,79,216,.35));
+  --shadow-mac: 0 50px 90px -40px rgba(0,0,0,.45);
+  /* type: the system font (SF Pro on Apple devices); Caveat for the one handwritten note */
+  --f-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --f-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --f-mono: ui-monospace, "SF Mono", Menlo, "JetBrains Mono", monospace;
+  --f-hand: "Caveat", "Bradley Hand", "Segoe Print", cursive;
+  /* shape */
+  --r-card: 28px; --r-tile: 20px; --r-win: 12px; --r-panel: 14px; --r-row: 12px; --r-ctl: 10px; --r-seg: 7px; --r-pill: 980px;
+  /* motion */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1); --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 150ms; --dur: 250ms; --dur-enter: 700ms;
+  /* glass (macOS 26: from clear to tinted), lit glass edges */
+  --glass: 72%;
+  --rim: inset 0 1px 0 rgba(255,255,255,.65), inset 0 0 0 .5px rgba(255,255,255,.25);
+  /* layout: where pinned scenes sit (below the floating nav), the content width */
+  --pin-top: 66px;
+  --wrap: 1120px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0A0A0B; --band: #141416; --card: #1A1A1C; --text: #F5F5F7; --text-2: #A1A1A6; --text-3: #8E8E93;
+    --hair: #38383C; --pill: #F5F5F7; --pill-text: #1D1D1F; --nav-line: rgba(255,255,255,.1);
+    --scrim: rgba(0,0,0,.55);
+    --blue: #0A84FF; --green: #30D158; --orange: #FF9F0A; --red: #FF453A; --purple: #BF5AF2; --indigo: #5E5CE6;
+    --teal: #40C8E0; --yellow: #FFD60A; --pink: #FF375F; --gray: #98989D;
+    --t-blue: #2997FF; --t-orange: #FF9F0A; --t-green: #30D158; --t-purple: #BF5AF2; --t-red: #FF6961;
+    --shadow-win: 0 0 0 .5px rgba(255,255,255,.14), 0 10px 30px rgba(0,0,0,.5), 0 30px 60px -20px rgba(0,0,0,.6);
+    --shadow-lift: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.4);
+    --rim: inset 0 1px 0 rgba(255,255,255,.16), inset 0 0 0 .5px rgba(255,255,255,.08);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0A0A0B; --band: #141416; --card: #1A1A1C; --text: #F5F5F7; --text-2: #A1A1A6; --text-3: #8E8E93;
+  --hair: #38383C; --pill: #F5F5F7; --pill-text: #1D1D1F; --nav-line: rgba(255,255,255,.1);
+  --scrim: rgba(0,0,0,.55);
+  --blue: #0A84FF; --green: #30D158; --orange: #FF9F0A; --red: #FF453A; --purple: #BF5AF2; --indigo: #5E5CE6;
+  --teal: #40C8E0; --yellow: #FFD60A; --pink: #FF375F; --gray: #98989D;
+  --t-blue: #2997FF; --t-orange: #FF9F0A; --t-green: #30D158; --t-purple: #BF5AF2; --t-red: #FF6961;
+  --shadow-win: 0 0 0 .5px rgba(255,255,255,.14), 0 10px 30px rgba(0,0,0,.5), 0 30px 60px -20px rgba(0,0,0,.6);
+  --shadow-lift: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.4);
+  --rim: inset 0 1px 0 rgba(255,255,255,.16), inset 0 0 0 .5px rgba(255,255,255,.08);
+  color-scheme: dark;
+}
+
+/* Reduce Transparency: glass turns solid, as it does in macOS. */
+@media (prefers-reduced-transparency: reduce) {
+  :root { --glass: 100% !important; }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "vmpane-website-deploy",
+  "private": true,
+  "description": "The deploy job's only install: the pinned cf CLI. It ships the build job's checked artifact; no project code is installed where the token is.",
+  "dependencies": {
+    "cf": "1.0.0-beta.12"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "overrides": {
+    "sharp": "0.35.5"
+  }
+}

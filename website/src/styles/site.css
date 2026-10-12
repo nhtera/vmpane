@@ -1,0 +1,195 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/* The website's styles: VMPane's tokens (tokens.css) and the design draft v5's
+   CSS on top of them (plans/261012-2014-website-design/vmpane-site-draft.html).
+   tokens.css is imported without a layer: it only defines custom properties.
+   The site's own rules are the `components` layer. Tailwind's preflight is
+   not imported: the site's base below is the draft's.
+   House rules (the draft's): at most one eyebrow per three sections, one dot
+   per line, one label per CTA intent, no gradient text, solid glass when the
+   viewer asks for less transparency. */
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "./fonts.css";
+@import "./tokens.css";
+@import "./landing.css";
+@import "./docs.css";
+
+@layer components {
+  /* ---------- base ---------- */
+  *, *::before, *::after { box-sizing: border-box; }
+  /* anchors (in-page links, the docs headings) land below the floating nav */
+  html { -webkit-text-size-adjust: 100%; overflow-x: clip; scroll-padding-top: 76px; }
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+  body {
+    margin: 0; overflow-x: clip;
+    background: var(--bg); color: var(--text);
+    font: 400 17px/1.5 var(--f-sans); letter-spacing: -.011em;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4 { font-family: var(--f-display); font-weight: 600; margin: 0; text-wrap: balance; }
+  p { margin: 0; text-wrap: pretty; }
+  a { color: var(--t-blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, kbd, pre { font-family: var(--f-mono); }
+  button { font: inherit; color: inherit; }
+  img, svg { max-width: 100%; }
+  :focus-visible { outline: 3px solid color-mix(in srgb, var(--blue) 60%, transparent); outline-offset: 3px; border-radius: 8px; }
+  ::selection { background: var(--accent-soft); }
+  .i { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .wrap { max-width: var(--wrap); margin-inline: auto; padding-inline: 16px; }
+  @media (min-width: 740px) { .wrap { padding-inline: 32px; } }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .skip { position: absolute; left: 12px; top: 12px; z-index: 50; padding: 8px 12px; border-radius: var(--r-ctl); background: var(--bg); color: var(--text); transform: translateY(-200%); visibility: hidden; }
+  .skip:focus { transform: none; visibility: visible; box-shadow: var(--shadow-lift); }
+  kbd { display: inline-block; padding: 1px 6px; min-width: 1.5em; text-align: center; border-radius: 5px; border: 1px solid var(--hair); background: var(--bg); font-size: .82em; color: var(--text); box-shadow: 0 1px 0 var(--hair); white-space: nowrap; }
+
+  /* ---------- shared components ---------- */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px;
+    border-radius: var(--r-pill); font: 500 17px/1 var(--f-sans); padding: 16px 28px; border: 0; cursor: pointer;
+    text-decoration: none !important;
+    transition: transform var(--dur) var(--ease-out-quart), background-color var(--dur), box-shadow var(--dur);
+  }
+  .btn:hover { transform: translateY(-2px); }
+  .btn:active { transform: scale(.98); transition-duration: 100ms; }
+  .btn-dark { background: var(--pill); color: var(--pill-text); box-shadow: 0 8px 20px -8px color-mix(in srgb, var(--pill) 60%, transparent); }
+  .btn-light { background: var(--fill); color: var(--text); box-shadow: var(--rim); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+  .btn-sm { font-size: 13px; padding: 8px 14px; min-height: 36px; font-weight: 600; }
+  .btn-sm .i { width: 15px; height: 15px; }
+  .eyebrow { font: 600 17px/1.3 var(--f-sans); letter-spacing: -.01em; }
+  .meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 10px; font: 500 13px/1.4 var(--f-sans); color: var(--text-3); }
+  .meta span + span { padding-left: 10px; border-left: 1px solid var(--hair); }
+  .hl-blue { color: var(--t-blue); } .hl-orange { color: var(--t-orange); } .hl-green { color: var(--t-green); }
+  .hl-purple { color: var(--t-purple); } .hl-red { color: var(--t-red); }
+  .badge { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: var(--on-color); flex: none; background: var(--c); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--on-color) 35%, transparent), 0 4px 10px -4px var(--c); }
+  .badge .i { width: 20px; height: 20px; stroke-width: 2; }
+  .head { display: grid; justify-items: center; gap: 16px; text-align: center; margin-bottom: 56px; }
+  .head h2 { font-size: clamp(40px, 6vw, 72px); line-height: 1.05; letter-spacing: -.035em; }
+  .head p { font-size: clamp(19px, 2vw, 21px); line-height: 1.42; color: var(--text-2); max-width: 640px; }
+  .head p b { color: var(--text); font-weight: 600; }
+  .head p code { font-size: .9em; }
+  .band { padding: 128px 0; }
+  .band.gray { background: var(--band); }
+  .hand { font: 600 26px/1 var(--f-hand); color: var(--t-blue); white-space: nowrap; display: inline-flex; align-items: flex-end; gap: 2px; }
+  .hand svg { width: 46px; height: 40px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  @media (max-width: 760px) {
+    .band { padding: 80px 0; }
+    .head { margin-bottom: 36px; gap: 12px; }
+    .head h2 { font-size: clamp(32px, 9.2vw, 40px); }
+    .head p { font-size: 17px; }
+  }
+
+  /* ---------- header: a floating glass pill; logo and a menu button on phones ---------- */
+  .nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; padding: 10px 16px 0; }
+  .nav-in {
+    max-width: 1040px; margin-inline: auto; display: flex; align-items: center; gap: 20px; padding: 8px 8px 8px 16px; border-radius: 22px;
+    background: color-mix(in srgb, var(--bg) var(--glass), transparent); box-shadow: var(--rim);
+    backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border: 1px solid var(--nav-line);
+  }
+  .logo { display: inline-flex; align-items: center; gap: 9px; color: var(--text); font: 700 19px/1 var(--f-display); letter-spacing: -.02em; text-decoration: none !important; }
+  .logo img { width: 28px; height: 28px; }
+  .nav-links { display: flex; gap: 26px; margin-inline: auto; font-size: 14px; }
+  .nav-links a { color: var(--text-2); transition: color var(--dur); }
+  .nav-links a:hover, .nav-links a[aria-current="page"] { color: var(--text); text-decoration: none; }
+  .nav-links .nav-dl { display: none; }
+  .icon-btn { width: 40px; height: 40px; display: grid; place-items: center; flex: none; border: 0; border-radius: 12px; background: transparent; color: var(--text-2); cursor: pointer; }
+  .icon-btn:hover { background: var(--fill); color: var(--text); }
+  .icon-btn .i { width: 20px; height: 20px; }
+  .theme-sun { display: none; }
+  [data-theme="dark"] .theme-sun { display: block; }
+  [data-theme="dark"] .theme-moon { display: none; }
+  .menu-btn { display: none; color: var(--text); }
+  .menu-btn .i { width: 22px; height: 22px; }
+  @media (max-width: 760px) {
+    .nav { padding: 8px 12px 0; }
+    .nav-in { position: relative; gap: 4px; padding: 6px 6px 6px 14px; }
+    .nav-in > .btn { display: none; }
+    .nav-in > .theme-btn { display: none; }
+    .menu-btn { display: grid; margin-left: auto; }
+    .nav-links { display: none; }
+    .nav.open .nav-links {
+      display: grid; position: absolute; left: 0; right: 0; top: calc(100% + 8px); gap: 0; margin: 0; padding: 4px 16px 16px; font-size: 17px;
+      border-radius: 22px; border: 1px solid var(--nav-line); background: color-mix(in srgb, var(--bg) 97%, var(--text));
+      box-shadow: var(--rim), var(--shadow-pop); transform-origin: 50% 0;
+    }
+    .nav.open .nav-links a { padding: 13px 2px; color: var(--text); border-top: 1px solid var(--hair); }
+    .nav.open .nav-links a:first-child { border-top: 0; }
+    .nav.open .nav-links .nav-dl {
+      display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; padding: 14px; border: 0;
+      border-radius: var(--r-pill); background: var(--pill); color: var(--pill-text); font-weight: 600;
+    }
+    .nav-dl .i { width: 17px; height: 17px; }
+    .nav.open .nav-links .nav-theme {
+      display: flex; align-items: center; gap: 10px; padding: 13px 2px; border: 0; border-top: 1px solid var(--hair);
+      background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer;
+    }
+    /* Without JavaScript (no data-theme on <html>) the menu cannot open: the links wrap under the logo. */
+    :root:not([data-theme]) .menu-btn { display: none; }
+    :root:not([data-theme]) .nav-in { flex-wrap: wrap; }
+    :root:not([data-theme]) .nav-links { display: flex; flex-wrap: wrap; gap: 4px 18px; width: 100%; padding: 4px 0 6px; font-size: 15px; }
+  }
+  .nav-links .nav-theme { display: none; }
+
+  /* ---------- footer ---------- */
+  .foot { border-top: 1px solid var(--hair); padding: 32px 0 44px; font-size: 13px; color: var(--text-3); }
+  .foot .wrap { display: grid; gap: 24px; }
+  .foot .cols { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .foot h2 { font: 600 13px/1.3 var(--f-sans); color: var(--text); margin-bottom: 8px; letter-spacing: 0; }
+  .foot ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .foot a { color: var(--text-2); }
+  .foot .logo { font-size: 16px; }
+  .foot .logo img { width: 22px; height: 22px; }
+  .foot .legal { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+
+  /* ---------- 404 ---------- */
+  .not-found { display: grid; gap: 18px; justify-items: center; text-align: center; padding-block: clamp(96px, 14vw, 160px); }
+  .not-found-code { font: 500 13px/1 var(--f-mono); color: var(--text-3); }
+  .not-found h1 { font-size: clamp(40px, 6vw, 64px); line-height: 1.05; letter-spacing: -.035em; }
+  .not-found p { color: var(--text-2); max-width: 36em; font-size: 19px; }
+  .not-found .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 8px; }
+
+  /* ---------- touch screens: every control gets a 44px target ---------- */
+  @media (pointer: coarse) {
+    .icon-btn { width: 44px; height: 44px; }
+    .logo { min-height: 44px; }
+    .foot a { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
+    .foot ul { gap: 0; }
+    .copy-btn { min-height: 44px; }
+  }
+
+  /* Reduce Transparency: no glass blur anywhere (the tokens make it solid). */
+  @media (prefers-reduced-transparency: reduce) {
+    .btn-light, .nav-in { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  }
+
+  /* ---------- motion: everything above is the visible final state ---------- */
+  @media (prefers-reduced-motion: no-preference) {
+    .nav.open .nav-links { animation: menuin 220ms var(--ease-out-quart); }
+    @keyframes menuin { from { opacity: 0; transform: translateY(-6px) scale(.98); } }
+  }
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      /* the nav gains depth once the page scrolls */
+      .nav-in { animation: navlift linear both; animation-timeline: scroll(root); animation-range: 0 120px; }
+      @keyframes navlift { to { box-shadow: var(--rim), var(--shadow-nav); } }
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  }
+}
+
+/* ---------- share card (/og-card, captured to public/og.png) ---------- */
+@layer components {
+  .og-card {
+    width: 1200px; height: 630px; overflow: hidden; position: relative;
+    display: grid; place-content: center; justify-items: center; gap: 28px; text-align: center;
+    background: var(--wall-a); color: var(--on-color);
+  }
+  .og-card img { width: 180px; height: 180px; filter: var(--shadow-app); }
+  .og-card h1 { font-size: 92px; line-height: 1.02; letter-spacing: -.04em; }
+  .og-card p { font: 600 28px/1.2 var(--f-display); letter-spacing: -.02em; opacity: .92; }
+}
