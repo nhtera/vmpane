@@ -71,6 +71,15 @@ it_start_helper() {
     echo "$pid"
 }
 
+# Runs the UI tests named by -only-testing value $1 (xcodebuild test), output to log $2; $3, when given, is the
+# result bundle path. One derived-data folder for all runs: a fresh one per run cost 800 MB and, deleted while
+# Xcode's build service still wrote to it, was sometimes left behind. Variables named TEST_RUNNER_<name> reach
+# the tests as <name>.
+it_ui_tests() {
+    xcodebuild test -project "$VMPANE_ROOT/VMPane.xcodeproj" -scheme VMPane -destination 'platform=macOS' \
+        -only-testing:"$1" -derivedDataPath "$HOME/VMPaneItest/ui-derived-data" ${3:+-resultBundlePath "$3"} >"$2" 2>&1
+}
+
 # Saved VM memory can only be restored while this Mac is unlocked (Virtualization's Secure Enclave key):
 # scenarios that restore skip (77) on a locked screen.
 it_require_unlocked() {

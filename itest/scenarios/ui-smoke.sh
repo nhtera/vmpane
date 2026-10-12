@@ -15,8 +15,7 @@ scenario_run() {
     work=$(mktemp -d /tmp/vp-ui.XXXXXX)
     trap 'set +e; rm -rf "${work:-/nonexistent}"; true' RETURN
     log="$work/xcodebuild.log"
-    if ! xcodebuild test -project "$VMPANE_ROOT/VMPane.xcodeproj" -scheme VMPane -destination 'platform=macOS' \
-        -only-testing:VMPaneUITests -derivedDataPath "$work/dd" -resultBundlePath "$work/ui.xcresult" >"$log" 2>&1; then
+    if ! it_ui_tests VMPaneUITests "$log" "$work/ui.xcresult"; then
         grep -E "error:|failed|Test Case .* failed" "$log" | tail -20 >&2
         it_fail "UI tests failed"
         return 1

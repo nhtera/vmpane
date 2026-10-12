@@ -68,8 +68,7 @@ scenario_run() {
 
     log="$work/xcodebuild.log"
     if ! TEST_RUNNER_VMPANE_ITEST_PVM=$pvm TEST_RUNNER_VMPANE_ITEST_SUPPORT=$VMPANE_SUPPORT_DIR \
-        xcodebuild test -project "$VMPANE_ROOT/VMPane.xcodeproj" -scheme VMPane -destination 'platform=macOS' \
-        -only-testing:VMPaneUITests/ImportUITests -derivedDataPath "$work/dd" >"$log" 2>&1; then
+        it_ui_tests VMPaneUITests/ImportUITests "$log"; then
         grep -E "error:|failed|Test Case .* failed" "$log" | tail -20 >&2
         it_fail "the import through the app failed"
         return 1
