@@ -77,9 +77,13 @@ final class VMWindowUITests: XCTestCase {
         let cancel = window.buttons["Cancel Install…"]
         XCTAssertTrue(cancel.waitForExistence(timeout: 120), "the install's progress offers to cancel")
         cancel.click()
-        let confirm = vm.buttons["Cancel Installation"]
-        XCTAssertTrue(confirm.waitForExistence(timeout: 10), "the app asks first")
-        confirm.click()
+        // The alert's own button (a sheet on the window, or a dialog), not its Touch Bar copy.
+        let inSheet = window.sheets.buttons["Cancel Installation"]
+        let inDialog = vm.dialogs.buttons["Cancel Installation"]
+        let asked = Date().addingTimeInterval(10)
+        while !inSheet.exists, !inDialog.exists, Date() < asked { _ = inSheet.waitForExistence(timeout: 1) }
+        XCTAssertTrue(inSheet.exists || inDialog.exists, "the app asks first")
+        (inSheet.exists ? inSheet : inDialog).click()
         XCTAssertTrue(cancel.waitForNonExistence(timeout: 180), "the install ended")
     }
 }
