@@ -99,12 +99,60 @@ it_start_helper() {
 }
 
 # Runs the UI tests named by -only-testing value $1 (xcodebuild test), output to log $2; $3, when given, is the
-# result bundle path. One derived-data folder for all runs: a fresh one per run cost 800 MB and, deleted while
-# Xcode's build service still wrote to it, was sometimes left behind. Variables named TEST_RUNNER_<name> reach
-# the tests as <name>.
+# result bundle path. They drive $APP, the app under test (UITests/AppUnderTest.swift). One derived-data folder for
+# all runs: a fresh one per run cost 800 MB and, deleted while Xcode's build service still wrote to it, was
+# sometimes left behind. Variables named TEST_RUNNER_<name> reach the tests as <name>.
 it_ui_tests() {
-    xcodebuild test -project "$VMPANE_ROOT/VMPane.xcodeproj" -scheme VMPane -destination 'platform=macOS' \
-        -only-testing:"$1" -derivedDataPath "$HOME/VMPaneItest/ui-derived-data" ${3:+-resultBundlePath "$3"} >"$2" 2>&1
+    TEST_RUNNER_VMPANE_ITEST_APP=$APP xcodebuild test -project "$VMPANE_ROOT/VMPane.xcodeproj" -scheme VMPane \
+        -destination 'platform=macOS' -only-testing:"$1" -derivedDataPath "$HOME/VMPaneItest/ui-derived-data" \
+        ${3:+-resultBundlePath "$3"} >"$2" 2>&1
+}
+
+# Runs UI test $1 (VMPaneUITests/<class>/<test>) on the window of the VM whose helper answers on $socket (the
+# caller's variable), which it shows first; extra TEST_RUNNER_ variables come from the caller's environment.
+# Fails unless the test ran and passed.
+it_ui_vm_window() {
+    local log
+    it_rpc "$socket" vm.display.show >/dev/null || { it_fail "the VM's window did not show"; return 1; }
+    log=$(mktemp /tmp/vp-ui-log.XXXXXX)
+    if ! TEST_RUNNER_VMPANE_ITEST_HELPER_APP="$APP/Contents/Helpers/VMPaneVM.app" it_ui_tests "$1" "$log"; then
+        grep -E "error:|failed|Test Case .* failed" "$log" | tail -20 >&2
+        it_fail "UI test $1 failed (log: $log)"
+        return 1
+    fi
+    grep -q "Test Case.*${1##*/}.*passed" "$log" || { rm -f "$log"; it_fail "UI test $1 did not run (skipped?)"; return 1; }
+    rm -f "$log"
+}
+
+# Shares folders with the running VM (helper on $socket) and checks that it took effect live. Arguments:
+# <host folder> <read-only: true|false>, repeated; each share is named after its folder. A signed app's helpers
+# take sharing from the app only: there it is done as a person does, in the VM window's settings
+# (UITests/VMWindowUITests.swift; needs an unlocked GUI session). A development app's helper takes it from the
+# itest bridge (vm.settings.apply); VMPANE_ITEST_UI=1 uses the window there too.
+it_share_live() {
+    local adds="[]" patch out
+    while (($# >= 2)); do
+        adds=$(jq -c --arg p "$1" --argjson ro "$2" '. + [{path: $p, readOnly: $ro}]' <<<"$adds")
+        shift 2
+    done
+    if it_signed || [[ ${VMPANE_ITEST_UI:-0} == 1 ]]; then
+        TEST_RUNNER_VMPANE_ITEST_SHARES=$adds it_ui_vm_window VMPaneUITests/VMWindowUITests/testFoldersSharedWhileTheVMRuns
+        return
+    fi
+    patch=$(it_rpc "$socket" vm.settings.get | jq -c --argjson adds "$adds" '{patch: {shares: (.shares + [$adds | to_entries[]
+        | {id: "share-live-\(.key)", name: (.value.path | split("/") | last), hostPath: .value.path, readOnly: .value.readOnly}])}}')
+    out=$(it_rpc "$socket" vm.settings.apply "$patch") || { it_fail "vm.settings.apply failed"; return 1; }
+    [[ $(jq -r .fields.shares <<<"$out") == applied ]] || { it_fail "sharing did not apply live: $out"; return 1; }
+}
+
+# Cancels the Windows install of the VM whose helper answers on $socket: on a signed app in its window, as a person
+# does (the helpers take vm.install.cancel from the app only); on a development app through the itest bridge.
+it_cancel_install() {
+    if it_signed || [[ ${VMPANE_ITEST_UI:-0} == 1 ]]; then
+        TEST_RUNNER_VMPANE_ITEST_CANCEL_INSTALL=1 it_ui_vm_window VMPaneUITests/VMWindowUITests/testWindowsInstallCancelledFromItsWindow
+        return
+    fi
+    it_rpc "$socket" vm.install.cancel >/dev/null || { it_fail "vm.install.cancel failed"; return 1; }
 }
 
 # The OCR tool (itest/lib/ocr.swift), compiled once per source version; echoes its path.

@@ -296,6 +296,10 @@ public actor HelperController {
                         .policyDenied, "the console topic needs policy level control; this VM allows \(effectivePolicy().level.rawValue)"))
             }
             connection.subscribe(Set(params.topics))
+            // A window opened during an install shows it (and can cancel it) without waiting for the next phase.
+            if params.topics.contains("install"), let progress = currentInstallProgress() {
+                connection.notify(topic: "install", method: ControlNotification.installProgress.rawValue, params: progress)
+            }
             return .success(.object([:]))
         }
     }

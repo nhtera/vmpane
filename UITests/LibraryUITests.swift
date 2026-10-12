@@ -16,9 +16,8 @@ final class LibraryUITests: XCTestCase {
     /// An empty library in its own support directory, past the welcome.
     @MainActor
     private func launch() -> XCUIApplication {
-        let app = XCUIApplication()
+        let app = AppUnderTest.app()
         app.launchEnvironment["VMPANE_SUPPORT_DIR"] = support.path
-        app.launchArguments += ["-onboarded", "YES"]
         app.launch()
         return app
     }

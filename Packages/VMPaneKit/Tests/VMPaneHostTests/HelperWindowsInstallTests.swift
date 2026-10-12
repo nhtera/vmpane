@@ -97,6 +97,31 @@ private func waitUntil(_ condition: () async throws -> Bool) async throws -> Boo
     #expect(!FileManager.default.fileExists(atPath: UnattendMedia.url(in: bundle).path))
 }
 
+/// A client that subscribes while the install runs (a window opened then) hears at once where it is, and can
+/// cancel it: the VM stops without the unattend image.
+@Test func aWindowOpenedDuringTheInstallSeesItAndCancelsIt() async throws {
+    let (helper, _) = try await installingHarness()
+    defer { Task { await helper.tearDown() } }
+    _ = try await helper.client.call("vm.start", params: ["headless": true])
+    let bundle = helper.bundle
+    #expect(try await waitUntil { InstallState.load(from: bundle)?.phase == .setupRunning })
+
+    _ = try await helper.client.call("events.subscribe", params: ["topics": ["install"]])
+    var notes = helper.client.notifications.makeAsyncIterator()
+    let now = await notes.next()
+    #expect(now?.method == "install.progress" && now?.params?["phase"] == "install" && now?.params?["percent"] == 10)
+
+    _ = try await helper.client.call("vm.install.cancel")
+    // The phase's own announcement may still come first (it is sent after the state is saved).
+    var cancelled = false
+    for _ in 0..<5 where !cancelled {
+        cancelled = await notes.next()?.params?["phase"] == "cancelled"
+    }
+    #expect(cancelled)
+    #expect(try await waitUntil { try await helper.state() == "stopped" })
+    #expect(!FileManager.default.fileExists(atPath: UnattendMedia.url(in: bundle).path))
+}
+
 /// A helper that restarts mid-Setup resumes without key presses, and a phase that runs out of time fails the
 /// install: the unattend image goes at once, the install media at the next stop.
 @Test func aResumedInstallPressesNoKeysAndTimesOut() async throws {

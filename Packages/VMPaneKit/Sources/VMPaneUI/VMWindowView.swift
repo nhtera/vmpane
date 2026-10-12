@@ -13,6 +13,7 @@ public struct VMWindowView: View {
     @State private var snapshots: SnapshotsModel?
     @State private var capturing = false
     @State private var hud = false
+    @State private var confirmingCancelInstall = false
     /// The content's height: sheets fit in it instead of hanging below a small window.
     @State private var room: CGFloat = 600
 
@@ -51,7 +52,8 @@ public struct VMWindowView: View {
                     return true
                 }
             if let install = model.install, install.isActive {
-                InstallProgressOverlay(progress: install, os: model.os)
+                InstallProgressOverlay(
+                    progress: install, os: model.os, cancel: model.os == .windows ? { confirmingCancelInstall = true } : nil)
             } else if model.state == .stopped || model.state == .error {
                 StoppedOverlay(model: model)
             }
@@ -117,6 +119,12 @@ public struct VMWindowView: View {
                 SnapshotsSheet(model: snapshots, running: model.state == .running || model.state == .paused)
                     .frame(height: fitted(SnapshotsSheet.idealHeight))
             }
+        }
+        .alert("Cancel the Windows installation?", isPresented: $confirmingCancelInstall) {
+            Button("Keep Installing", role: .cancel) {}
+            Button("Cancel Installation", role: .destructive) { Task { await model.cancelInstall() } }
+        } message: {
+            Text("The VM stops, and the installer and its answer file (with the password) are removed from it.")
         }
         .alert("The VM could not do that", isPresented: errorShown) {
             Button("OK", role: .cancel) {}
@@ -211,22 +219,30 @@ struct VMToolbar: ToolbarContent {
     }
 }
 
-/// While macOS or Windows installs (the guest needs no input): what is happening and how far along.
+/// While macOS or Windows installs (the guest needs no input): what is happening and how far along, and for
+/// Windows a way to stop.
 struct InstallProgressOverlay: View {
     let progress: HelperViewModel.InstallProgress
     let os: GuestOS?
+    /// Asks to cancel the install (Windows), when it can be.
+    let cancel: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 10) {
-            Text(os.map { "Installing \(OSBadge.name($0))" } ?? "Installing").font(.headline)
-            ProgressView(value: Double(progress.percent), total: 100)
-            Text(progress.message).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            Text("You can leave this running; VMPane restarts the VM when it is done.").font(.caption).foregroundStyle(.secondary)
+            VStack(spacing: 10) {
+                Text(os.map { "Installing \(OSBadge.name($0))" } ?? "Installing").font(.headline)
+                ProgressView(value: Double(progress.percent), total: 100)
+                Text(progress.message).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Text("You can leave this running; VMPane restarts the VM when it is done.").font(.caption).foregroundStyle(.secondary)
+            }
+            .accessibilityElement(children: .combine)
+            if let cancel {
+                Button("Cancel Install…", action: cancel)
+            }
         }
         .padding(20)
         .frame(width: 360)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-        .accessibilityElement(children: .combine)
     }
 }
 

@@ -80,6 +80,12 @@ private func eventually(_ condition: @MainActor () -> Bool) async -> Bool {
     channel.answer("vm.suspend", .failure(RPCError(.invalidState, "a VM installing Windows cannot be suspended")))
     await model.perform(.suspend)
     #expect(model.lastError == "a VM installing Windows cannot be suspended")
+    model.lastError = nil
+    await model.cancelInstall()
+    #expect(channel.calls.last == "vm.install.cancel" && model.lastError == nil)
+    channel.answer("vm.install.cancel", .failure(RPCError(.invalidState, "the VM is starting; cancel the install once it runs")))
+    await model.cancelInstall()
+    #expect(model.lastError == "the VM is starting; cancel the install once it runs")
 }
 
 @Test @MainActor func screenshotsLandAsPNGFiles() async throws {

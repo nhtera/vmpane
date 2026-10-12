@@ -1,8 +1,9 @@
 # Guest-visible VZ devices on a Linux guest (golden image probe on the serial console):
 #   - nested virtualization: /dev/kvm in the guest when enabled (M3 and later), absent when off;
 #   - Rosetta: the `rosetta` virtiofs tag carries the Rosetta binary when enabled (host Rosetta installed);
-#   - VMPane shares: the `vmpane-shares` tag lists each share as a directory; a live change through
-#     vm.settings.apply reaches the guest (checked for a mount kept since boot and for a fresh mount).
+#   - VMPane shares: the `vmpane-shares` tag lists each share as a directory; a folder shared while the VM runs
+#     (it_share_live: on a signed app in the VM window's settings, an unlocked GUI session) reaches the guest
+#     (checked for a mount kept since boot and for a fresh mount).
 source "$VMPANE_ROOT/itest/lib/common.sh"
 IT_SCENARIO=vz-devices
 
@@ -51,11 +52,8 @@ scenario_run() {
     [[ $(field share "$probe") == "./data,./data/hello.txt," ]] || it_fail "share not visible" || return 1
 
     # 2. Live share change: a second share appears without a restart.
-    local patch fields offset
-    patch=$(jq -nc --arg d "$work/data" --arg m "$work/more" '{patch: {shares: [
-        {id: "s1", name: "data", hostPath: $d, readOnly: true}, {id: "s2", name: "more", hostPath: $m, readOnly: true}]}}')
-    fields=$(it_rpc "$socket" vm.settings.apply "$patch" | jq -c .fields)
-    [[ $fields == '{"shares":"applied"}' ]] || it_fail "shares not applied live: $fields" || return 1
+    local offset
+    it_share_live "$work/more" true || return 1
     offset=$(it_log_size "$b")
     it_rpc "$socket" vm.input.text '{"text": "VMPANE-PROBE\n"}' >/dev/null
     probe=$(probe_after "$b" "$offset") || it_fail "no probe after the change" || return 1

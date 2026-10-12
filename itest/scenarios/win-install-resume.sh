@@ -3,7 +3,8 @@
 #   2. the helper is killed (SIGKILL); the next helper reaps QEMU (Windows sees a power cut) and, at vm.start,
 #      resumes in setupRunning: same attempt (no key presses, which only a first boot gets), the ISO out of the
 #      config (it cannot boot again and wipe the disk);
-#   3. vm.install.cancel: the VM stops, the unattend image is gone, the config has no install left.
+#   3. Cancel (it_cancel_install: on a signed app in the VM's window, an unlocked GUI session): the VM stops, the
+#      unattend image is gone, the config has no install left.
 # Whether Windows Setup itself recovers from the power cut is Windows' business, not checked here.
 # Skips like win-install (no ISO, < 25 GiB free).
 source "$VMPANE_ROOT/itest/lib/common.sh"
@@ -50,7 +51,7 @@ scenario_run() {
     [[ $(it_state "$bundle") == running ]] || it_fail "the VM is not running after the restart" || return 1
 
     # 3. Cancel.
-    it_rpc "$socket" vm.install.cancel >/dev/null || it_fail "vm.install.cancel failed" || return 1
+    it_cancel_install || return 1
     [[ ! -e $bundle/install/unattend.iso ]] || it_fail "unattend.iso is still there after cancel" || return 1
     it_wait_for 180 bash -c "[[ \$(/usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' '$socket' vm.info | jq -r .state) == stopped ]]" \
         || it_fail "the VM did not stop after cancel" || return 1

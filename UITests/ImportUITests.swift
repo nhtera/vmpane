@@ -13,9 +13,8 @@ final class ImportUITests: XCTestCase {
             throw XCTSkip("run by itest/scenarios/import-parallels.sh")
         }
         continueAfterFailure = false
-        let app = XCUIApplication()
+        let app = AppUnderTest.app()
         app.launchEnvironment["VMPANE_SUPPORT_DIR"] = support
-        app.launchArguments += ["-onboarded", "YES"]
         app.launch()
         XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10))
 

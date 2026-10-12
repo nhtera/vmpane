@@ -186,18 +186,23 @@ public struct ApplyModeBadge: View {
     }
 }
 
-/// The VM's shared folders: add with a folder picker, remove per row.
+/// The VM's shared folders: add with a folder picker; per row, read-only or not, and remove.
 struct SharedFoldersEditor: View {
     @Binding var shares: [Extensible<ShareConfig>]
 
     var body: some View {
         VStack(alignment: .leading) {
             Text("Shared folders")
-            ForEach(shares, id: \.id) { share in
+            ForEach($shares, id: \.id) { $share in
                 HStack {
                     Label(share.hostPath, systemImage: "folder").lineLimit(1).truncationMode(.middle)
                     Spacer()
+                    Toggle("Read only", isOn: $share.readOnly)
+                        .toggleStyle(.checkbox)
+                        .accessibilityLabel("Read only: \(share.name)")
+                        .help("The VM can read this folder but not change it")
                     Button("Remove", systemImage: "minus.circle") { shares.removeAll { $0.id == share.id } }
+                        .accessibilityLabel("Remove \(share.name)")
                         .labelStyle(.iconOnly)
                         .buttonStyle(.borderless)
                 }

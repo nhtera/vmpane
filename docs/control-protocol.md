@@ -106,7 +106,7 @@ at it) needs `control` for clients other than the app and an operator.
 | `exec.exited` | `{execId, code, signal}` |
 | `console.output` | `{dataB64}` |
 | `snapshot.progress` | `{id, percent}` |
-| `install.progress` | `{phase, percent, message}` |
+| `install.progress` | `{phase, percent, message}`; subscribing to `install` while a Windows install runs sends the current one at once |
 | `files.progress` | `{bytesDone, bytesTotal, file}` (during `vm.files.drop`) |
 <!-- contract:notifications:end -->
 

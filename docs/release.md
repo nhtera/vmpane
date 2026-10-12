@@ -33,7 +33,10 @@ open an issue and quarantine it; do not rerun until it passes.
 3. `scripts/release.sh itest x.y.z --tier beta|release` on each required Mac (copy the DMG and
    `candidate.json`; collect the result files back into `itest/results/`), with `VMPANE_SIGN_IDENTITY` set:
    `update-under-load` signs a second version of the app. Against a Developer ID app the scenarios act as an
-   agent within a policy they set the way the app does (`itest/policy`); the app's own controls are not theirs.
+   agent within a policy they set the way the app does (`itest/policy`); what only the app may do (sharing a
+   folder while the VM runs, cancelling a Windows install) they do in the app's own windows through UI tests
+   (`UITests/VMWindowUITests.swift`), and every UI test drives the candidate's app. Keep the Mac unlocked and
+   leave it alone while the tier runs: the UI tests take the keyboard and mouse.
 4. `scripts/release.sh publish x.y.z` refuses unless every scenario of the tier passed for this DMG on enough
    Macs. It builds and verifies the corresponding source (GPL), writes `SHA256SUMS`, adds this DMG to the
    appcast and writes the cask; then it creates the GitHub Release (pre-release for betas) with the DMG, source,

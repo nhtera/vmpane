@@ -183,6 +183,17 @@ public final class HelperViewModel {
         }
     }
 
+    /// Ends the Windows install as cancelled; the helper stops the VM.
+    public func cancelInstall() async {
+        do {
+            _ = try await channel.call(ControlMethod.vmInstallCancel.rawValue, params: nil, timeout: .seconds(30))
+        } catch let error as RPCError {
+            lastError = error.message
+        } catch {
+            lastError = String(describing: error)
+        }
+    }
+
     /// Saves a PNG of the guest display to `directory` (the Desktop, like macOS screenshots).
     public func screenshot(to directory: URL) async {
         do {

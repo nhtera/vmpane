@@ -119,11 +119,28 @@ extension HelperController {
         state.advance(to: phase)
         guard state != windowsInstall else { return }
         await persistInstall(state)
-        let progress: [InstallState.Phase: (Int, String)] = [
-            .setupRunning: (10, "Windows Setup is installing"), .firstLogon: (80, "Windows started; installing drivers and tools"),
-            .toolsInstalled: (90, "Drivers and tools installed; restarting the VM"),
-        ]
-        if let (percent, message) = progress[phase] { announceInstall(message, percent: percent) }
+        if phase != .firstBoot, let (percent, message) = Self.installProgress[phase] { announceInstall(message, percent: percent) }
+    }
+
+    /// What `install.progress` says in each phase of an install that is still going.
+    static let installProgress: [InstallState.Phase: (Int, String)] = [
+        .prepared: (0, "Starting Windows Setup"), .firstBoot: (0, "Starting Windows Setup"),
+        .setupRunning: (10, "Windows Setup is installing"), .firstLogon: (80, "Windows started; installing drivers and tools"),
+        .toolsInstalled: (90, "Drivers and tools installed; restarting the VM"),
+    ]
+
+    /// The progress of the install going on in the VM, for a client that subscribes now (a window opened during
+    /// it). None while the VM is stopped: its window offers to start it.
+    func currentInstallProgress() -> JSONValue? {
+        guard ![.stopped, .error].contains(self.state) else { return nil }
+        loadInstall()
+        guard let state = windowsInstall, !state.isFinished, var (percent, message) = Self.installProgress[state.phase] else {
+            return nil
+        }
+        if state.phase == .setupRunning, state.mediaEjected {
+            (percent, message) = (30, "Windows Setup restarted; the installer disc is ejected")
+        }
+        return ["phase": "install", "percent": .int(Int64(percent)), "message": .string(message)]
     }
 
     /// The VM stopped during an install: finalize after the tools, clean up after a failure.
