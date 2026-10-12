@@ -56,18 +56,31 @@ final class LibraryUITests: XCTestCase {
         // hosts and the split view's column hosts are unnamed groups the size of their window or sheet (VoiceOver
         // names them by the window); the title bar's buttons and title are macOS's own. Everything else is audited.
         let titleBarButtons = window.buttons.matching(NSPredicate(format: "identifier BEGINSWITH '_XCUI:'"))
-        let windowHost: (XCUIAccessibilityAuditIssue) -> Bool = { issue in
+        func excuse(_ issue: XCUIAccessibilityAuditIssue) -> Bool {
             guard let element = issue.element else { return false }
             if !window.frame.intersects(element.frame) { return true }  // the menu bar: this test audits the window
             if issue.auditType == .parentChild {
                 return titleBarButtons.allElementsBoundByIndex.contains { $0.frame.contains(element.frame) }
             }
-            if issue.auditType == .contrast {  // the title macOS draws in the title bar
-                return element.elementType == .staticText && element.value as? String == window.title
+            if issue.auditType == .contrast {
+                // The title macOS draws in the title bar; or window text under an open sheet, where the audit samples
+                // the sheet's pixels instead of the text's.
+                if element.elementType == .staticText && element.value as? String == window.title { return true }
+                return app.sheets.allElementsBoundByIndex.contains { sheet in
+                    sheet.frame.contains(element.frame)
+                        && !sheet.staticTexts.matching(NSPredicate(format: "value == %@", element.value as? String ?? "")).firstMatch.exists
+                }
             }
             guard issue.auditType == .sufficientElementDescription, element.elementType == .group else { return false }
             let sheetHost = app.sheets.allElementsBoundByIndex.contains { $0.frame == element.frame }
             return sheetHost || (element.frame.minY == window.frame.minY && element.frame.height == window.frame.height)
+        }
+        let windowHost: (XCUIAccessibilityAuditIssue) -> Bool = { issue in
+            let excused = excuse(issue)
+            if !excused {  // the failure names only the audit; this says which element
+                print("audit issue: \(issue.compactDescription) on \(issue.element?.debugDescription.prefix(300) ?? "no element")")
+            }
+            return excused
         }
         try app.performAccessibilityAudit(for: .all, windowHost)
         app.typeKey("n", modifierFlags: .command)
