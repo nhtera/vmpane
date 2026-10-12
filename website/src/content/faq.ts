@@ -36,7 +36,7 @@ export const FAQ: readonly Faq[] = [
   },
   {
     q: "How does it update?",
-    a: "VMPane checks for updates itself and asks before it installs one. With Homebrew, `brew upgrade` works too.",
+    a: "VMPane checks for updates itself and asks before it installs one. With Homebrew, `brew upgrade --cask vmpane` works too.",
   },
 ];
 

@@ -1,100 +1,142 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/* The docs view, from the approved prototype. Tokens only (no hex). */
+/* The docs view, from the design draft v5's Docs view: an edge-to-edge sidebar
+   in the band colour with a coloured badge per page (like System Settings),
+   the system font, a prose column of 65-75 characters, a quiet table of
+   contents. Tokens only. */
 @layer components {
-  /* code block with Copy */
-  .code { background: var(--band); border-radius: var(--r-panel); overflow: hidden; }
-  .code-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 8px 6px 16px; border-bottom: 1px solid var(--hair); font-size: 13px; color: var(--text-2); }
-  .code pre { margin: 0; padding: 16px 20px; overflow-x: auto; font-family: var(--f-mono); font-size: 14px; line-height: 1.7; color: var(--text); background: none !important; }
-  .copy-btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding-inline: 10px; border-radius: var(--r-seg); border: 0; background: var(--fill); box-shadow: var(--rim); color: var(--text); font-size: 13px; font-weight: 500; cursor: pointer; }
-  .copy-btn:hover { background: color-mix(in srgb, var(--text) 12%, transparent); }
+  /* ---------- layout: sidebar | article | table of contents ---------- */
+  .docs { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 12px; border-top: 1px solid var(--hair); }
+  @media (min-width: 900px) { .docs { grid-template-columns: 272px minmax(0, 1fr); } }
+  @media (min-width: 1200px) { .docs { grid-template-columns: 272px minmax(0, 1fr) 220px; } }
 
-  .docs { display: grid; grid-template-columns: 236px minmax(0, 1fr) 200px; gap: 48px; padding-block: 32px 96px; }
-  .docs-side { position: sticky; top: 84px; align-self: start; max-height: calc(100vh - 100px); overflow-y: auto; display: grid; gap: 22px; padding-bottom: 24px; font-size: 14.5px; }
-  .search-btn {
-    display: flex; align-items: center; gap: 8px; width: 100%; height: 38px; padding-inline: 10px;
-    border: 1px solid var(--hair); border-radius: var(--r-ctl); background: var(--bg); color: var(--text-2); cursor: pointer; font-size: 14px;
+  .docs-side {
+    display: none; align-content: start; gap: 18px; position: sticky; top: 76px; height: calc(100vh - 76px); height: calc(100dvh - 76px);
+    padding: 18px 12px 24px; background: var(--band); border-right: 1px solid var(--hair);
+    font-size: 14px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
   }
-  .search-btn svg { width: 15px; height: 15px; }
-  .search-btn kbd { margin-left: auto; }
-  .docs-nav { display: grid; gap: 22px; }
-  .nav-group { display: grid; gap: 2px; }
-  .nav-group p { font-weight: 600; font-size: 13.5px; padding: 0 10px 4px; }
-  .nav-group a { display: block; padding: 5px 10px; border-radius: var(--r-seg); color: var(--text-2); text-decoration: none; line-height: 1.4; }
-  .nav-group a:hover { color: var(--text); background: var(--fill); }
-  .nav-group a[aria-current="page"] { color: var(--text); background: var(--accent-soft); font-weight: 500; }
-  .docs-menu { display: none; }
+  @media (min-width: 900px) { .docs-side { display: grid; } }
+  .docs-nav { display: grid; gap: 18px; }
+  .nav-group { display: grid; gap: 1px; }
+  .nav-group p { font: 600 12px/1.3 var(--f-sans); color: var(--text-3); padding: 0 8px; margin-bottom: 4px; }
+  .nav-group a { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 7px; color: var(--text); text-decoration: none; line-height: 1.3; }
+  .nav-group a:hover { background: var(--fill); text-decoration: none; }
+  .nav-group a[aria-current="page"] { background: var(--sel); color: var(--on-color); }
+  .nav-group .ic { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; flex: none; background: var(--c); color: var(--on-color); }
+  .nav-group .ic .i { width: 14px; height: 14px; stroke-width: 2; }
+  .nav-group a[aria-current="page"] .ic { background: color-mix(in srgb, var(--on-color) 22%, transparent); }
 
-  .article { min-width: 0; max-width: 46rem; }
-  .crumb { font-size: 14px; color: var(--text-2); margin-bottom: 10px; }
-  .article h1 { font-family: var(--f-display); font-weight: 600; font-size: clamp(2rem, 1.4vw + 1.5rem, 2.6rem); line-height: 1.12; letter-spacing: -0.015em; }
-  .article .lead { margin-top: 14px; font-size: 1.125rem; color: var(--text-2); }
-  .article h2 { font-family: var(--f-display); font-weight: 600; font-size: 1.6rem; line-height: 1.2; margin-top: 48px; }
-  .article h3 { font-size: 17px; font-weight: 600; margin-top: 28px; }
-  .article p, .article ul, .article ol { margin-top: 14px; margin-bottom: 0; }
+  .search-btn {
+    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 7px 10px; border: 0; border-radius: 8px;
+    background: var(--bg); box-shadow: 0 0 0 .5px var(--hair), 0 1px 2px var(--fill); color: var(--text-2); font-size: 14px; cursor: pointer;
+  }
+  .search-btn:hover { color: var(--text); }
+  .search-btn .i { width: 16px; height: 16px; }
+  .search-btn kbd { margin-left: auto; }
+
+  /* phones and narrow windows: the nav folds into a disclosure under the header */
+  .docs-menu { display: none; }
+  @media (max-width: 899px) {
+    .docs-menu { display: block; margin: 12px 16px 0; border-radius: var(--r-panel); background: var(--band); }
+    .docs-menu summary { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 0 16px; font-weight: 600; cursor: pointer; list-style: none; }
+    .docs-menu summary::-webkit-details-marker { display: none; }
+    .docs-menu summary::after { content: "+"; font-size: 22px; font-weight: 400; color: var(--text-3); transition: transform var(--dur) var(--ease-out-quart); }
+    .docs-menu[open] summary::after { transform: rotate(45deg); }
+    .docs-menu .docs-side-inner { display: grid; gap: 18px; padding: 4px 8px 16px; font-size: 15px; }
+  }
+
+  /* ---------- the article ---------- */
+  .article { min-width: 0; width: 100%; max-width: 784px; margin-inline: auto; padding: 32px 16px 120px; }
+  @media (min-width: 900px) { .article { padding-inline: 32px; } }
+  .article > * + * { margin-top: 18px; }
+  .crumb { font-size: 14px; color: var(--text-3); }
+  .article h1 { font-size: clamp(34px, 4vw, 44px); letter-spacing: -.03em; line-height: 1.08; margin-top: 6px; }
+  .article h1:focus-visible { outline: none; }
+  .article .lead { font-size: 21px; line-height: 1.42; color: var(--text-2); }
+  .article h2 { font-size: 28px; letter-spacing: -.02em; line-height: 1.2; margin-top: 44px; }
+  .article h3 { font-size: 19px; letter-spacing: -.015em; margin-top: 28px; }
+  .article p, .article ul, .article ol { max-width: 70ch; }
   .article ul, .article ol { padding-left: 1.3em; }
   .article li + li { margin-top: 6px; }
+  .article li > ul, .article li > ol { margin-top: 6px; }
   .article li::marker { color: var(--text-3); }
-  .article :not(pre) > code { font-family: var(--f-mono); font-size: 0.88em; background: var(--fill); border-radius: 4px; padding: 1px 5px; }
-  .article .code { margin-top: 18px; }
-  .article blockquote, .callout { margin: 22px 0 0; padding: 14px 16px; border-radius: var(--r-row); background: var(--bg); border: 1px solid var(--hair); border-left: 3px solid var(--blue); }
-  .article blockquote > p:first-child { margin-top: 0; }
-  .callout b { display: block; font-weight: 600; margin-bottom: 2px; }
-  .article .steps { list-style: none; padding: 0; counter-reset: step; display: grid; gap: 18px; }
-  /* Block layout, the number in the gutter: a step's text may hold any inline
-     content (bold, code, links), which a grid would split into cells. */
-  .article .steps > li { counter-increment: step; position: relative; display: block; min-height: 28px; padding-left: 44px; margin: 0; }
-  .article .steps > li::before {
-    content: counter(step); position: absolute; left: 0; top: 0; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
-    border: 1px solid var(--hair); background: var(--bg); font-size: 13.5px; font-weight: 600; color: var(--text);
-  }
-  .article .steps > li > strong:first-child, .article .steps > li > p:first-child > strong:first-child { display: block; font-weight: 600; padding-top: 2px; }
-  .article .steps > li > p { margin-top: 4px; }
-  .article .steps > li > p:first-child { margin-top: 0; }
-  .article h1:focus-visible { outline: none; }
-  .article kbd { font-size: 0.82em; }
+  .article :not(pre) > code { font-size: .88em; background: var(--fill); padding: 2px 6px; border-radius: 6px; overflow-wrap: anywhere; }
+  .article kbd { font-size: .82em; }
   /* links in running text are underlined: colour alone does not tell them apart */
   .article a { overflow-wrap: anywhere; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
   .article a:hover { text-decoration-thickness: 2px; }
   .article .cards a, .article .pager a { text-decoration: none; }
-  .table-scroll, .code pre { scrollbar-width: thin; }
-  .table-scroll:focus-visible, .code pre:focus-visible { outline-offset: -2px; border-radius: var(--r-panel); }
-  .table-scroll { margin-top: 18px; overflow-x: auto; border: 1px solid var(--hair); border-radius: var(--r-panel); background: var(--bg); }
-  .article table { width: 100%; border-collapse: collapse; font-size: 15px; }
-  .article th, .article td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--hair); vertical-align: top; }
-  .article th { font-weight: 600; font-size: 13.5px; color: var(--text-2); background: var(--band); }
-  .article tr:last-child td { border-bottom: 0; }
-  /* Shiki's line spans carry the class "line", which the landing page's transcript also uses. */
-  .article .shiki .line { display: inline; grid-template-columns: none; gap: 0; padding: 0; border: 0; border-radius: 0; }
-  .code-head .copy-btn { flex: none; }
+  .article blockquote { margin-inline: 0; padding: 16px 20px; border-radius: var(--r-panel); background: var(--band); }
+  .article blockquote > :first-child { margin-top: 0; }
+  .article blockquote > * + * { margin-top: 10px; }
+  .article hr { border: 0; border-top: 1px solid var(--hair); margin-block: 32px; }
+
+  /* numbered steps: the number in the gutter, any inline content in the text */
+  .article .steps { list-style: none; padding: 0; counter-reset: step; display: grid; gap: 18px; }
+  .article .steps > li { counter-increment: step; position: relative; display: block; min-height: 28px; padding-left: 44px; margin: 0; }
+  .article .steps > li::before {
+    content: counter(step); position: absolute; left: 0; top: 0; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+    background: var(--band); font-size: 13px; font-weight: 600; color: var(--text);
+  }
+  .article .steps > li > strong:first-child, .article .steps > li > p:first-child > strong:first-child { display: block; font-weight: 600; padding-top: 2px; }
+  .article .steps > li > p { margin-top: 4px; }
+  .article .steps > li > p:first-child { margin-top: 0; }
+
+  /* code block with Copy */
+  .code { background: var(--band); border-radius: var(--r-panel); overflow: hidden; }
+  .code-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 8px 6px 18px; font-size: 13px; color: var(--text-2); }
   .code-head > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .article .cards { list-style: none; padding: 0; margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: 12px; }
+  .code pre { margin: 0; padding: 4px 20px 18px; overflow-x: auto; font-family: var(--f-mono); font-size: 14px; line-height: 1.7; color: var(--text); background: none !important; scrollbar-width: thin; }
+  /* Shiki's line spans carry the class "line": inline, never a grid. */
+  .code pre .line { display: inline; }
+  .copy-btn { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding-inline: 10px; border-radius: var(--r-seg); border: 0; background: var(--fill); box-shadow: var(--rim); color: var(--text); font-size: 13px; font-weight: 500; cursor: pointer; }
+  .copy-btn:hover { background: color-mix(in srgb, var(--text) 12%, transparent); }
+
+  /* tables scroll inside their box, never the page */
+  .table-scroll { overflow-x: auto; border-radius: var(--r-panel); border: 1px solid var(--hair); scrollbar-width: thin; }
+  .table-scroll:focus-visible, .code pre:focus-visible { outline-offset: -3px; }
+  .article table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .article th, .article td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--hair); vertical-align: top; }
+  .article th { font-size: 13px; font-weight: 600; color: var(--text-3); background: var(--band); }
+  .article tr:last-child td { border-bottom: 0; }
+
+  /* the /docs index: a card per page */
+  .article .cards { list-style: none; padding: 0; max-width: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: 12px; }
   .article .cards li { margin: 0; }
-  .cards a { display: grid; gap: 4px; height: 100%; padding: 14px 16px; border: 1px solid var(--hair); border-radius: var(--r-row); background: var(--bg); color: var(--text); text-decoration: none; }
-  .cards a:hover { border-color: var(--blue); }
+  .cards a { display: grid; gap: 4px; height: 100%; padding: 16px 18px; border-radius: var(--r-panel); background: var(--band); color: var(--text); transition: box-shadow var(--dur); }
+  .cards a:hover { box-shadow: inset 0 0 0 1px var(--blue); }
+  .cards strong { font-weight: 600; }
   .cards span { color: var(--text-2); font-size: 14.5px; }
-  .pager { margin-top: 56px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .pager a { display: grid; gap: 2px; padding: 14px 16px; border: 1px solid var(--hair); border-radius: var(--r-row); text-decoration: none; color: var(--text); background: var(--bg); }
-  .pager a:hover { border-color: var(--blue); }
+
+  /* pager and page footer */
+  .pager { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 48px !important; }
+  .pager a { display: grid; gap: 2px; padding: 16px 18px; border-radius: var(--r-panel); background: var(--band); color: var(--text); transition: box-shadow var(--dur); }
+  .pager a:hover { box-shadow: inset 0 0 0 1px var(--blue); }
   .pager small { color: var(--text-3); font-size: 13px; }
   .pager .prev { grid-column: 1; }
-  .pager .next { text-align: right; grid-column: 2; }
-  .edit { margin-top: 28px; font-size: 14px; color: var(--text-2); display: flex; flex-wrap: wrap; gap: 6px 20px; }
+  .pager .next { grid-column: 2; text-align: right; }
+  @media (max-width: 600px) { .pager { grid-template-columns: minmax(0, 1fr); } .pager .next { grid-column: 1; } }
+  .edit { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 20px; padding-top: 18px; border-top: 1px solid var(--hair); font-size: 14px; color: var(--text-3); max-width: none !important; }
 
-  .toc { position: sticky; top: 84px; align-self: start; font-size: 13.5px; display: grid; gap: 8px; }
-  .toc p { font-weight: 600; }
-  .toc a { color: var(--text-2); text-decoration: none; display: block; padding-left: 12px; border-left: 2px solid var(--hair); line-height: 1.5; }
-  .toc a[data-depth="3"] { padding-left: 24px; }
+  /* ---------- table of contents ---------- */
+  .toc { display: none; align-content: start; gap: 8px; position: sticky; top: 76px; padding: 38px 24px 0 0; font-size: 13px; }
+  @media (min-width: 1200px) { .toc { display: grid; } }
+  .toc p { font-weight: 600; color: var(--text); }
+  .toc a { color: var(--text-2); text-decoration: none; line-height: 1.4; }
+  .toc a[data-depth="3"] { padding-left: 12px; }
   .toc a:hover { color: var(--text); }
-  .toc a[aria-current="true"] { color: var(--text); border-left-color: var(--blue); }
+  .toc a[aria-current="true"] { color: var(--t-blue); font-weight: 600; }
 
-  /* search dialog */
-  dialog.search { width: min(560px, calc(100vw - 32px)); max-width: none; padding: 0; border: 1px solid var(--hair); border-radius: var(--r-tile); background: var(--bg); color: var(--text); box-shadow: var(--shadow-win); margin: 12vh auto auto; overflow: hidden; }
+  /* ---------- search dialog ---------- */
+  dialog.search {
+    width: min(560px, calc(100vw - 32px)); max-width: none; padding: 0; border: 1px solid var(--nav-line); border-radius: var(--r-tile);
+    background: var(--bg); color: var(--text); box-shadow: var(--shadow-win); margin: 12vh auto auto; overflow: hidden;
+  }
   dialog.search::backdrop { background: var(--scrim); }
-  .search-field { display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--hair); }
-  .search-field svg { width: 17px; height: 17px; color: var(--text-3); flex: none; }
-  .search-field:focus-within { outline: 2px solid var(--blue); outline-offset: -2px; }
-  .search-field input { flex: 1; min-width: 0; height: 52px; border: 0; background: none; color: var(--text); font: inherit; font-size: 16px; outline: none; }
+  .search-field { display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--hair); }
+  .search-field .i { width: 18px; height: 18px; color: var(--text-3); }
+  .search-field:focus-within { outline: 3px solid color-mix(in srgb, var(--blue) 60%, transparent); outline-offset: -3px; }
+  .search-field input { flex: 1; min-width: 0; height: 54px; border: 0; background: none; color: var(--text); font: inherit; font-size: 17px; outline: none; }
   .search-field input::placeholder { color: var(--text-2); opacity: 1; }
   .results { margin: 0; padding: 0 8px; max-height: 50vh; overflow-y: auto; overscroll-behavior: contain; }
   .results:not(:empty) { padding-block: 8px; }
@@ -109,27 +151,13 @@
   .search-note { margin: 0; padding: 14px 20px; color: var(--text-2); }
   .results:not(:empty) + .search-note { border-top: 1px solid var(--hair); }
 
+  /* ---------- touch screens: 44 px targets ---------- */
   @media (pointer: coarse) {
-    /* No keyboard shortcut to show on a touch screen. */
     .search-btn kbd { display: none; }
-    .nav-group a, .search-btn, .toc a { min-height: 44px; display: flex; align-items: center; }
+    .nav-group a, .search-btn, .toc a { min-height: 44px; }
     .results a { min-height: 44px; align-content: center; }
     .edit a, .pager a { min-height: 44px; }
     .edit a { display: inline-flex; align-items: center; }
-  }
-  @media (max-width: 1100px) {
-    .docs { grid-template-columns: 220px minmax(0, 1fr); }
-    .toc { display: none; }
-  }
-  @media (max-width: 900px) {
-    .docs { grid-template-columns: minmax(0, 1fr); gap: 20px; padding-top: 20px; }
-    .docs-side { display: none; }
-    .docs-menu { display: block; border: 1px solid var(--hair); border-radius: var(--r-row); background: var(--bg); }
-    .docs-menu summary { padding: 10px 14px; font-weight: 600; cursor: pointer; font-size: 14.5px; min-height: 44px; }
-    .docs-menu .docs-side-inner { padding: 4px 6px 14px; display: grid; gap: 18px; font-size: 14.5px; }
-  }
-  @media (max-width: 720px) {
-    .pager { grid-template-columns: minmax(0, 1fr); }
-    .pager .next { grid-column: 1; }
+    .copy-btn { min-height: 44px; }
   }
 }

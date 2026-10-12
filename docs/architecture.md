@@ -73,6 +73,8 @@ VMPane.app/Contents/
   Helpers/qemu/{bin,lib}/          QEMU, qemu-img, swtpm and their libraries
   Resources/qemu/share/            firmware and QEMU data files, passed with -L
   Resources/qemu/MANIFEST.json     the QEMU bundle's identity (part of the runtime copy's name)
+  Resources/GuestTools/{linux,macos}/                 guest tools, shared read-only into VZ guests (vmpane-tools)
+  Resources/GuestTools/vmpane-guest-tools-windows.iso the Windows guest tools disc (drivers and the agent)
 ```
 
 Every Mach-O is listed in `Config/signing-manifest.json` with its signing identifier and entitlements;

@@ -17,6 +17,8 @@
   --blue: #007AFF; --green: #34C759; --orange: #FF9500; --red: #FF3B30; --purple: #AF52DE; --indigo: #5856D6;
   --teal: #30B0C7; --yellow: #FFCC00; --pink: #FF2D55; --gray: #8E8E93;
   --on-color: #FFFFFF;
+  /* a selected row (macOS's selection blue): white text on it is AA */
+  --sel: #0064E1;
   --accent-soft: color-mix(in srgb, var(--blue) 14%, transparent);
   /* text tints: AA (4.5:1) on --bg and --band, and on inline code's fill. The draft's #0071E3, #C25000 and
      #1A8A3C fell short on --band: blue is Apple's link blue, orange and green a shade darker. */
@@ -64,6 +66,7 @@
     --bg: #0A0A0B; --band: #141416; --card: #1A1A1C; --text: #F5F5F7; --text-2: #A1A1A6; --text-3: #8E8E93;
     --hair: #38383C; --pill: #F5F5F7; --pill-text: #1D1D1F; --nav-line: rgba(255,255,255,.1);
     --scrim: rgba(0,0,0,.55);
+    --sel: #0A6CF0;
     --blue: #0A84FF; --green: #30D158; --orange: #FF9F0A; --red: #FF453A; --purple: #BF5AF2; --indigo: #5E5CE6;
     --teal: #40C8E0; --yellow: #FFD60A; --pink: #FF375F; --gray: #98989D;
     --t-blue: #2997FF; --t-orange: #FF9F0A; --t-green: #30D158; --t-purple: #BF5AF2; --t-red: #FF6961;
@@ -74,6 +77,7 @@
   }
 }
 :root[data-theme="dark"] {
+  --sel: #0A6CF0;
   --bg: #0A0A0B; --band: #141416; --card: #1A1A1C; --text: #F5F5F7; --text-2: #A1A1A6; --text-3: #8E8E93;
   --hair: #38383C; --pill: #F5F5F7; --pill-text: #1D1D1F; --nav-line: rgba(255,255,255,.1);
   --scrim: rgba(0,0,0,.55);

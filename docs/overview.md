@@ -19,16 +19,16 @@ VM, not VMPane. See [Architecture](architecture.md).
 
 - **Snapshots**: live snapshots of a running VM keep its memory; a stopped VM's snapshot keeps its disks.
 - **Shared folders** from your Mac, **port forwarding** (from this Mac only, unless you let other computers on
-  the network connect), the clipboard, and drag and drop of files (with the guest tools).
+  the network connect), the clipboard, and dragging files into the VM (with the guest tools).
 - **The `vmpane` command**: start, stop, snapshot, run commands, copy files and forward ports from a terminal.
   See [`vmpane` commands](cli.md).
-- **Import from Parallels**: turn a Parallels VM into a VMPane VM.
+- **Import from Parallels**: turn a Parallels Linux or Windows VM into a VMPane VM.
 
 ## AI agents
 
 Claude Code, Codex, Gemini or any MCP client starts `vmpane mcp` and talks to it over stdin and stdout; nothing
 listens on the network. Every VM starts at **Off**: agents cannot even see it until you open it to them, at one
-of five levels from **Look only** to **Full control**. VMPane asks before an agent runs a command (Deny is the
+of four levels from **Look only** to **Full control** (in the VM's Settings). VMPane asks before an agent runs a command (Deny is the
 default), snapshots the VM before an agent's first change, records every call, and one switch stops every agent.
 See [VMPane for AI agents](mcp.md) and the [Security model](security-model.md).
 
@@ -37,7 +37,7 @@ See [VMPane for AI agents](mcp.md) and the [Security model](security-model.md).
 - **Arm guests only.** No x86 or x86-64 systems: there is no emulation.
 - **Windows 11 on Arm** has a 2D display (no DirectX or GPU acceleration) and no Hyper-V, WSL2 or other nested
   virtualization inside it. The Windows licence is yours: VMPane installs from your ISO.
-- **macOS guests**: Apple allows two macOS VMs running at once per Mac.
+- **macOS guests**: Apple allows two macOS VMs running at once per Mac. See [macOS guests](guides/macos.md).
 - **No USB passthrough** in 1.0.
 
 ## Where to go next

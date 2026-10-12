@@ -30,8 +30,8 @@ with at least one share; otherwise it appears after the next start.
 
 ## Rosetta (x86_64 Linux programs)
 
-Turn on Rosetta in the VM's settings (VMPane asks macOS to install Rosetta if needed; restart the VM).
-Then, in the guest:
+Choose **Rosetta (run x86-64 Linux programs)** when you create the VM (New VM › Integrations; VMPane asks
+macOS to install Rosetta if needed). Then, in the guest:
 
 ```sh
 sudo mkdir -p /media/rosetta
@@ -54,6 +54,5 @@ mounts and holds the Rosetta binary.
 
 ## Nested virtualization
 
-On a Mac with an M3 chip or later, turn on nested virtualization in the VM's settings (restart the VM).
-The guest then has `/dev/kvm`, for KVM, QEMU with acceleration, or Firecracker inside the VM. On earlier
-chips the option is not shown.
+*Planned.* VMs support nested virtualization on a Mac with an M3 chip or later (the guest then has `/dev/kvm`,
+for KVM, QEMU with acceleration, or Firecracker inside the VM), but the app has no switch for it yet.

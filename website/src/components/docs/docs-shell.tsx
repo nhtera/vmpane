@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type ReactNode, useEffect, useRef } from "react";
+import { strings } from "@/content/strings";
 import { pageContext } from "@/lib/docs-toc";
 import { nav } from "@/lib/site-links";
 import { DocsMenu } from "./docs-menu";
@@ -14,7 +15,7 @@ import { Pager } from "./pager";
 export function DocsShell({ slug, children }: { slug: string; children: ReactNode }) {
   return (
     <DocsSearchProvider>
-      <main id="main" className="wrap docs">
+      <main id="main" className="docs">
         <DocsSidebar slug={slug} />
         <DocsMenu slug={slug} />
         {children}
@@ -50,7 +51,7 @@ export function DocsArticle({ slug, title, description, source, lastUpdated, chi
 
   return (
     <article className="article" data-docs-article="">
-      {section ? <p className="crumb">{section}</p> : null}
+      {section ? <p className="crumb">{`${strings.docs.navLabel} › ${section}`}</p> : null}
       <h1 ref={heading} tabIndex={-1}>
         {title}
       </h1>
