@@ -1,3 +1,8 @@
 #include "Base.xcconfig"
 SWIFT_OPTIMIZATION_LEVEL = -O
 SWIFT_COMPILATION_MODE = wholemodule
+// The appcast on GitHub Pages (the gh-pages branch, written by scripts/release.sh publish) and the public half of
+// the EdDSA key in the maintainer's keychain (generate_keys --account vmpane). `/$()/` keeps the URL's `//` from
+// starting an xcconfig comment.
+VMPANE_SPARKLE_FEED_URL = https:/$()/nhtera.github.io/vmpane/appcast.xml
+VMPANE_SPARKLE_PUBLIC_KEY = iuoTPPZSlp2JzSD5GZZzDx8MiH3NEJbqnodrV4BsrBU=

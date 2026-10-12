@@ -81,7 +81,7 @@ hardened runtime: without a team ID, library validation would refuse the app's o
 
 ## Conventions
 
-- [Conventional Commits](https://www.conventionalcommits.org/), signed off (`git commit -s`).
+- [Conventional Commits](https://www.conventionalcommits.org/).
 - Swift 6 language mode with complete concurrency checking; no warnings.
 - Comments explain *why*. They do not reference plan, ticket or review identifiers.
 - Decisions with lasting impact get an ADR in `docs/adr/`.

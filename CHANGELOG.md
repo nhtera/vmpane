@@ -4,5 +4,19 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+## [1.0.0-beta.1]
+The first public beta.
+
 ### Added
-- Repository foundation: Xcode project (XcodeGen), `VMPaneKit` Swift package, Rust guest-agent workspace, scripts, CI.
+- macOS and Linux guests on Virtualization.framework: install macOS from an Apple restore image (IPSW) and Linux
+  from an ISO; suspend and resume; live and offline snapshots.
+- Windows 11 ARM guests on QEMU with Hypervisor.framework, a software TPM and Secure Boot; an unattended install
+  from your own ISO that resumes after an interruption.
+- The VMPane guest agent for Linux, macOS and Windows: shared clipboard, drag and drop of files, file transfer
+  and commands.
+- Shared folders and port forwarding.
+- Import of Parallels Desktop VMs.
+- The `vmpane` command-line tool and a built-in MCP server (`vmpane mcp`): AI coding agents drive only the VMs
+  you open to them, at the level you choose (every VM starts at Off), and the kill switch stops them all.
+- Updates through Sparkle; VMPane asks before installing one, and running VMs keep running.

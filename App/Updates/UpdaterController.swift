@@ -28,6 +28,11 @@ final class UpdaterController: NSObject {
         return !((info["SUFeedURL"] as? String) ?? "").isEmpty && !((info["SUPublicEDKey"] as? String) ?? "").isEmpty
     }
 
+    /// A beta (x.y.z-beta.n) always gets the next beta: its testers are never stranded on it.
+    nonisolated static var isBeta: Bool {
+        ((Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "").contains("-")
+    }
+
     var canCheck: Bool { controller != nil }
 
     func start() {
@@ -96,7 +101,7 @@ final class UpdaterController: NSObject {
 
 extension UpdaterController: SPUUpdaterDelegate {
     nonisolated func allowedChannels(for updater: SPUUpdater) -> Set<String> {
-        UserDefaults.standard.bool(forKey: Self.betaKey) ? ["beta"] : []
+        UserDefaults.standard.bool(forKey: Self.betaKey) || Self.isBeta ? ["beta"] : []
     }
 
     nonisolated func updater(

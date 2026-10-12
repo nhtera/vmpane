@@ -26,11 +26,14 @@ struct PreferencesView: View {
             }
             if UpdaterController.isConfigured {
                 Section {
-                    Toggle("Get beta versions", isOn: $betaUpdates)
+                    Toggle("Get beta versions", isOn: UpdaterController.isBeta ? .constant(true) : $betaUpdates)
+                        .disabled(UpdaterController.isBeta)
                 } header: {
                     Text("Updates")
                 } footer: {
-                    Text("VMPane checks vmpane.app for updates and asks before installing one. Running VMs keep running.")
+                    Text(
+                        (UpdaterController.isBeta ? "This is a beta: VMPane offers the next betas too. " : "")
+                            + "VMPane checks GitHub for updates and asks before installing one. Running VMs keep running.")
                 }
             }
             Section {

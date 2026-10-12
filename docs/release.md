@@ -35,12 +35,17 @@ open an issue and quarantine it; do not rerun until it passes.
    `update-under-load` signs a second version of the app. Against a Developer ID app the scenarios act as an
    agent within a policy they set the way the app does (`itest/policy`); the app's own controls are not theirs.
 4. `scripts/release.sh publish x.y.z` refuses unless every scenario of the tier passed for this DMG on enough
-   Macs. It builds and verifies the corresponding source (GPL), writes `SHA256SUMS`, and creates the GitHub
-   Release (pre-release for betas) with the DMG, source, Windows guest tools ISO and sums.
-5. Appcast: `generate_appcast` (Sparkle, EdDSA key from the keychain) over the release DMGs, beta items with
-   `<sparkle:channel>beta</sparkle:channel>`; deploy `appcast.xml` to vmpane.app with the site's own deploy token.
-6. Homebrew: a pull request to `nhtera/homebrew-tap` updating `Casks/vmpane.rb` (version, sha256).
-7. Manual checks: `docs/release-checklist.md`.
+   Macs. It builds and verifies the corresponding source (GPL), writes `SHA256SUMS`, adds this DMG to the
+   appcast and writes the cask; then it creates the GitHub Release (pre-release for betas) with the DMG, source,
+   Windows guest tools ISO and sums, and only then publishes the appcast and opens the tap pull request:
+   - **Appcast:** `appcast.xml` on the `gh-pages` branch, served by GitHub Pages at
+     `https://nhtera.github.io/vmpane/appcast.xml` (the app's `SUFeedURL`, `Config/Release.xcconfig`).
+     `generate_appcast` adds an item for the DMG (download from the GitHub Release), signed with the EdDSA key
+     in this Mac's keychain (account `vmpane`); a beta's item is on the `beta` channel, which betas and people who
+     chose "Get beta versions" follow. Every earlier item stays. `publish` checks the item's length and signature,
+     and waits until Pages serves it.
+   - **Homebrew:** a pull request to `nhtera/homebrew-tap` with `Casks/vmpane.rb` (version, sha256); merge it.
+5. Manual checks: `docs/release-checklist.md`.
 
 `--dry-run` on `build-candidate` and `publish` turns the release-only checks into warnings and publishes nothing:
 use it to rehearse.
@@ -59,10 +64,12 @@ use it to rehearse.
 Sparkle accepts an update that changes **either** the EdDSA key **or** the Developer ID certificate, not both
 (the update must be a Developer ID-signed DMG). So:
 
-1. `generate_keys --account vmpane-2` (a new key in the keychain); export it right away (`generate_keys -x`) to
-   two offline backups.
-2. Put the new public key in `VMPANE_SPARKLE_PUBLIC_KEY`, bump the version, release normally, signing the appcast
-   item with the **new** key. Installed copies accept it on the strength of the unchanged Developer ID signature.
+1. `generate_keys --account vmpane-2` (a new key in the keychain; the tools are in
+   `build/dd/SourcePackages/artifacts/sparkle/Sparkle/bin`); export it right away (`generate_keys --account
+   vmpane-2 -x <file>`) to two offline backups.
+2. Put the new public key in `VMPANE_SPARKLE_PUBLIC_KEY` (`Config/Release.xcconfig`) and the new account in
+   `scripts/release.sh`, bump the version, release normally: the appcast item is signed with the **new** key.
+   Installed copies accept it on the strength of the unchanged Developer ID signature.
 3. If the old key was exposed: remove every appcast item signed with it, and publish a security advisory
    (GitHub) saying which versions to update from by hand if Sparkle refuses.
 
@@ -80,10 +87,11 @@ Do not change the Developer ID certificate in the same release.
 Revoke the app-specific password (appleid.apple.com) or the App Store Connect API key, then
 `xcrun notarytool store-credentials vmpane-notary …` with a new one. Nothing published needs to change.
 
-### Site deploy token exposed
+### GitHub account or token exposed
 
-Revoke it at the host, check `appcast.xml` against the last published version (every item's EdDSA signature
-must verify with `sign_update --verify`), redeploy, and create a new token. A forged appcast item cannot install
+Anyone who can push to `gh-pages` can change the appcast. Revoke the token (or secure the account), check
+`appcast.xml` against the last published version (every item's EdDSA signature must verify with
+`sign_update --account vmpane --verify <dmg> <signature>`) and restore it. A forged appcast item cannot install
 without a valid EdDSA signature and Developer ID signature.
 
 ### Homebrew tap compromised

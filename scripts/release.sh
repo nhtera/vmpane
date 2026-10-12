@@ -7,9 +7,10 @@
 #       runs the tier's scenarios (itest/tiers.json) against that exact DMG; results are keyed by its SHA-256
 #   scripts/release.sh publish <version> [--dry-run]
 #       gate: a passing, clean result for the candidate × every tier scenario (× hosts for the release tier);
-#       then the corresponding source, SHA256SUMS, and (not in --dry-run) the GitHub Release and the tap PR
+#       then the corresponding source, SHA256SUMS, the appcast and the cask, and (not in --dry-run) the GitHub
+#       Release, the appcast on the gh-pages branch (after the DMG it offers) and the tap pull request
 # --dry-run: preflight problems that only a real release needs (tag, CI run, signed Windows tools) are warnings,
-# and nothing is published. Sparkle's appcast is added with the updater (not yet).
+# and nothing is published.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -29,6 +30,9 @@ while (($#)); do
 done
 [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]] || { echo "error: version '$version' is not x.y.z[-beta.n]" >&2; exit 2; }
 out=build/release/$version
+repo=nhtera/vmpane
+feed=https://nhtera.github.io/vmpane/appcast.xml
+sparkle=build/dd/SourcePackages/artifacts/sparkle/Sparkle/bin
 candidate=$out/candidate.json
 problems=0
 
@@ -149,14 +153,117 @@ publish() {
     local assets=("$dmg" "$out/vmpane-$version-corresponding-source.tar.zst" "$out/vmpane-guest-tools-$version-windows.iso" "$out/SHA256SUMS")
     local prerelease=--latest
     [[ $version == *-* ]] && prerelease=--prerelease
+    make_appcast "$dmg" "$notes"
+    cask "$sha" >"$out/vmpane.rb"
     if $dry; then
         echo "publish (dry run): would run"
         echo "  gh release create v$version $prerelease --title 'VMPane $version' --notes-file $notes ${assets[*]}"
-        echo "  a PR to nhtera/homebrew-tap: Casks/vmpane.rb version $version, sha256 $sha"
+        echo "  $out/appcast/appcast.xml to the gh-pages branch ($feed)"
+        echo "  a pull request to nhtera/homebrew-tap with $out/vmpane.rb"
         return 0
     fi
-    gh release create "v$version" "$prerelease" --title "VMPane $version" --notes-file "$notes" "${assets[@]}"
-    echo "published v$version; next: the tap PR (Casks/vmpane.rb: version $version, sha256 $sha)"
+    gh release create "v$version" "$prerelease" --repo "$repo" --title "VMPane $version" --notes-file "$notes" "${assets[@]}"
+    # The DMG is public before the appcast offers it.
+    publish_appcast
+    tap_pr
+    echo "published v$version"
+}
+
+# The published appcast plus an item for this DMG, EdDSA-signed with the key in this Mac's keychain (account
+# vmpane): $out/appcast/appcast.xml. A beta goes on Sparkle's beta channel.
+make_appcast() {
+    local dmg=$1 notes=$2 dir=$out/appcast channel=() public
+    public=$(sed -n 's/^VMPANE_SPARKLE_PUBLIC_KEY = //p' Config/Release.xcconfig)
+    [[ $("$sparkle/generate_keys" --account vmpane -p 2>/dev/null) == "$public" ]] \
+        || { echo "error: the keychain's Sparkle key (account vmpane) is not the app's (Release.xcconfig)" >&2; exit 1; }
+    rm -rf "$dir"
+    mkdir -p "$dir"
+    git fetch -q origin gh-pages
+    git show origin/gh-pages:appcast.xml >"$dir/appcast.xml"
+    cp -c "$dmg" "$dir/"
+    cp "$notes" "$dir/VMPane-$version.md"
+    [[ $version == *-* ]] && channel=(--channel beta)
+    # Every earlier item stays (--maximum-versions 0): the feed is the whole history.
+    "$sparkle/generate_appcast" --account vmpane --maximum-versions 0 --embed-release-notes \
+        --download-url-prefix "https://github.com/$repo/releases/download/v$version/" \
+        --full-release-notes-url "https://github.com/$repo/releases/tag/v$version" \
+        --link "https://github.com/$repo" ${channel[@]+"${channel[@]}"} "$dir" >/dev/null
+    rm -rf "$dir/VMPane-$version.dmg" "$dir/VMPane-$version.md" "$dir/old_updates"
+    # The new item: this version, this DMG's length, and a signature that verifies.
+    local enclosure signature
+    enclosure=$(xmllint --xpath "//item[*[local-name()='shortVersionString']='$version']/enclosure" "$dir/appcast.xml" 2>/dev/null) \
+        || { echo "error: the appcast has no item for $version" >&2; exit 1; }
+    [[ $enclosure == *" length=\"$(stat -f %z "$dmg")\""* ]] \
+        || { echo "error: the appcast item's length is not the DMG's" >&2; exit 1; }
+    signature=$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' <<<"$enclosure")
+    "$sparkle/sign_update" --account vmpane --verify "$dmg" "$signature" >/dev/null 2>&1 \
+        || { echo "error: the appcast item's signature does not verify" >&2; exit 1; }
+    echo "appcast: $dir/appcast.xml"
+}
+
+publish_appcast() {
+    local site tries=0
+    site=$(mktemp -d)
+    git worktree add -q --detach "$site" origin/gh-pages
+    cp "$out/appcast/appcast.xml" "$site/appcast.xml"
+    git -C "$site" add appcast.xml
+    git -C "$site" commit -q -m "appcast: VMPane $version"
+    git -C "$site" push -q origin HEAD:gh-pages
+    git worktree remove --force "$site"
+    # GitHub Pages serves the new commit within minutes.
+    until [[ $(curl -fsS "$feed" 2>/dev/null) == *"<sparkle:shortVersionString>$version<"* ]]; do
+        ((++tries < 60)) || { echo "error: $feed does not offer $version after 10 minutes" >&2; exit 1; }
+        sleep 10
+    done
+    echo "appcast: $feed offers $version"
+}
+
+# The Homebrew cask for this release (nhtera/homebrew-tap, Casks/vmpane.rb).
+cask() {
+    cat <<CASK
+cask "vmpane" do
+  version "$version"
+  sha256 "$1"
+
+  url "https://github.com/$repo/releases/download/v#{version}/VMPane-#{version}.dmg"
+  name "VMPane"
+  desc "Virtual machines for macOS, Linux and Windows 11 ARM, with a CLI and an MCP server"
+  homepage "https://github.com/$repo"
+
+  livecheck do
+    url "$feed"
+    strategy :sparkle
+  end
+
+  auto_updates true
+  depends_on arch: :arm64
+  depends_on macos: ">= :sequoia"
+
+  app "VMPane.app"
+  binary "#{appdir}/VMPane.app/Contents/Helpers/vmpane"
+
+  # Never ~/Library/Application Support/VMPane: the VMs are the person's data.
+  zap trash: [
+    "~/Library/Caches/app.vmpane.mac",
+    "~/Library/HTTPStorages/app.vmpane.mac",
+    "~/Library/Preferences/app.vmpane.mac.plist",
+    "~/Library/Saved Application State/app.vmpane.mac.savedState",
+  ]
+end
+CASK
+}
+
+# A pull request to the tap with $out/vmpane.rb.
+tap_pr() {
+    local tap=nhtera/homebrew-tap branch=vmpane-$version base old existing=()
+    base=$(gh api "repos/$tap/git/ref/heads/main" --jq .object.sha)
+    gh api -X POST "repos/$tap/git/refs" -f ref="refs/heads/$branch" -f sha="$base" >/dev/null
+    old=$(gh api "repos/$tap/contents/Casks/vmpane.rb?ref=main" --jq .sha 2>/dev/null || true)
+    [[ -n $old ]] && existing=(-f sha="$old")
+    gh api -X PUT "repos/$tap/contents/Casks/vmpane.rb" -f message="vmpane $version" -f branch="$branch" \
+        -f content="$(base64 <"$out/vmpane.rb")" ${existing[@]+"${existing[@]}"} >/dev/null
+    gh pr create --repo "$tap" --base main --head "$branch" --title "vmpane $version" \
+        --body "VMPane $version: https://github.com/$repo/releases/tag/v$version"
 }
 
 case "$stage" in
