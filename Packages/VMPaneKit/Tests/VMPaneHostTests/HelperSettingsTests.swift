@@ -189,3 +189,20 @@ private func httpGet(_ url: String) async -> String? {
     #expect(ops.policy(edited).level == .off && ops.policy(edited).tampered)
     await helper.tearDown()
 }
+
+/// The scripted clipboard follows the VM's direction like the window's: a VM shared host to guest only lends no
+/// guest clipboard to the host (vm.clipboard.read), and one shared guest to host only takes nothing in.
+@Test(arguments: [ClipboardConfig.Mode.hostToGuest, .guestToHost])
+func scriptedClipboardFollowsTheVMsDirection(mode: ClipboardConfig.Mode) async throws {
+    let helper = try await Harness.make(configure: { $0.clipboard.mode = mode })
+    _ = try await helper.client.call("vm.start")
+    let refused = mode == .hostToGuest ? "vm.clipboard.read" : "vm.clipboard.write"
+    let params: JSONValue? = refused == "vm.clipboard.write" ? ["items": [["type": "text", "text": "x"]]] : nil
+    do {
+        _ = try await helper.client.call(refused, params: params)
+        Issue.record("\(refused) was allowed with clipboard sharing \(mode.rawValue)")
+    } catch let error as RPCError {
+        #expect(error.message.contains(mode == .hostToGuest ? "host to guest only" : "guest to host only"))
+    }
+    await helper.tearDown()
+}

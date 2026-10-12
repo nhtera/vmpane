@@ -58,6 +58,9 @@ extension HelperController {
         case .success(let decoded): types = decoded.types ?? [.text, .png, .files]
         case .failure(let error): return .failure(error)
         }
+        guard config.clipboard.mode == .off || config.clipboard.mode.receivesFromGuest else {
+            return .failure(RPCError(.invalidState, "this VM's clipboard sharing is host to guest only"))
+        }
         return await withClipboardAgent { connection in
             let content = try await AgentClipboard.get(connection, types: types)
             var items: [JSONValue] = []
@@ -85,6 +88,9 @@ extension HelperController {
                 content.png = data
             case .files: return .failure(RPCError(.invalidParams, "files go into the guest with vm.files.drop"))
             }
+        }
+        guard config.clipboard.mode == .off || config.clipboard.mode.sendsToGuest else {
+            return .failure(RPCError(.invalidState, "this VM's clipboard sharing is guest to host only"))
         }
         return await withClipboardAgent { connection in
             try await AgentClipboard.set(connection, content)
