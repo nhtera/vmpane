@@ -30,6 +30,10 @@ if [[ ! -x $bridge || itest/bridge/main.swift -nt $bridge ]]; then
     codesign -s - -f -i app.vmpane.mac.itest "$bridge" 2>/dev/null
 fi
 export VMPANE_ITEST_BRIDGE=$root/$bridge
+# Helpers signed with a Developer ID never honour the bridge: against such an app the tests act as an agent, within
+# a policy set the way the app sets it (itest/policy; common.sh it_signed).
+swift build -q -c release --package-path itest/policy --scratch-path build/itest-policy
+export VMPANE_ITEST_POLICY=$root/build/itest-policy/release/vmpane-itest-policy
 
 if [[ "$(uname -m)" != arm64 ]]; then
     echo "error: itests need an Apple-silicon Mac" >&2
@@ -66,6 +70,8 @@ case "$APP" in
 esac
 [[ -d "$APP" ]] || { echo "error: no VMPane.app in the artifact" >&2; exit 1; }
 export APP
+team=$(codesign -dv "$APP" 2>&1 | sed -n 's/^TeamIdentifier=//p')
+export VMPANE_ITEST_SIGNED=$([[ -n $team && $team != "not set" ]] && echo 1 || echo 0)
 git_sha=$(git rev-parse --verify -q HEAD || echo none)
 dirty=$([[ -n "$(git status --porcelain 2>/dev/null)" ]] && echo true || echo false)
 chip=$(sysctl -n machdep.cpu.brand_string | tr ' ' '-')

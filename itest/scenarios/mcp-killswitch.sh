@@ -19,7 +19,7 @@ scenario_run() {
     it_rpc "$socket" vm.input.text '{"text": "VMPANE-INSTALL-AGENT\n"}' >/dev/null
     it_wait_for 60 grep -qa 'VMPANE-AGENT-INSTALLED rc=0' "$bundle/logs/serial.log" || it_fail "the agent did not install" || return 1
     it_wait_for 30 it_agent_connected || it_fail "the agent did not connect" || return 1
-    it_rpc "$socket" vm.settings.apply '{"patch": {"mcp": {"policy": "admin", "confirmExec": false}}}' >/dev/null || it_fail "cannot set the policy" || return 1
+    it_set_policy admin || it_fail "cannot set the policy" || return 1
     export VMPANE_EXCHANGE_DIR="$work/exchange"
     it_agent_exec 'head -c 1073741824 /dev/zero >/root/big.bin; mkdir -p /root/w; echo up >/root/w/f; setsid -f python3 -m http.server 8000 --directory /root/w >/dev/null 2>&1 </dev/null; sleep 1' >/dev/null \
         || it_fail "cannot prepare the guest" || return 1
@@ -36,6 +36,7 @@ sys.path.insert(0, os.path.join(os.environ["VMPANE_ROOT"], "itest/lib"))
 from mcp_client import MCPClient
 
 cli, socket, port = sys.argv[1], sys.argv[2], int(sys.argv[3])
+signed = os.environ.get("VMPANE_ITEST_SIGNED") == "1"
 client = MCPClient(cli)
 vm = client.call("vm_list")["structuredContent"]["vms"][0]["id"]
 long_exec = client.start("tools/call", {"name": "vm_exec", "arguments": {"vm": vm, "command": "sleep 300", "as": "admin"}})
@@ -44,6 +45,20 @@ time.sleep(1.5)
 
 killed_at = time.time()
 subprocess.run([cli, "mcp", "kill"], check=True, capture_output=True)
+
+def answered(call):
+    try:
+        client.wait(call, timeout=0.05)
+        return True
+    except Exception as error:
+        if "Empty" not in type(error).__name__:
+            raise
+        return False
+
+# On a signed app the tests are an agent too, refused while the switch is on: the cut call stands in for the guest's
+# command, which is looked for after the release.
+def exec_stopped():
+    return answered(long_exec) if signed else not guest_sleep_alive()
 
 def guest_sleep_alive():
     out = subprocess.run([sys.executable, os.path.join(os.environ["VMPANE_ROOT"], "itest/lib/agent_exec.py"), socket,
@@ -59,7 +74,7 @@ def forward_answers():
 
 done = {}
 while time.time() - killed_at < 5 and len(done) < 3:
-    if "exec" not in done and not guest_sleep_alive():
+    if "exec" not in done and exec_stopped():
         done["exec"] = time.time() - killed_at
     if "forward" not in done and not forward_answers():
         done["forward"] = time.time() - killed_at
@@ -81,8 +96,13 @@ for tool, arguments in [("vm_list", {}), ("vm_screenshot", {"vm": vm, "max_edge"
     assert refused.get("isError") and "kill switch" in refused["content"][0]["text"], refused
 print("mcp-killswitch: new agent calls are refused")
 PY
-    # The app lets agents act again: the forward comes back.
-    it_rpc "$socket" mcp.enableAll >/dev/null || it_fail "the app could not release the switch" || return 1
+    # The app lets agents act again (on a signed app as the app does it, itest/policy): the forward comes back.
+    if it_signed; then
+        "$VMPANE_ITEST_POLICY" release || it_fail "cannot release the switch" || return 1
+    else
+        it_rpc "$socket" mcp.enableAll >/dev/null || it_fail "the app could not release the switch" || return 1
+    fi
     it_wait_for 5 bash -c "curl -sf --max-time 2 http://127.0.0.1:$port/f >/dev/null" || it_fail "the forward did not come back" || return 1
+    [[ -z $(it_agent_exec "pgrep -fx 'sleep 300' || true") ]] || it_fail "the agent's command survived the switch" || return 1
     echo "mcp-killswitch: released by the app; the agent's forward is back"
 }

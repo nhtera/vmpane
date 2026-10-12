@@ -31,7 +31,9 @@ open an issue and quarantine it; do not rerun until it passes.
    that is not notarized; it builds Release, signs from `Config/signing-manifest.json`, verifies, makes the DMG,
    notarizes and staples it, and records the candidate's SHA-256 in `build/release/x.y.z/candidate.json`.
 3. `scripts/release.sh itest x.y.z --tier beta|release` on each required Mac (copy the DMG and
-   `candidate.json`; collect the result files back into `itest/results/`).
+   `candidate.json`; collect the result files back into `itest/results/`), with `VMPANE_SIGN_IDENTITY` set:
+   `update-under-load` signs a second version of the app. Against a Developer ID app the scenarios act as an
+   agent within a policy they set the way the app does (`itest/policy`); the app's own controls are not theirs.
 4. `scripts/release.sh publish x.y.z` refuses unless every scenario of the tier passed for this DMG on enough
    Macs. It builds and verifies the corresponding source (GPL), writes `SHA256SUMS`, and creates the GitHub
    Release (pre-release for betas) with the DMG, source, Windows guest tools ISO and sums.

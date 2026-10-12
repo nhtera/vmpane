@@ -16,7 +16,7 @@ scenario_run() {
         || { echo "cli-e2e: the app has no Linux guest tools (guest-tools/build-linux.sh, then rebuild)" >&2; return 77; }
     it_boot_linux_clone || return 1
     # Agents' level for this VM, set as the app sets it (the bridge is the app to a development helper): tagged.
-    it_rpc "$socket" vm.settings.apply '{"patch": {"mcp": {"policy": "admin", "confirmExec": false}}}' >/dev/null || it_fail "cannot set the policy" || return 1
+    it_set_policy admin || it_fail "cannot set the policy" || return 1
     trap 'set +e; [[ -n ${pid:-} ]] && kill -9 "$pid" 2>/dev/null; rm -rf "$work"; true' RETURN
     it_rpc "$socket" vm.input.text '{"text": "VMPANE-INSTALL-AGENT\n"}' >/dev/null
     it_wait_for 60 grep -qa 'VMPANE-AGENT-INSTALLED rc=0' "$bundle/logs/serial.log" || it_fail "the agent did not install" || return 1
@@ -78,8 +78,14 @@ scenario_run() {
     [[ $(file -b "$work/shot.png") == PNG* ]] || it_fail "the screenshot is not a PNG" || return 1
     echo "cli-e2e: snapshot create/list/delete, screenshot"
 
-    # 5. Policy: at observe, a script (no terminal) may look but not act: exit 77, recorded as a denial.
-    it_rpc "$socket" vm.settings.apply '{"patch": {"mcp": {"policy": "observe"}}}' >/dev/null || it_fail "cannot lower the policy" || return 1
+    # 5. stop
+    [[ $("$cli" stop "$id" --force --json | jq -r .state) =~ ^(stopping|stopped)$ ]] || it_fail "stop" || return 1
+    it_wait_for 30 bash -c "[[ \$('$cli' info '$id' --json | jq -r .state) == stopped ]]" || it_fail "the VM did not stop" || return 1
+    echo "cli-e2e: stop --force"
+
+    # 6. Policy: at observe, a script (no terminal) may look but not act: exit 77, recorded as a denial. With the VM
+    # stopped: on a signed app a policy change restarts the helper (it_set_policy).
+    it_set_policy observe || it_fail "cannot lower the policy" || return 1
     "$cli" info "$id" >/dev/null || it_fail "info at observe" || return 1
     rc=0; "$cli" exec "$id" --as admin -- true </dev/null 2>/dev/null || rc=$?
     [[ $rc == 77 ]] || it_fail "exec at observe exited $rc, not 77" || return 1
@@ -88,11 +94,5 @@ scenario_run() {
     # Hand-raising the level in config.json does not count (no tag).
     jq '.mcp.policy = "admin"' "$bundle/config.json" >"$work/c.json" && cp "$work/c.json" "$bundle/config.json"
     [[ $("$cli" list --json | jq length) == 0 ]] || it_fail "a hand-edited policy made the VM visible" || return 1
-    it_rpc "$socket" vm.settings.apply '{"patch": {"mcp": {"policy": "admin", "confirmExec": false}}}' >/dev/null || it_fail "cannot raise the policy" || return 1
     echo "cli-e2e: at observe a script is refused (77, audited); a hand-edited level counts as off"
-
-    # 6. stop
-    [[ $("$cli" stop "$id" --force --json | jq -r .state) =~ ^(stopping|stopped)$ ]] || it_fail "stop" || return 1
-    it_wait_for 30 bash -c "[[ \$('$cli' info '$id' --json | jq -r .state) == stopped ]]" || it_fail "the VM did not stop" || return 1
-    echo "cli-e2e: stop --force"
 }

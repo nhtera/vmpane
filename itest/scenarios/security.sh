@@ -27,12 +27,15 @@ scenario_run() {
           rm -rf "$work"
           true' RETURN
 
+    # The policy key exists once the app has set a policy: on a signed app, set (off) as the app sets it.
+    IT_POLICY=off it_grant "$bundle" || it_fail "cannot set the agents' policy" || return 1
     VMPANE_TEST_DUMMY_CHILD=1 "$helper" --vm "$bundle" --headless &
     pid=$!
     it_wait_for 10 test -S "$socket" || it_fail "no socket after 10 s" || return 1
-    # A policy change through the app's path makes the policy key; then back to off.
+    # On a development app, a policy change through the app's path (the bridge) makes the key; then back to off.
     local level
     for level in observe off; do
+        it_signed && break
         it_rpc "$socket" vm.settings.apply "{\"patch\": {\"mcp\": {\"policy\": \"$level\"}}}" >/dev/null || it_fail "settings apply failed" || return 1
     done
 
@@ -148,14 +151,20 @@ s.close()
 print(f"security: {len(many)} connections at once: {alive} kept (cap 128), the rest closed; answers after")
 EOF
     kill -0 "$pid" 2>/dev/null || it_fail "the helper died" || return 1
-    [[ $(it_rpc "$socket" vm.info | jq -r .state) == stopped ]] || it_fail "the helper stopped answering" || return 1
+    local answer
+    if it_signed; then  # the tests are an agent here, at policy off: a refusal is the answer
+        answer=$(it_rpc "$socket" vm.info 2>&1 || true)
+        [[ $answer == *"-32012"* ]] || it_fail "the helper stopped answering: $answer" || return 1
+    else
+        [[ $(it_rpc "$socket" vm.info | jq -r .state) == stopped ]] || it_fail "the helper stopped answering" || return 1
+    fi
     local denials
     denials=$(jq -s '[.[] | select(.result == "denied" and .identity == "automated")] | length' "$bundle/logs/mcp-audit.jsonl")
     [[ $denials -ge 2 ]] || it_fail "expected the unsigned client's refusals in the audit log, found $denials" || return 1
     [[ $(it_mode "$bundle/logs/mcp-audit.jsonl") == 600 ]] || it_fail "the audit log is not 0600" || return 1
     echo "security: refusals audited (0600 log); the helper answers after all of it"
 
-    it_rpc "$socket" helper.shutdown >/dev/null 2>&1 || true
+    if it_signed; then kill -TERM "$pid"; else it_rpc "$socket" helper.shutdown >/dev/null 2>&1 || true; fi
     it_wait_for 10 bash -c "! kill -0 $pid 2>/dev/null" || it_fail "the helper did not shut down" || return 1
     pid=
 }

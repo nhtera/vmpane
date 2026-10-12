@@ -25,21 +25,26 @@ scenario_run() {
     vm=$(it_sid "$bundle")  # vmpane selects VMs by short id too
     app="$work/Applications/VMPane.app"
     cli="$app/Contents/Helpers/vmpane"
-    cp -cR "$APP" "$app"
+    ditto "$APP" "$app"  # (an APFS clone fails from a mounted DMG)
     trap 'set +e
           p=$(uul_helper_pid); [[ -n $p && $p != null ]] && kill -9 "$p" 2>/dev/null
           [[ -n ${pid:-} ]] && kill -9 "$pid" 2>/dev/null
           rm -rf "$work"; true' RETURN
 
-    # The agents' level, set as the app sets it (through a helper started directly), so vmpane may start the VM.
-    pid=$("$app/Contents/Helpers/VMPaneVM.app/Contents/MacOS/VMPaneVM" --vm "$bundle" --headless >>"$work/direct.log" 2>&1 & echo $!)
-    it_wait_for 30 bash -c "/usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' '$(it_socket "$bundle")' vm.info >/dev/null 2>&1" \
-        || it_fail "the helper did not answer" || return 1
-    it_rpc "$(it_socket "$bundle")" vm.settings.apply '{"patch": {"mcp": {"policy": "admin", "confirmExec": false}}}' >/dev/null \
-        || it_fail "cannot set the policy" || return 1
-    it_rpc "$(it_socket "$bundle")" helper.shutdown >/dev/null 2>&1 || true
-    it_wait_exit "$pid" 15 || it_fail "the direct helper did not exit" || return 1
-    pid=
+    # The agents' level, set as the app sets it, so vmpane may start the VM: on a signed app by it_grant, on a
+    # development app through a helper started directly.
+    if it_signed; then
+        it_grant "$bundle" || it_fail "cannot set the policy" || return 1
+    else
+        pid=$("$app/Contents/Helpers/VMPaneVM.app/Contents/MacOS/VMPaneVM" --vm "$bundle" --headless >>"$work/direct.log" 2>&1 & echo $!)
+        it_wait_for 30 bash -c "/usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' '$(it_socket "$bundle")' vm.info >/dev/null 2>&1" \
+            || it_fail "the helper did not answer" || return 1
+        it_rpc "$(it_socket "$bundle")" vm.settings.apply '{"patch": {"mcp": {"policy": "admin", "confirmExec": false}}}' >/dev/null \
+            || it_fail "cannot set the policy" || return 1
+        it_rpc "$(it_socket "$bundle")" helper.shutdown >/dev/null 2>&1 || true
+        it_wait_exit "$pid" 15 || it_fail "the direct helper did not exit" || return 1
+        pid=
+    fi
 
     # 1. vmpane starts the VM: its helper runs from the runtime copy of this version.
     "$cli" start "$vm" >/dev/null || it_fail "vmpane start failed" || return 1
@@ -50,8 +55,14 @@ scenario_run() {
 
     # 2. The update: the app bundle replaced by another version (different guest tools → another runtime version).
     rm -rf "$app"
-    cp -cR "$APP" "$app"
+    ditto "$APP" "$app"
     echo "# update-under-load $(date +%s)" >>"$app/Contents/Resources/GuestTools/linux/SHA256SUMS"
+    # A signed app with a changed file is damaged to macOS (it kills what runs from it): sign the new version as a
+    # release would.
+    if it_signed; then
+        [[ -n ${VMPANE_SIGN_IDENTITY:-} ]] || it_fail "set VMPANE_SIGN_IDENTITY: the new version of a signed app is signed too" || return 1
+        "$VMPANE_ROOT/scripts/sign.sh" "$app" >"$work/sign.log" 2>&1 || it_fail "cannot sign the new version: $(tail -3 "$work/sign.log")" || return 1
+    fi
 
     # 3. The VM did not notice; the new vmpane drives the old helper.
     [[ $(uul_state) == running ]] || it_fail "the VM is not running after the update" || return 1

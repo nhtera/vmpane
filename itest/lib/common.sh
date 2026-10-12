@@ -57,8 +57,35 @@ it_create_bundle() {
 }
 
 # Starts a helper for bundle $1 (headless) in the background; echoes its pid once the socket exists.
+# Against an app signed with a Developer ID (scripts/itest.sh), helpers never treat the itest bridge as the app
+# (PeerClassifier): the tests are then an agent, within the policy $IT_POLICY that it_grant sets for a VM the way
+# the app does (itest/policy). A development (ad hoc) app keeps the bridge's rights and its policies as they are.
+it_signed() { [[ ${VMPANE_ITEST_SIGNED:-0} == 1 ]]; }
+IT_POLICY=admin
+it_grant() {
+    it_signed || return 0
+    local clipboard=--clipboard
+    [[ $IT_POLICY == off ]] && clipboard=
+    "$VMPANE_ITEST_POLICY" set "$1" "$IT_POLICY" $clipboard
+}
+
+# Sets the agents' level for VM $bundle (helper $pid on $socket: the caller's variables) to $1 as the app does:
+# live on a development app; on a signed one by restarting the helper with the new policy, which stops the VM.
+it_set_policy() {
+    if ! it_signed; then
+        it_rpc "$socket" vm.settings.apply "{\"patch\": {\"mcp\": {\"policy\": \"$1\", \"confirmExec\": false}}}" >/dev/null
+        return
+    fi
+    [[ $IT_POLICY == "$1" ]] && return 0
+    IT_POLICY=$1
+    kill -TERM "$pid" 2>/dev/null
+    it_wait_exit "$pid" 30 || { kill -9 "$pid" 2>/dev/null; it_wait_exit "$pid"; }
+    pid=$(it_start_helper "$bundle")
+}
+
 it_start_helper() {
     local bundle=$1 sid run="$VMPANE_SUPPORT_DIR/run"
+    it_grant "$bundle" || { it_fail "cannot set the agents' policy for $bundle"; return 1; }
     sid=$(it_sid "$bundle")
     # Output to a log, never the caller's stdout: callers capture this function's output with $( ).
     mkdir -p "$VMPANE_SUPPORT_DIR"

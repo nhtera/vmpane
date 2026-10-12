@@ -13,6 +13,7 @@ scenario_run() {
     local bundle="$VMPANE_SUPPORT_DIR/VMs/T.vmpane"
     mkdir -p "$VMPANE_SUPPORT_DIR/VMs"
     it_create_bundle "$bundle"
+    it_grant "$bundle" || it_fail "cannot set the agents' policy" || return 1
     local sid run="$VMPANE_SUPPORT_DIR/run"
     sid=$(it_sid "$bundle")
     local pids=()
@@ -61,7 +62,8 @@ scenario_run() {
     # 4. A Finder-style duplicate gets a new identity and its own socket.
     cp -Rp "$bundle" "$VMPANE_SUPPORT_DIR/VMs/T copy.vmpane"
     "$helper" --vm "$VMPANE_SUPPORT_DIR/VMs/T copy.vmpane" --headless &
-    pids+=("$!")
+    local copy=$!
+    pids+=("$copy")
     local copy_sid
     it_wait_for 10 bash -c "[[ \$(jq -r .id '$VMPANE_SUPPORT_DIR/VMs/T copy.vmpane/config.json' | tr A-F a-f | cut -c1-8) != $sid ]]" \
         || it_fail "duplicate kept the original id" || return 1
@@ -83,6 +85,8 @@ scenario_run() {
     for f in "$sid.sock" "$sid.pid" "$sid.children"; do
         [[ ! -e "$run/$f" ]] || it_fail "run/$f left behind" || return 1
     done
-    it_rpc "$run/$copy_sid.sock" helper.shutdown >/dev/null
+    # The duplicate is a new VM: on a signed app the agents' policy granted to the original does not reach it.
+    if it_signed; then kill -TERM "$copy"; else it_rpc "$run/$copy_sid.sock" helper.shutdown >/dev/null; fi
+    it_wait_exit "$copy" || it_fail "the duplicate's helper did not exit" || return 1
     return 0
 }

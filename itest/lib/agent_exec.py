@@ -35,6 +35,7 @@ def main():
         send(0, "helper.hello", {"proto": 1, "minProto": 1, "client": {"name": "itest", "version": "0", "kind": "cli"}})
         send(1, "agent.exec", params)
         exec_id = None
+        early = []  # notes can come before the answer that names the exec (a quick command, an audited caller)
         for line in file:
             message = json.loads(line)
             if message.get("id") == 0:
@@ -44,19 +45,34 @@ def main():
                     print(json.dumps(message["error"]), file=sys.stderr)
                     return 125
                 exec_id = message["result"]["execId"]
+                for note_message in early:
+                    code = handle(note_message, exec_id)
+                    if code is not None:
+                        return code
                 continue
-            note = message.get("params", {})
-            if message.get("method") == "exec.output" and note.get("execId") == exec_id:
-                out = sys.stdout if note["stream"] == "stdout" else sys.stderr
-                out.buffer.write(base64.b64decode(note["dataB64"]))
-                out.flush()
-            elif message.get("method") == "exec.exited" and note.get("execId") == exec_id:
-                if note.get("timedOut"):
-                    return 124
-                if note.get("code") is not None:
-                    return note["code"]
-                return 128 + 9 if note.get("signal") == "SIGKILL" else 129
+            if exec_id is None:
+                early.append(message)
+                continue
+            code = handle(message, exec_id)
+            if code is not None:
+                return code
     return 125
+
+
+def handle(message, exec_id):
+    """Writes an exec's output; returns its exit status once it has exited, else None."""
+    note = message.get("params", {})
+    if message.get("method") == "exec.output" and note.get("execId") == exec_id:
+        out = sys.stdout if note["stream"] == "stdout" else sys.stderr
+        out.buffer.write(base64.b64decode(note["dataB64"]))
+        out.flush()
+    elif message.get("method") == "exec.exited" and note.get("execId") == exec_id:
+        if note.get("timedOut"):
+            return 124
+        if note.get("code") is not None:
+            return note["code"]
+        return 128 + 9 if note.get("signal") == "SIGKILL" else 129
+    return None
 
 
 if __name__ == "__main__":

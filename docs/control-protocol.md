@@ -110,6 +110,10 @@ at it) needs `control` for clients other than the app and an operator.
 | `files.progress` | `{bytesDone, bytesTotal, file}` (during `vm.files.drop`) |
 <!-- contract:notifications:end -->
 
+An exec's `exec.output` and `exec.exited` can arrive before the `agent.exec` answer that names its `execId` (a
+quick command; callers other than the app are audited before their answer): keep notifications that come while
+the call is open, and match them once the id is known.
+
 ## Errors
 
 JSON-RPC's standard codes (-32700 parse error, -32600 invalid request, -32601 method not found,

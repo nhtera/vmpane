@@ -19,11 +19,11 @@ scenario_run() {
     it_rpc "$socket" vm.input.text '{"text": "VMPANE-INSTALL-AGENT\n"}' >/dev/null
     it_wait_for 60 grep -qa 'VMPANE-AGENT-INSTALLED rc=0' "$bundle/logs/serial.log" || it_fail "the agent did not install" || return 1
     it_wait_for 30 it_agent_connected || it_fail "the agent did not connect" || return 1
-    it_rpc "$socket" vm.settings.apply '{"patch": {"mcp": {"policy": "admin", "confirmExec": false}}}' >/dev/null || it_fail "cannot set the policy" || return 1
+    it_set_policy admin || it_fail "cannot set the policy" || return 1
     export VMPANE_EXCHANGE_DIR="$work/exchange"
 
     /usr/bin/python3 - "$cli" "$bundle" "$socket" <<'PY' || { it_fail "the MCP session failed"; return 1; }
-import json, os, subprocess, sys, time
+import json, os, shutil, subprocess, sys, time
 sys.path.insert(0, os.path.join(os.environ["VMPANE_ROOT"], "itest/lib"))
 from mcp_client import MCPClient
 
@@ -56,17 +56,45 @@ fed = client.call("vm_exec", vm=vm, argv=["cat"], stdin="fed in", **{"as": "admi
 assert fed["structuredContent"]["stdout"] == "fed in", fed
 print("mcp-e2e: exec output, exit code 3 as an error result, stdin")
 
-exchange = os.path.join(os.environ["VMPANE_EXCHANGE_DIR"], vms[0]["name"])
-os.makedirs(exchange, exist_ok=True)
-open(os.path.join(exchange, "in.txt"), "w").write("from the mac")
-pushed = client.call("vm_file_push", vm=vm, host_path="in.txt", guest_path="/root/in.txt")
-assert not pushed.get("isError"), pushed
-pulled = client.call("vm_file_pull", vm=vm, guest_path="/root/in.txt", host_path="back/out.txt")
-assert not pulled.get("isError"), pulled
-assert open(os.path.join(exchange, "back/out.txt")).read() == "from the mac"
-escape = client.call("vm_file_pull", vm=vm, guest_path="/etc/hostname", host_path="../../escape.txt")
-assert escape.get("isError") and not os.path.exists(os.path.join(os.environ["VMPANE_EXCHANGE_DIR"], "..", "escape.txt")), escape
-print("mcp-e2e: file push/pull through the exchange folder; .. refused")
+# A signed vmpane ignores $VMPANE_EXCHANGE_DIR (an agent must not move where files land): there the round trip goes
+# through the person's ~/VMPane Exchange/<vm>/, in a folder of its own removed afterwards.
+signed = os.environ.get("VMPANE_ITEST_SIGNED") == "1"
+if signed:
+    # (vmpane makes the VM's folder on every push or pull: note what was there before the first one)
+    root = os.path.join(os.path.expanduser("~"), "VMPane Exchange")
+    vm_dir = os.path.join(root, vms[0]["name"])
+    root_existed, vm_dir_existed = os.path.isdir(root), os.path.isdir(vm_dir)
+    sub = f"vmpane-itest-{os.getpid()}"
+else:
+    vm_dir = os.path.join(os.environ["VMPANE_EXCHANGE_DIR"], vms[0]["name"])
+    sub = ""
+exchange = os.path.join(vm_dir, sub)
+try:
+    if signed:
+        test_dir = os.path.join(os.environ["VMPANE_EXCHANGE_DIR"], vms[0]["name"])
+        os.makedirs(test_dir, exist_ok=True)
+        open(os.path.join(test_dir, "env-only.txt"), "w").write("here only")
+        ignored = client.call("vm_file_push", vm=vm, host_path="env-only.txt", guest_path="/root/env-only.txt")
+        assert ignored.get("isError"), f"a signed vmpane used $VMPANE_EXCHANGE_DIR: {ignored}"
+    os.makedirs(exchange, exist_ok=True)
+    open(os.path.join(exchange, "in.txt"), "w").write("from the mac")
+    pushed = client.call("vm_file_push", vm=vm, host_path=os.path.join(sub, "in.txt"), guest_path="/root/in.txt")
+    assert not pushed.get("isError"), pushed
+    pulled = client.call("vm_file_pull", vm=vm, guest_path="/root/in.txt", host_path=os.path.join(sub, "back/out.txt"))
+    assert not pulled.get("isError"), pulled
+    assert open(os.path.join(exchange, "back/out.txt")).read() == "from the mac"
+    escape = client.call("vm_file_pull", vm=vm, guest_path="/etc/hostname", host_path="../../escape.txt")
+    assert escape.get("isError") and not os.path.exists(os.path.join(vm_dir, "..", "..", "escape.txt")), escape
+finally:
+    if signed:
+        shutil.rmtree(exchange, ignore_errors=True)
+        for made, folder in [(not vm_dir_existed, vm_dir), (not root_existed, root)]:
+            if made:
+                try:
+                    os.rmdir(folder)  # only when empty: never what a person put there meanwhile
+                except OSError:
+                    pass
+print("mcp-e2e: file push/pull through the exchange folder; .. refused" + (" ($VMPANE_EXCHANGE_DIR ignored)" if signed else ""))
 
 taken = client.call("vm_snapshot_create", vm=vm, name="agent test")
 snapshot = taken["structuredContent"]["id"]
@@ -86,8 +114,28 @@ running = client.call("vm_exec", vm=vm, command="pgrep -fx 'sleep 300' || true",
 assert running["structuredContent"]["stdout"].strip() == "", running
 print("mcp-e2e: a cancelled exec gets no answer and is killed in the guest")
 
-subprocess.run([sys.executable, os.path.join(os.environ["VMPANE_ROOT"], "itest/lib/rpc.py"), socket, "vm.settings.apply",
-                json.dumps({"patch": {"mcp": {"policy": "observe"}}})], check=True, capture_output=True)
+client.close()
+PY
+
+    # At a lower level (control) exec is refused and screenshots still work. On a signed app the change restarts
+    # the helper (it_set_policy), which stops the VM: start it again.
+    it_set_policy control || it_fail "cannot lower the policy" || return 1
+    if it_signed; then
+        it_rpc "$socket" vm.start '{"headless": true}' >/dev/null || it_fail "vm.start at control failed" || return 1
+        it_wait_for 60 bash -c "[[ \$(/usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' '$socket' vm.info | jq -r .state) == running ]]" \
+            || it_fail "the VM did not start again" || return 1
+    fi
+    /usr/bin/python3 - "$cli" "$bundle" <<'PY' || { it_fail "the MCP session at control failed"; return 1; }
+import json, os, sys
+sys.path.insert(0, os.path.join(os.environ["VMPANE_ROOT"], "itest/lib"))
+from mcp_client import MCPClient
+
+cli, bundle = sys.argv[1:3]
+client = MCPClient(cli)
+def text(result):
+    return "\n".join(block.get("text", "") for block in result["content"] if block["type"] == "text")
+
+vm = client.call("vm_list")["structuredContent"]["vms"][0]["id"]
 refused = client.call("vm_exec", vm=vm, argv=["true"])
 assert refused.get("isError") and "Refused" in text(refused), refused
 assert client.call("vm_screenshot", vm=vm, max_edge=320)["content"][0]["type"] == "image"
@@ -95,7 +143,7 @@ audit = [json.loads(line) for line in open(os.path.join(bundle, "logs/mcp-audit.
 denied = [a for a in audit if a["result"] == "denied" and a["method"] == "agent.exec"]
 assert denied and denied[-1]["kind"] == "mcp" and denied[-1].get("session") and denied[-1]["identity"] == "cli", denied[-1:]
 assert all(a["identity"] == "cli" and a["kind"] == "mcp" for a in audit if a.get("session") == denied[-1]["session"])
-print("mcp-e2e: at observe exec is refused, screenshots still work; refusals audited with the session")
+print("mcp-e2e: at control exec is refused, screenshots still work; refusals audited with the session")
 client.close()
 PY
 }
