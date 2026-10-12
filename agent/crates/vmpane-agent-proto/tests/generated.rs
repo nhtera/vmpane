@@ -377,7 +377,10 @@ fn regen() {
 #[test]
 fn generated_files_are_current() {
     for (path, text) in files() {
-        let committed = std::fs::read_to_string(&path).unwrap_or_default();
+        // A Windows checkout may turn line endings into CRLF: the text is what must match.
+        let committed = std::fs::read_to_string(&path)
+            .unwrap_or_default()
+            .replace("\r\n", "\n");
         assert!(
             committed == text,
             "{} is stale: cargo test -p vmpane-agent-proto -- --ignored regen",

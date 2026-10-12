@@ -104,13 +104,27 @@ private func line(_ value: JSONValue) -> Data { MCPServer.encode(value) }
     #expect(wire.messages.last?["error"]?["code"] == -32700)
 }
 
-/// When the client closes its input, calls still running get their answers out first.
+/// When the client closes its input, calls still running get their answers out first. The call answers when the
+/// test lets it, not after a fixed time: a loaded machine cannot make the drain end first.
 @Test func answersInFlightGoOutBeforeTheServerEnds() async throws {
     let wire = Wire()
-    let server = wire.server()
+    let (released, release) = AsyncStream<Void>.makeStream()
+    let gated = Tool("gated", "Answers when the test lets it.", schema: Schema.object([:])) { _, _ in
+        for await _ in released { break }
+        return ToolResult(text: "done")
+    }
+    let server = wire.server([gated])
     let meta: JSONValue = ["io.modelcontextprotocol/protocolVersion": "2026-07-28"]
     await server.receive(
-        line(["jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": ["name": "slow", "arguments": [:], "_meta": meta]]))
-    await server.drain(within: .seconds(10))
+        line(["jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": ["name": "gated", "arguments": [:], "_meta": meta]]))
+    let drained = Mutex(false)
+    let draining = Task {
+        await server.drain(within: .seconds(60))
+        drained.withLock { $0 = true }
+    }
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(!drained.withLock { $0 }, "the drain waits while the call runs")
+    release.yield()
+    await draining.value
     #expect(wire.messages.contains { $0["id"] == 1 && $0["result"] != nil })
 }
