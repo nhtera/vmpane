@@ -80,6 +80,20 @@ it_ui_tests() {
         -only-testing:"$1" -derivedDataPath "$HOME/VMPaneItest/ui-derived-data" ${3:+-resultBundlePath "$3"} >"$2" 2>&1
 }
 
+# The OCR tool (itest/lib/ocr.swift), compiled once per source version; echoes its path.
+it_ocr_binary() {
+    local src="$VMPANE_ROOT/itest/lib/ocr.swift" bin
+    bin="$HOME/VMPaneItest/bin/ocr-$(shasum -a 256 "$src" | cut -c1-12)"
+    if [[ ! -x $bin ]]; then
+        mkdir -p "$(dirname "$bin")"
+        swiftc -O "$src" -o "$bin.partial" 2>/dev/null && mv "$bin.partial" "$bin" || return 1
+    fi
+    echo "$bin"
+}
+
+# Text on PNG $1: JSON lines {text, x, y, w, h} (image pixels, origin top left).
+it_ocr() { "$(it_ocr_binary)" "$1"; }
+
 # Saved VM memory can only be restored while this Mac is unlocked (Virtualization's Secure Enclave key):
 # scenarios that restore skip (77) on a locked screen.
 it_require_unlocked() {
@@ -151,6 +165,24 @@ it_golden_macos() {
     local golden="$HOME/VMPaneItest/macos-base.vmpane"
     if [[ -f "$golden/.ready" ]]; then echo "$golden"; return 0; fi
     "$VMPANE_ROOT/itest/lib/build-golden-macos.sh" "$golden" >&2 || return 1
+    echo "$golden"
+}
+
+# The golden macOS bundle with a user (auto-login) and the guest agent (build-golden-macos-user.sh), cloned from
+# the golden macOS bundle. The account is a test account of test VMs: its password is no secret.
+IT_MACOS_USER=vmpane
+IT_MACOS_PASSWORD=vmpane-itest
+# Rebuilt when the app's macOS guest tools change (its .ready holds their checksum).
+IT_GOLDEN_MACOS_USER_VERSION=1
+it_golden_macos_user_marker() {
+    echo "$IT_GOLDEN_MACOS_USER_VERSION $(shasum -a 256 "$APP/Contents/Resources/GuestTools/macos/SHA256SUMS" 2>/dev/null | cut -c1-16)"
+}
+it_golden_macos_user() {
+    local golden="$HOME/VMPaneItest/macos-user.vmpane"
+    [[ -f "$APP/Contents/Resources/GuestTools/macos/SHA256SUMS" ]] \
+        || { echo "$IT_SCENARIO: the app has no macOS guest tools (guest-tools/build-macos.sh, then rebuild)" >&2; return 77; }
+    if [[ $(cat "$golden/.ready" 2>/dev/null) == "$(it_golden_macos_user_marker)" ]]; then echo "$golden"; return 0; fi
+    "$VMPANE_ROOT/itest/lib/build-golden-macos-user.sh" "$golden" >&2 || return 1
     echo "$golden"
 }
 

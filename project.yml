@@ -61,6 +61,13 @@ targets:
             mkdir -p "$app/Contents/Resources/GuestTools"
             ditto "$SRCROOT/build/guest-tools/macos" "$app/Contents/Resources/GuestTools/macos"
           fi
+          # Guest tools are built by hand (guest-tools/build-*.sh); a build embedding older ones says so.
+          for os in linux macos; do
+            stamp="$SRCROOT/build/guest-tools/$os/SHA256SUMS"
+            if [[ -f $stamp && -n $(find "$SRCROOT/agent/crates" "$SRCROOT/agent/installer/$os" -newer "$stamp" -type f -print -quit) ]]; then
+              echo "warning: the $os guest tools are older than the agent's sources (guest-tools/build-$os.sh)"
+            fi
+          done
           if [[ ! -x "$bundle/bin/qemu-system-aarch64" ]]; then
             echo "warning: no QEMU bundle at $bundle (qemu/scripts/package.sh); Windows guests will not run"
             exit 0
