@@ -19,6 +19,18 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> Io for T {}
 /// A connected byte stream to the host.
 pub type BoxIo = Box<dyn Io>;
 
+/// Whether this agent's connection to the host needs `transport.ack` (cap `ack`): a macOS guest's vsock stalls
+/// for good once about 240 KiB are in flight, so it keeps less than that unacknowledged.
+pub const NEEDS_ACKS: bool = cfg!(target_os = "macos");
+
+/// The host has received `bytes` on the current connection (`transport.ack`).
+pub fn host_acked(bytes: u64) {
+    #[cfg(target_os = "macos")]
+    vsock::host_acked(bytes);
+    #[cfg(not(target_os = "macos"))]
+    let _ = bytes;
+}
+
 /// Host CID of the vsock device.
 pub const HOST_CID: u32 = 2;
 

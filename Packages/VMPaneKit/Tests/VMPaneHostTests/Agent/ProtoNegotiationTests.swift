@@ -34,10 +34,12 @@ final class FakeAgent: @unchecked Sendable {
 
     func send(_ message: RPCMessage) throws { try send(.message(AgentCodec.encode(message))) }
 
-    func hello(proto: UInt32 = 1, minProto: UInt32 = 1, token: String? = nil, id: RPCID = .int(1)) throws {
+    func hello(
+        proto: UInt32 = 1, minProto: UInt32 = 1, token: String? = nil, id: RPCID = .int(1), caps: [String] = ["exec", "file"]
+    ) throws {
         let params = AgentHelloParams(
             proto: proto, minProto: minProto, agentVersion: "test", os: "linux", arch: "aarch64",
-            caps: ["exec", "file"], token: token)
+            caps: caps, token: token)
         try send(.request(RPCRequest(id: id, method: AgentMethod.hello, params: RPCParams.encode(params).get())))
     }
 
@@ -286,4 +288,44 @@ func violationsAfterHelloCloseTheConnection(_ violation: String) async throws {
     #expect(!firstClosed && !secondClosed)
     for task in waiting { await task.value }  // both time out without hello
     #expect(await hub.status.connected == false)
+}
+
+/// An agent that asks for acknowledgements (cap `ack`: macOS guests, whose vsock stalls with about 240 KiB in flight)
+/// hears how many bytes the host has read: at once after `hello`, then every 32 KiB. One that does not ask hears none.
+@Test(arguments: [true, false])
+func theHostAcknowledgesWhatItReadToAgentsThatAsk(asks: Bool) async throws {
+    let (agent, hostFD) = try FakeAgent.pair()
+    let connection = AgentConnection(socket: AgentSocket(fd: hostFD), hostVersion: "h")
+    async let peer = connection.open(helloTimeout: .seconds(5))
+    try agent.hello(caps: asks ? ["exec", AgentCap.ack] : ["exec"])
+    _ = try await peer
+    guard case .response? = await agent.nextMessage() else { Issue.record("no hello response"); return }
+    let heartbeat = try AgentFrame.message(
+        AgentCodec.encode(.request(RPCRequest(id: nil, method: AgentMethod.agentHeartbeat, params: [:])))
+    ).encoded()
+    // Blocking writes go on a GCD thread, as FakeAgent's waits do: on a cooperative-pool thread they can starve
+    // the host actor that reads them while the full suite runs.
+    DispatchQueue.global().async {
+        var sent = 0
+        while sent < 128 << 10 {
+            agent.send(raw: heartbeat)
+            sent += heartbeat.count
+        }
+    }
+    // Until an acknowledgement within 32 KiB of the 128 KiB sent (how far apart they are depends on how much each
+    // read of the socket returns), or a quiet spell.
+    var acks: [Int64] = []
+    while (acks.last ?? 0) < 96 << 10,
+        case .request(let request)? = await agent.nextMessage(within: asks ? 10 : 2),
+        request.method == AgentMethod.transportAck
+    {
+        acks.append(request.params?["bytes"]?.intValue ?? -1)
+    }
+    if asks {
+        #expect(acks.count >= 3, "after hello, then per 32 KiB of 128 KiB: \(acks)")
+        #expect(acks == acks.sorted() && (acks.first ?? 0) > 0)
+        #expect((acks.last ?? 0) >= 96 << 10)
+    } else {
+        #expect(acks.isEmpty)
+    }
 }

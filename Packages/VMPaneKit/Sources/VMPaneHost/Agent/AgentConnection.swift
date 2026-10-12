@@ -36,6 +36,11 @@ public actor AgentConnection {
     /// When the last bytes arrived, and whether reading is held back by a full stream (`watchIdle`).
     var lastReceived = ContinuousClock.now
     var readingPaused = false
+    /// Bytes read from the agent on this connection, and up to where they were acknowledged (`transport.ack`).
+    var receivedBytes: UInt64 = 0
+    var acknowledgedBytes: UInt64 = 0
+    /// An agent that asks for acknowledgements hears of every this many bytes read.
+    static let ackEvery: UInt64 = 32 << 10
 
     /// `vmpane-agent-proto::limits::HEARTBEAT_SECONDS`.
     static let heartbeat: Duration = .seconds(5)

@@ -753,6 +753,20 @@
         "unixNanos"
       ],
       "type": "object"
+    },
+    "TransportAck": {
+      "description": "host → guest notification to agents with [`cap::ACK`]: the host has read `bytes` on this connection.",
+      "properties": {
+        "bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bytes"
+      ],
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1010,6 +1024,14 @@
       },
       "result": {
         "$ref": "#/$defs/Empty"
+      }
+    },
+    "transport.ack": {
+      "cap": "ack",
+      "direction": "hostToGuest",
+      "kind": "notification",
+      "params": {
+        "$ref": "#/$defs/TransportAck"
       }
     }
   },

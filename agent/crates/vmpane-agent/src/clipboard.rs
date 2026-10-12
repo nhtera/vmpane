@@ -168,11 +168,8 @@ mod imp {
                 .unwrap_or(0);
             loop {
                 tokio::time::sleep(Duration::from_millis(250)).await;
-                let Ok((count, types)) = tokio::task::spawn_blocking(|| {
-                    (pasteboard::change_count(), pasteboard::available())
-                })
-                .await
-                else {
+                // Only the change count while nothing changes: asking for the types reads the pasteboard's items.
+                let Ok(count) = tokio::task::spawn_blocking(pasteboard::change_count).await else {
                     continue;
                 };
                 if count == last {
@@ -182,6 +179,9 @@ mod imp {
                 if count == OWN_CHANGE.load(Ordering::Relaxed) {
                     continue;
                 }
+                let Ok(types) = tokio::task::spawn_blocking(pasteboard::available).await else {
+                    continue;
+                };
                 let seq = u64::try_from(count).unwrap_or(0);
                 if conn
                     .out

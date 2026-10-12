@@ -57,6 +57,12 @@ pub fn protocol_document() -> Value {
         request::<Empty, AgentInfo>(&mut g, method::AGENT_INFO, None),
         request::<Empty, Empty>(&mut g, method::AGENT_PING, None),
         notification::<Empty>(&mut g, method::AGENT_HEARTBEAT),
+        {
+            let mut ack = notification::<TransportAck>(&mut g, method::TRANSPORT_ACK);
+            ack.direction = Direction::HostToGuest;
+            ack.cap = Some(cap::ACK);
+            ack
+        },
         request::<ExecStartParams, ExecStartResult>(&mut g, method::EXEC_START, Some(cap::EXEC)),
         request::<ExecSignalParams, Empty>(&mut g, method::EXEC_SIGNAL, Some(cap::EXEC)),
         notification::<ExecExited>(&mut g, method::EXEC_EXITED),

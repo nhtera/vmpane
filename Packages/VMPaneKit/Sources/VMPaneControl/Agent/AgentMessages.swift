@@ -10,6 +10,8 @@ public enum AgentMethod {
     public static let agentPing = "agent.ping"
     /// Guest → host every few seconds (`vmpane-agent-proto::limits::HEARTBEAT_SECONDS`); ignored by the host.
     public static let agentHeartbeat = "agent.heartbeat"
+    /// Host → guest `{bytes}`: how many bytes the host has read on this connection; to agents with `AgentCap.ack`.
+    public static let transportAck = "transport.ack"
     public static let execStart = "exec.start"
     public static let execSignal = "exec.signal"
     public static let execExited = "exec.exited"
@@ -45,6 +47,8 @@ public enum AgentCap {
     public static let display = "display"
     public static let freeze = "freeze"
     public static let reveal = "reveal"
+    /// The agent wants `transport.ack` (macOS guests: their vsock stalls with about 240 KiB in flight).
+    public static let ack = "ack"
 }
 
 /// The agent protocol's own error codes (JSON-RPC's standard ones are in `ControlErrorCode`).

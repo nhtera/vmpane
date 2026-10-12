@@ -186,7 +186,8 @@ private func expectation(for result: Result<RPCMessage, AgentCodec.DecodeError>)
 @Test func methodNamesMatchTheSchema() throws {
     let methods = try #require(try proto("schema/protocol.json")["methods"]?.objectValue)
     let swift: [String] = [
-        AgentMethod.hello, AgentMethod.agentInfo, AgentMethod.agentPing, AgentMethod.agentHeartbeat, AgentMethod.execStart,
+        AgentMethod.hello, AgentMethod.agentInfo, AgentMethod.agentPing, AgentMethod.agentHeartbeat, AgentMethod.transportAck,
+        AgentMethod.execStart,
         AgentMethod.execSignal,
         AgentMethod.execExited, AgentMethod.filePush, AgentMethod.filePull, AgentMethod.fileStat, AgentMethod.fileMkdirTemp,
         AgentMethod.sessionReveal, AgentMethod.clipboardGet, AgentMethod.clipboardSet, AgentMethod.clipboardChanged,

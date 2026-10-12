@@ -7,6 +7,8 @@ extension AgentConnection {
     func receive(_ bytes: Data) async {
         guard closeReason == nil, !refusing else { return }
         lastReceived = .now
+        receivedBytes += UInt64(bytes.count)
+        if receivedBytes - acknowledgedBytes >= Self.ackEvery { acknowledge() }
         decoder.append(bytes)
         while closeReason == nil, !refusing {
             let frame: AgentFrame?
@@ -130,8 +132,20 @@ extension AgentConnection {
         let peer = Peer(hello: hello, proto: proto)
         self.peer = peer
         reply(id, .success(["proto": .int(Int64(proto)), "hostVersion": .string(hostVersion)]))
+        acknowledge()  // at once: the agent keeps to its window only once it knows this host acknowledges
         helloWaiter?.resume(returning: peer)
         helloWaiter = nil
+    }
+
+    /// Tells an agent that asked for it (`AgentCap.ack`) how many bytes the host has read: a macOS guest's vsock
+    /// stalls for good with about 240 KiB in flight, so its agent keeps less than that unacknowledged.
+    func acknowledge() {
+        guard peer?.hello.caps?.contains(AgentCap.ack) == true,
+            let frame = try? encodeMessage(
+                .request(RPCRequest(id: nil, method: AgentMethod.transportAck, params: ["bytes": .int(Int64(receivedBytes))])))
+        else { return }
+        acknowledgedBytes = receivedBytes
+        enqueue(frame)
     }
 
     /// Answers `hello` with `error`, then closes once the answer is written (the agent learns why).

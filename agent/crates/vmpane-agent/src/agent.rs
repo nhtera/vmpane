@@ -73,6 +73,9 @@ impl Agent {
                     caps.extend([cap::NET, cap::PORTS]);
                 }
                 caps.extend([cap::FREEZE, cap::REVEAL]);
+                if crate::transport::NEEDS_ACKS {
+                    caps.push(cap::ACK);
+                }
                 if crate::clipboard::SUPPORTED {
                     caps.push(cap::CLIPBOARD);
                 }

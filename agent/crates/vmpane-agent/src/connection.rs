@@ -21,10 +21,10 @@ use tokio::task::JoinSet;
 use vmpane_agent_proto::error::ErrorCode;
 use vmpane_agent_proto::frame::{Frame, FrameDecoder, StreamStatus, is_host_stream};
 use vmpane_agent_proto::jsonrpc::{
-    ErrorObject, Id, Message, Notification, Request, Response, encode_value,
+    ErrorObject, Id, Message, Notification, Request, Response, decode_params, encode_value,
 };
 use vmpane_agent_proto::limits::{HEARTBEAT_SECONDS, MAX_CHUNK, MAX_OPEN_STREAMS};
-use vmpane_agent_proto::methods::Empty;
+use vmpane_agent_proto::methods::{Empty, TransportAck};
 use vmpane_agent_proto::methods::{HelloParams, HelloResult, method};
 use vmpane_agent_proto::{MIN_PROTO, PROTO};
 
@@ -501,6 +501,12 @@ async fn handle_frame(
                         then.await;
                     }
                 });
+                Ok(())
+            }
+            Ok(Message::Notification(n)) if n.method == method::TRANSPORT_ACK => {
+                if let Ok(ack) = decode_params::<TransportAck>(n.params.as_ref()) {
+                    crate::transport::host_acked(ack.bytes);
+                }
                 Ok(())
             }
             Ok(Message::Notification(n)) => {

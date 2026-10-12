@@ -58,6 +58,12 @@ in a response before it reads further, so data that follows at once is never "un
 The host stops reading the socket while one stream holds more than 4 MiB nobody has consumed. That pushes back
 on the guest through the transport.
 
+A macOS guest's vsock stalls for good once about 240 KiB are in flight from the guest (a 256 KiB file chunk
+never arrived; a stream of them lost bytes, and the host saw broken frames). Linux guests' vsock does not. So an
+agent with cap `ack` (macOS) gets `transport.ack {bytes}` from the host: right after `hello`, then for every 32 KiB
+read. It keeps at most 128 KiB beyond the last acknowledgement on the socket. Agents without the cap get none, and
+an agent that never hears one (an older host) does not wait.
+
 ## Handshake
 
 The guest speaks first, with `hello`:
@@ -98,6 +104,7 @@ Host → guest requests unless noted. A method whose cap the agent did not adver
 | `net.addrs`, `ports.listening` | net, ports | → interfaces / listening sockets (hints only) |
 | `fs.freeze`, `fs.thaw` | freeze | `{timeoutMs ≤ 60000}` → `{frozen}` / → `{thawed}` |
 | `agent.heartbeat` (guest → host) | — | `{}` every 5 s |
+| `transport.ack` (host → guest) | ack | `{bytes}`: bytes the host has read on this connection (see Streams) |
 
 Notes on individual methods:
 
