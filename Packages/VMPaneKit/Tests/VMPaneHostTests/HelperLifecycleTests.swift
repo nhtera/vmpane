@@ -153,7 +153,8 @@ func installing(_ config: inout VMConfigV1) {
     _ = try await helper.client.call("vm.start")
     helper.backend.emit(.stopped(reason: "guest shut down"))
     var saved = try ConfigStore.load(helper.bundle)
-    for _ in 0..<100 where saved.install != nil {
+    // Up to 10 s: the hook runs after the stop is handled, which a loaded machine can delay past a second.
+    for _ in 0..<1000 where saved.install != nil {
         try await Task.sleep(for: .milliseconds(10))
         saved = try ConfigStore.load(helper.bundle)
     }

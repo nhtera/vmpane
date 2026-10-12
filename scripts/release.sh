@@ -6,7 +6,7 @@
 #   scripts/release.sh itest <version> --tier beta|release
 #       runs the tier's scenarios (itest/tiers.json) against that exact DMG; results are keyed by its SHA-256
 #   scripts/release.sh publish <version> [--dry-run]
-#       gate: a passing, clean result for the candidate × every tier scenario (× hosts for the release tier);
+#       gate: a passing, clean result for the candidate × every tier scenario (× the tier's hosts, itest/tiers.json);
 #       then the corresponding source, SHA256SUMS, the appcast and the cask, and (not in --dry-run) the GitHub
 #       Release, the appcast on the gh-pages branch (after the DMG it offers) and the tap pull request
 # --dry-run: preflight problems that only a real release needs (tag, CI run, signed Windows tools) are warnings,

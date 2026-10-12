@@ -11,6 +11,6 @@
   ],
   "tiers": {
     "beta": {"scenarios": ["core"], "hosts": 1},
-    "release": {"scenarios": ["core", "full"], "hosts": 2, "note": "≥ 2 chips incl. one M3 or later; latest macOS 26.x and 27"}
+    "release": {"scenarios": ["core", "full"], "hosts": 1, "note": "the project has one Mac: its chip and macOS are the only ones tested"}
   }
 }

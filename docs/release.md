@@ -10,7 +10,10 @@ happens here.
 |---|---|---|
 | PR | every pull request (CI) | lint, unit tests, build |
 | beta | every `x.y.z-beta.n` | the `core` scenarios of `itest/tiers.json` on the notarized candidate, one Mac |
-| release | the first public beta, 1.0 and every minor | `core` + `full` on the candidate, two Macs (≥ 2 chips, one M3 or later; the latest macOS 26.x and 27) |
+| release | the first public beta, 1.0 and every minor | `core` + `full` on the candidate, one Mac |
+
+The project has one Mac (an M4 Pro): other chips and macOS versions are tested by the people running the betas,
+not before a release. Nested virtualization (M3 and later) is covered by that Mac; M1 and M2 behaviour is not.
 
 Results are keyed by the candidate DMG's SHA-256 (`itest/results/<sha>-<scenario>-<chip>-<macOS build>.json`).
 A result from a dirty tree or a skipped scenario never counts. A scenario that only passed on a rerun is flaky:
@@ -33,8 +36,9 @@ open an issue and quarantine it; do not rerun until it passes.
    dirty tree, an untagged HEAD, mismatched versions, a missing CI run, an MSI without the tag's attestation or a
    macOS agent package that is not notarized; it builds Release, signs from `Config/signing-manifest.json`, verifies, makes the DMG,
    notarizes and staples it, and records the candidate's SHA-256 in `build/release/x.y.z/candidate.json`.
-3. `scripts/release.sh itest x.y.z --tier beta|release` on each required Mac (copy the DMG and
-   `candidate.json`; collect the result files back into `itest/results/`), with `VMPANE_SIGN_IDENTITY` set:
+3. `scripts/release.sh itest x.y.z --tier beta|release` (on another Mac too, if `itest/tiers.json` asks for more
+   hosts: copy the DMG and `candidate.json`, collect the result files back into `itest/results/`), with
+   `VMPANE_SIGN_IDENTITY` set:
    `update-under-load` signs a second version of the app. Against a Developer ID app the scenarios act as an
    agent within a policy they set the way the app does (`itest/policy`); what only the app may do (sharing a
    folder while the VM runs, cancelling a Windows install) they do in the app's own windows through UI tests

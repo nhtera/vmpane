@@ -136,7 +136,8 @@ private let base = "http://vm"
     let dav = try DAV.start(prefix: "/t0k3n")
     defer { dav.stop() }
     let root = "\(base)/t0k3n"
-    #expect(await dav.curl(["\(base)/Projects/"]).status == 404, "without the token")
+    let anonymous = await dav.curl(["\(base)/Projects/"])
+    #expect(anonymous.status == 404, "without the token: \(anonymous.status) \(anonymous.headers)")
     #expect(await dav.curl(["\(root)/Reference/notes.txt"]).body == "notes")
     for path in [
         "/Projects/../outside/secret.txt", "/Projects/%2e%2e/outside/secret.txt", "/Projects/escape/secret.txt", "/../outside/secret.txt",
