@@ -88,6 +88,8 @@ preflight() {
 build_candidate() {
     preflight
     mkdir -p "$out"
+    # The Linux guest tools from this commit's agent (ones built earlier carry an older agent).
+    guest-tools/build-linux.sh >/dev/null
     # The Windows guest tools disc, always made again with this release's agent MSI (reproducible): one built
     # earlier may have none.
     local iso
