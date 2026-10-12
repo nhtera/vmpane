@@ -7,6 +7,9 @@ import VMPaneUI
 /// Step 1: which system.
 struct OSChoiceStep: View {
     @Bindable var wizard: WizardModel
+    /// The card with keyboard focus. Its ring follows the card's shape and sits outside it, so a card that only
+    /// has focus (the first one, when the step opens) does not look chosen.
+    @FocusState private var focused: GuestOS?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -30,13 +33,26 @@ struct OSChoiceStep: View {
             }
             .frame(maxWidth: .infinity, minHeight: 130)
             .padding(8)
-            .background(
+            .background(wizard.os == os ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(
                 RoundedRectangle(cornerRadius: 10)
                     .strokeBorder(wizard.os == os ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: wizard.os == os ? 2 : 1)
+            )
+            .overlay(alignment: .topTrailing) {
+                if wizard.os == os {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor).padding(6)
+                }
+            }
+            .padding(3)
+            .overlay(
+                RoundedRectangle(cornerRadius: 13)
+                    .strokeBorder(Color(nsColor: .keyboardFocusIndicatorColor), lineWidth: focused == os ? 3 : 0)
             )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .focused($focused, equals: os)
         .accessibilityLabel(title)
         .accessibilityAddTraits(wizard.os == os ? .isSelected : [])
     }

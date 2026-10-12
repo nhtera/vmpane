@@ -226,6 +226,19 @@ func shell(_ tool: String, _ arguments: [String]) throws {
     }
 }
 
+/// A Finder copy is named after its file; a copy that kept the original's file name gets "copy" added.
+@Test(arguments: [("Ubuntu copy", "Ubuntu copy"), ("Dev box", "Dev box"), ("Ubuntu", "Ubuntu copy")])
+func aCopyGivenANewIdentityIsNamedAsACopy(file: String, named: String) throws {
+    try withTempDirectory { dir in
+        var config = makeConfig()
+        config.name = "Ubuntu"
+        let bundle = try VMBundle.create(at: dir.appendingPathComponent("\(file).vmpane"), config: config)
+        let lock = try #require(try bundle.tryLock(retryingFor: 5))
+        #expect(try FullClone.regenerateIdentity(holding: lock).name == named)
+        #expect(try ConfigStore.load(bundle).name == named)
+    }
+}
+
 /// About 35 s: runs with `VMPANE_SLOW_TESTS=1` (the phase gate sets it).
 @Test(.enabled(if: ProcessInfo.processInfo.environment["VMPANE_SLOW_TESTS"] != nil))
 func thousandSnapshotCyclesStayFastAndFree() throws {
@@ -287,4 +300,25 @@ func thousandSnapshotCyclesStayFastAndFree() throws {
     }
     #expect(measured?.path == "/")  // the nearest folder that exists
     try SpaceGuard.require(20 * gib, at: notYet, available: { _ in 25 * gib })
+}
+
+/// A snapshot's disks are clones of the live set: listed, it shows the space it holds of its own (what deleting it
+/// frees), which grows as the live disk changes, not the whole VM's size.
+@Test func aSnapshotIsListedWithTheSpaceItHoldsOfItsOwn() throws {
+    try withTempDirectory { dir in
+        let (bundle, lock) = try makeBundle(dir)
+        let disk = bundle.currentDirectory.appendingPathComponent("disk.img")
+        let block = Data((0..<(8 << 20)).map { UInt8(truncatingIfNeeded: $0 &* 2_654_435_761 >> 13) })
+        try block.write(to: disk)
+        let store = SnapshotStore(lock: lock)
+        _ = try store.create(name: "s", kind: .disk, origin: .user, context: context)
+        let shared = try #require(try store.list().first).sizeBytes
+        #expect(shared < 1 << 20, "a fresh snapshot shares its disk with the VM: \(shared) bytes")
+
+        let handle = try FileHandle(forWritingTo: disk)
+        try handle.write(contentsOf: Data(repeating: 0xA5, count: 4 << 20))
+        try handle.close()
+        let diverged = try #require(try store.list().first).sizeBytes
+        #expect(diverged >= 4 << 20 && diverged < 6 << 20, "4 MiB rewritten in the VM: \(diverged) bytes")
+    }
 }

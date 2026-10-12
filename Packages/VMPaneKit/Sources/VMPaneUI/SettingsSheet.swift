@@ -5,6 +5,8 @@ import VMPaneCore
 /// The VM's settings. Each setting says whether a change takes effect now ("Live"), at the next start ("Next
 /// start"), or simply when saved; Apply sends all changes at once and shows what each one did.
 public struct SettingsSheet: View {
+    /// Its height when the window has room; smaller windows get a shorter sheet (the form scrolls).
+    static let idealHeight: CGFloat = 600
     @Bindable var model: SettingsModel
     @Environment(\.dismiss) private var dismiss
 
@@ -98,7 +100,8 @@ public struct SettingsSheet: View {
             }
             .padding()
         }
-        .frame(width: 520, height: 600)
+        .frame(width: 520)
+        .frame(minHeight: 300, idealHeight: Self.idealHeight)
         .task {
             await model.refreshPorts()
             await model.refreshPolicy()

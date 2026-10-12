@@ -167,6 +167,7 @@ import Testing
         #expect(Set(items.map(\.id)).count == 2)
         #expect(items.first { $0.bundle.url.lastPathComponent == "B.vmpane" }?.id == (try ConfigStore.load(original).id))
         #expect(try library.items().map(\.id) == items.map(\.id))
+        #expect(items.compactMap(\.config?.name).sorted() == ["B", "B copy"])  // not two "B" rows
     }
 }
 

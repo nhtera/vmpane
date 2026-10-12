@@ -31,3 +31,6 @@ agent/fuzz/target/
 agent/fuzz/corpus/
 agent/fuzz/artifacts/
 agent/fuzz/coverage/
+
+# Python bytecode (itest helpers)
+__pycache__/

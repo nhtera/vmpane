@@ -46,7 +46,7 @@ struct WindowsISODownloadView: View {
             }
             .padding()
         }
-        .frame(width: 900, height: 680)
+        .frame(width: 620, height: 500)  // inside the wizard sheet (640 × 520) it sits on
     }
 }
 

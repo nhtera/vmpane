@@ -3,12 +3,15 @@ import VMPaneCore
 
 /// The VM's snapshots: take one, restore (after saying what is lost), delete.
 public struct SnapshotsSheet: View {
+    /// Its height when the window has room; smaller windows get a shorter sheet (the list scrolls).
+    static let idealHeight: CGFloat = 480
     @Bindable var model: SnapshotsModel
     let running: Bool
     @Environment(\.dismiss) private var dismiss
     @State private var newName = ""
     @State private var restoring: SnapshotMeta?
     @State private var deleting: SnapshotMeta?
+    @State private var selection: UUID?
 
     public init(model: SnapshotsModel, running: Bool) {
         self.model = model
@@ -30,7 +33,7 @@ public struct SnapshotsSheet: View {
             }
             .padding()
             Divider()
-            List(model.snapshots, id: \.id) { snapshot in
+            List(model.snapshots, id: \.id, selection: $selection) { snapshot in
                 SnapshotRow(snapshot: snapshot)
                     .contextMenu {
                         if snapshot.origin == .agentSession {
@@ -50,13 +53,19 @@ public struct SnapshotsSheet: View {
             }
             Divider()
             HStack {
+                let selected = model.snapshots.first { $0.id == selection }
+                Button(selected?.origin == .agentSession ? "Undo Agent Session…" : "Restore…") { restoring = selected }
+                    .disabled(selected == nil || model.busy)
+                Button("Delete…", role: .destructive) { deleting = selected }
+                    .disabled(selected == nil || model.busy)
                 if model.busy { ProgressView().controlSize(.small) }
                 Spacer()
                 Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
             }
             .padding()
         }
-        .frame(width: 520, height: 480)
+        .frame(width: 520)
+        .frame(minHeight: 300, idealHeight: Self.idealHeight)
         .task { await model.reload() }
         .confirmationDialog(title("Restore", restoring), isPresented: shown($restoring), presenting: restoring) { snapshot in
             Button("Restore") { Task { await model.restore(snapshot.id) } }
@@ -105,6 +114,7 @@ private struct SnapshotRow: View {
                 Text("Before agent").font(.caption2).foregroundStyle(.secondary)
             }
             ByteSizeText(snapshot.sizeBytes).font(.caption).foregroundStyle(.secondary)
+                .help("Space this snapshot takes of its own: what deleting it frees. It grows as the VM changes.")
         }
         .accessibilityElement(children: .combine)
     }

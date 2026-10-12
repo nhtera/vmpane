@@ -11,7 +11,7 @@ struct VMPaneApp: App {
     var body: some Scene {
         Window("VMPane", id: "library") {
             LibraryWindow(store: appDelegate.library)
-                .frame(minWidth: 640, minHeight: 400)
+                .frame(minWidth: 640, minHeight: 540)  // the New VM sheet (520) fits below the toolbar
         }
         .commands {
             CommandGroup(after: .appInfo) {

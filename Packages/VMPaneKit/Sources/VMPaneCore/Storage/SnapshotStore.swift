@@ -118,8 +118,10 @@ public struct SnapshotStore: Sendable {
         for entry in entries where UUID(uuidString: entry.lastPathComponent) != nil {
             let metaURL = entry.appendingPathComponent("meta.json")
             guard let data = try? Data(contentsOf: metaURL),
-                let meta = try? CanonicalJSON.decoder().decode(SnapshotMeta.self, from: data)
+                var meta = try? CanonicalJSON.decoder().decode(SnapshotMeta.self, from: data)
             else { continue }
+            // The space it holds now: its clones take space of their own as the live disks move on.
+            meta.sizeBytes = CloneSpace.privateBytes(entry) ?? meta.sizeBytes
             metas.append(meta)
         }
         return metas.sorted { ($0.createdAt, $0.id.uuidString) < ($1.createdAt, $1.id.uuidString) }

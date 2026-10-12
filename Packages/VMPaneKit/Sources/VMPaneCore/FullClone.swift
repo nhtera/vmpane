@@ -49,11 +49,20 @@ public enum FullClone {
         }
     }
 
+    /// What a copy of the VM named `name`, at `url`, is called: its file's name, or "<name> copy" when that is
+    /// the original's name too.
+    public static func copyName(of name: String, at url: URL) -> String {
+        let fileName = url.deletingPathExtension().lastPathComponent
+        return fileName != name && !fileName.isEmpty ? fileName : "\(name) copy"
+    }
+
     /// In-place identity change for a bundle found to duplicate another (e.g. a Finder copy). Saved RAM
-    /// state is deleted: it belongs to the other machine's identity.
+    /// state is deleted: it belongs to the other machine's identity. It is renamed (`copyName`), so the library does
+    /// not list two VMs alike.
     public static func regenerateIdentity(holding lock: BundleLock) throws -> VMConfigV1 {
         let bundle = lock.bundle
-        let config = newIdentity(try ConfigStore.load(bundle))
+        var config = newIdentity(try ConfigStore.load(bundle))
+        config.name = copyName(of: config.name, at: bundle.url)
         let fm = FileManager.default
         try? fm.removeItem(at: bundle.auxDirectory.appendingPathComponent("MachineIdentifier"))
         if fm.fileExists(atPath: bundle.stateDirectory.path) {

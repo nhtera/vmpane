@@ -149,11 +149,15 @@ public struct VMLibrary: Sendable {
                 resolved.append((config.id, bundle.url))
             }
         }
+        let copies = Set(unindexed.map(\.0))
         return (resolved + unindexed).map { id, url in
             do {
                 let bundle = try VMBundle.open(url)
                 do {
-                    return Item(id: id, bundle: bundle, config: try ConfigStore.load(bundle), error: nil)
+                    var config = try ConfigStore.load(bundle)
+                    // Listed under the name its helper gives it when it adopts the copy.
+                    if copies.contains(id) { config.name = FullClone.copyName(of: config.name, at: bundle.url) }
+                    return Item(id: id, bundle: bundle, config: config, error: nil)
                 } catch {
                     return Item(id: id, bundle: bundle, config: nil, error: Self.problem(error, at: url))
                 }

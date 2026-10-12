@@ -13,6 +13,8 @@ public struct VMWindowView: View {
     @State private var snapshots: SnapshotsModel?
     @State private var capturing = false
     @State private var hud = false
+    /// The content's height: sheets fit in it instead of hanging below a small window.
+    @State private var room: CGFloat = 600
 
     public init(display: NSView, model: HelperViewModel, captureKeys: (@MainActor (Bool) -> Void)? = nil) {
         self.display = display
@@ -74,6 +76,7 @@ public struct VMWindowView: View {
                     .accessibilityAddTraits(.updatesFrequently)
             }
         }
+        .onGeometryChange(for: CGFloat.self, of: \.size.height) { room = $0 }
         .task { await model.watchInput() }
         .task(id: model.notice) {
             guard model.notice != nil else { return }
@@ -106,11 +109,14 @@ public struct VMWindowView: View {
             isPresented: Binding(get: { settings != nil }, set: { if !$0 { settings = nil } }),
             onDismiss: { Task { await model.refresh() } },
             content: {
-                if let settings { SettingsSheet(model: settings) }
+                if let settings { SettingsSheet(model: settings).frame(height: fitted(SettingsSheet.idealHeight)) }
             }
         )
         .sheet(isPresented: Binding(get: { snapshots != nil }, set: { if !$0 { snapshots = nil } })) {
-            if let snapshots { SnapshotsSheet(model: snapshots, running: model.state == .running || model.state == .paused) }
+            if let snapshots {
+                SnapshotsSheet(model: snapshots, running: model.state == .running || model.state == .paused)
+                    .frame(height: fitted(SnapshotsSheet.idealHeight))
+            }
         }
         .alert("The VM could not do that", isPresented: errorShown) {
             Button("OK", role: .cancel) {}
@@ -118,11 +124,17 @@ public struct VMWindowView: View {
             Text(model.lastError ?? "")
         }
     }
+
+    /// A sheet's height in this window: its own when there is room, else the window's (it scrolls).
+    private func fitted(_ ideal: CGFloat) -> CGFloat { min(ideal, max(VMWindowContent.minimumHeight - 12, room - 12)) }
 }
 
 /// Puts `VMWindowView` into a display window, with its toolbar bridged into the window's title bar.
 @MainActor
 public enum VMWindowContent {
+    /// The smallest content height, so the sheets still fit (they scroll below their own height).
+    static let minimumHeight: CGFloat = 340
+
     public static func install(
         in window: NSWindow, display: NSView, model: HelperViewModel, captureKeys: (@MainActor (Bool) -> Void)? = nil
     ) {
@@ -133,6 +145,10 @@ public enum VMWindowContent {
         window.contentViewController = hosting
         window.setContentSize(size)
         window.toolbarStyle = .unified
+        let aspect = window.contentAspectRatio
+        let width = aspect.height > 0 ? minimumHeight * aspect.width / aspect.height : minimumHeight * 4 / 3
+        window.contentMinSize = NSSize(width: width, height: minimumHeight)
+        if size.height < minimumHeight { window.setContentSize(window.contentMinSize) }
     }
 }
 
