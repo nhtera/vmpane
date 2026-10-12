@@ -157,7 +157,7 @@ jobs:
   rust-windows:
     if: github.event_name != 'schedule'
     runs-on: windows-11-arm
-    timeout-minutes: 30
+    timeout-minutes: 50  # WiX 3 needs .NET 3.5, which takes the runner ~15 minutes to install
     defaults:
       run:
         shell: bash
@@ -181,6 +181,10 @@ jobs:
       - name: Install WiX 3 and cargo-wix (pinned)
         run: |
           choco install wixtoolset --version 3.14.1 --no-progress -y
+          # The installer sets WIX (and PATH) for new shells only: later steps get its bin through GITHUB_PATH.
+          wix=$(powershell -NoProfile -Command '[Environment]::GetEnvironmentVariable("WIX", "Machine")' | tr -d '\r')
+          [[ -n $wix && -f "$(cygpath -u "${wix}bin")/candle.exe" ]] || { echo "WiX 3 is not where WIX says: '$wix'"; exit 1; }
+          echo "${wix}bin" >> "$GITHUB_PATH"
           cargo install --locked cargo-wix --version 0.3.9
       - name: Build the agent MSI
         run: |
