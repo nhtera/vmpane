@@ -1,12 +1,23 @@
 import CryptoKit
 import Foundation
 
-public enum DownloadError: Error, Equatable, Sendable {
+public enum DownloadError: Error, Equatable, Sendable, CustomStringConvertible {
     case httpStatus(Int)
     case checksumMismatch(expected: String, actual: String)
     case insecureURL
     /// The transfer ended early; the partial file is kept and the next call resumes it.
     case incomplete(received: Int64, expected: Int64)
+
+    public var description: String {
+        switch self {
+        case .httpStatus(let status): "the download server answered \(status) (\(HTTPURLResponse.localizedString(forStatusCode: status)))"
+        case .checksumMismatch: "the download is not the expected file (its checksum differs); it was deleted, try again"
+        case .insecureURL: "the download address is not secure (https)"
+        case .incomplete(let received, let expected):
+            "the download stopped at \(ByteCountFormatter.string(fromByteCount: received, countStyle: .file)) of "
+                + "\(ByteCountFormatter.string(fromByteCount: expected, countStyle: .file)); try again to resume it"
+        }
+    }
 }
 
 /// Large-file downloads (IPSWs, ISOs) that survive interruption: data goes to `<file>.partial`, a later

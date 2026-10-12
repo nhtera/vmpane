@@ -138,11 +138,11 @@ private func sha(_ data: Data) -> String { SHA256.hash(data: data).map { String(
     }
 }
 
-/// A small ISO in `dir` with `EFI/BOOT/<loader>` (none when nil).
-private func makeISO(in dir: URL, _ name: String, loader: String?) throws -> URL {
+/// A small ISO in `dir` with `EFI/<boot>/<loader>` (none when nil).
+private func makeISO(in dir: URL, _ name: String, loader: String?, boot: String = "BOOT") throws -> URL {
     let tree = dir.appendingPathComponent("\(name)-tree")
-    try FileManager.default.createDirectory(at: tree.appendingPathComponent("EFI/BOOT"), withIntermediateDirectories: true)
-    if let loader { try Data("efi".utf8).write(to: tree.appendingPathComponent("EFI/BOOT/\(loader)")) }
+    try FileManager.default.createDirectory(at: tree.appendingPathComponent("EFI/\(boot)"), withIntermediateDirectories: true)
+    if let loader { try Data("efi".utf8).write(to: tree.appendingPathComponent("EFI/\(boot)/\(loader)")) }
     let iso = dir.appendingPathComponent("\(name).iso")
     let child = try ChildSpawner.spawn(
         URL(fileURLWithPath: "/usr/bin/hdiutil"),
@@ -164,6 +164,28 @@ private func temporaryDirectory() throws -> URL {
     #expect(ISOInspector.inspect(try makeISO(in: dir, "arm", loader: "BOOTAA64.EFI")) == .arm64)
     #expect(ISOInspector.inspect(try makeISO(in: dir, "x86", loader: "BOOTX64.EFI")) == .notArm64)
     #expect(ISOInspector.inspect(dir.appendingPathComponent("missing.iso")) == .unreadable)
+}
+
+/// Debian's arm64 netinst has a partition table in its system area (a hybrid ISO): macOS will not mount it
+/// ("no mountable file systems"), so the wizard said "unreadable". Its ISO 9660 tree is read without mounting.
+@Test func isoInspectorReadsHybridMediaMacOSCannotMount() throws {
+    let dir = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    func hybrid(_ name: String, loader: String) throws -> URL {
+        let iso = try makeISO(in: dir, name, loader: loader, boot: "boot")
+        let file = try FileHandle(forUpdating: iso)
+        try file.seek(toOffset: 446)  // an MBR with one EFI system partition, as hybrid ISOs carry
+        try file.write(contentsOf: [0x00, 0, 0, 0, 0xEF, 0, 0, 0, 64, 0, 0, 0, 8, 0, 0, 0])
+        try file.seek(toOffset: 510)
+        try file.write(contentsOf: [0x55, 0xAA])
+        try file.close()
+        return iso
+    }
+    #expect(ISOInspector.inspect(try hybrid("debian", loader: "bootaa64.efi")) == .arm64)
+    #expect(ISOInspector.inspect(try hybrid("amd64", loader: "bootx64.efi")) == .notArm64)
+    let notISO = dir.appendingPathComponent("zeros.iso")
+    try Data(count: 64 << 10).write(to: notISO)
+    #expect(ISOInspector.inspect(notISO) == .unreadable)
 }
 
 @Test func linuxInstallAttachesOnlyArm64Media() throws {
@@ -224,4 +246,12 @@ private func utf16(_ text: String, at offset: Int) -> Data {
     try LinuxInstall.forgetBootEntries(holding: lock)
     #expect(!FileManager.default.fileExists(atPath: store.path))
     try LinuxInstall.forgetBootEntries(holding: lock)  // nothing to forget: fine
+}
+
+/// The wizard shows these to people: sentences, not case names like "unreadable".
+@Test func installErrorsReadAsSentences() {
+    #expect(ErrorText.readable(LinuxInstallError.unreadable).contains("cannot be read"))
+    #expect(ErrorText.readable(LinuxInstallError.notArm64).contains("arm64"))
+    #expect(ErrorText.readable(DownloadError.httpStatus(404)).contains("404"))
+    #expect(ErrorText.readable(InsufficientSpace(requiredBytes: 30 << 30, availableBytes: 2 << 30)).contains("not enough free disk space"))
 }

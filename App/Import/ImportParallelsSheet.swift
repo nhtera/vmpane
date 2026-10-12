@@ -77,7 +77,7 @@ struct ImportParallelsSheet: View {
             name = found.name
             os = found.os ?? .linux
         } catch {
-            problem = String(describing: error)
+            problem = ErrorText.readable(error)
         }
     }
 
@@ -95,7 +95,7 @@ struct ImportParallelsSheet: View {
                 progress = nil
             } catch {
                 progress = nil
-                problem = String(describing: error)
+                problem = ErrorText.readable(error)
             }
         }
     }

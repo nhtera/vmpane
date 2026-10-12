@@ -1,12 +1,17 @@
 import Foundation
 
-public struct InsufficientSpace: Error, Equatable, Sendable {
+public struct InsufficientSpace: Error, Equatable, Sendable, CustomStringConvertible {
     public let requiredBytes: UInt64
     public let availableBytes: UInt64
 
     public init(requiredBytes: UInt64, availableBytes: UInt64) {
         self.requiredBytes = requiredBytes
         self.availableBytes = availableBytes
+    }
+
+    public var description: String {
+        let size = { (bytes: UInt64) in ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .file) }
+        return "not enough free disk space: this needs \(size(requiredBytes)), \(size(availableBytes)) is free"
     }
 }
 

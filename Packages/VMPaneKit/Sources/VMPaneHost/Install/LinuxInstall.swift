@@ -1,11 +1,18 @@
 import Foundation
 import VMPaneCore
 
-public enum LinuxInstallError: Error, Equatable, Sendable {
+public enum LinuxInstallError: Error, Equatable, Sendable, CustomStringConvertible {
     /// The ISO has no arm64 UEFI loader (likely an x86_64 image).
     case notArm64
-    /// The ISO could not be mounted (damaged, or not an ISO).
+    /// The ISO could not be read (damaged, or not an ISO).
     case unreadable
+
+    public var description: String {
+        switch self {
+        case .notArm64: "this ISO has no arm64 boot loader (EFI/BOOT/BOOTAA64.EFI): choose the arm64 (aarch64) edition"
+        case .unreadable: "the ISO cannot be read (it may be damaged, or not an ISO image)"
+        }
+    }
 }
 
 /// Linux install from an ISO: the ISO boots as read-only USB mass storage (`removable` entry

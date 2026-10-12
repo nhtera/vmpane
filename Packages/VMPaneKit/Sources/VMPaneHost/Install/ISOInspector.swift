@@ -1,8 +1,9 @@
 import Foundation
 import VMPaneCore
 
-/// Checks that a user-supplied ISO can boot an arm64 VM: mounted read-only, it must contain
-/// `EFI/BOOT/BOOTAA64.EFI` (the removable-media boot path for arm64 UEFI).
+/// Checks that a user-supplied ISO can boot an arm64 VM: it must contain `EFI/BOOT/BOOTAA64.EFI` (the
+/// removable-media boot path for arm64 UEFI). Read from its ISO 9660 tree; an image that is not ISO 9660 is
+/// mounted read-only instead.
 public enum ISOInspector {
     public enum Verdict: Equatable, Sendable {
         case arm64
@@ -12,6 +13,11 @@ public enum ISOInspector {
     }
 
     public static func inspect(_ iso: URL) -> Verdict {
+        if let found = ISO9660.containsFile(["EFI", "BOOT", "BOOTAA64.EFI"], in: iso) { return found ? .arm64 : .notArm64 }
+        return inspectMounted(iso)
+    }
+
+    private static func inspectMounted(_ iso: URL) -> Verdict {
         let mount = FileManager.default.temporaryDirectory.appendingPathComponent("vmpane-iso-\(UUID().uuidString)")
         guard (try? FileManager.default.createDirectory(at: mount, withIntermediateDirectories: true)) != nil else { return .unreadable }
         defer { try? FileManager.default.removeItem(at: mount) }

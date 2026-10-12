@@ -103,7 +103,7 @@ struct NewVMWizard: View {
                 creating = false
             } catch {
                 creating = false
-                failure = String(describing: error)
+                failure = ErrorText.readable(error)
             }
         }
     }
