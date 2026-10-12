@@ -29,7 +29,14 @@ scenario_run() {
     it_rpc "$socket" vm.input.text "$(jq -n --arg t "$ascii"$'\n' '{text: $t}')" >/dev/null || it_fail "ASCII typing failed" || return 1
     it_wait_for 10 grep -aqF "VMPANE-TYPED $ascii" "$bundle/logs/serial.log" \
         || { it_fail "ASCII did not arrive intact: $(grep -a VMPANE-TYPED "$bundle/logs/serial.log" | tail -1)"; return 1; }
-    echo "vz-capture: typed text and all printable ASCII arrived intact"
+    # A long line in one call (380 characters, half of them shifted): typed in one burst, VZ dropped keys past
+    # ~100 characters and could leave Shift held.
+    local long
+    long=$(/usr/bin/python3 -c 'print("".join(chr(c) for c in range(0x21, 0x7F)) * 4, end="")')
+    it_rpc "$socket" vm.input.text "$(jq -n --arg t "$long"$'\n' '{text: $t}')" >/dev/null || it_fail "long typing failed" || return 1
+    it_wait_for 20 grep -aqF "VMPANE-TYPED $long" "$bundle/logs/serial.log" \
+        || { it_fail "a long line did not arrive intact: $(grep -a VMPANE-TYPED "$bundle/logs/serial.log" | tail -1 | cut -c1-200)"; return 1; }
+    echo "vz-capture: typed text, all printable ASCII and a ${#long}-character line arrived intact"
 
     # Absolute pointer: click at three points; the guest sees the same fraction of its axis range (±2%).
     local size width height device max_x max_y px py line gx gy

@@ -187,7 +187,19 @@ public final class VZBackend: VMBackend {
         return Screenshot(png: capture.png, width: capture.width, height: capture.height, scale: capture.scale)
     }
 
+    /// The pause between typed characters. macOS guests lose keys typed in one burst (of 377 characters sent at
+    /// once, 93 arrived and a held Shift could stay down); a fast typist's pace arrives intact.
+    static let keyInterval = Duration.milliseconds(8)
+
     public func send(_ input: InputEvent) async throws {
+        guard case .text(let text) = input, text.count > 1 else { return try await sendNow(input) }
+        for (index, character) in text.enumerated() {
+            if index > 0 { try await Task.sleep(for: Self.keyInterval) }
+            try await sendNow(.text(String(character)))
+        }
+    }
+
+    private func sendNow(_ input: InputEvent) async throws {
         try await MainActor.run {
             guard let display else { throw VZBackendError.captureUnavailable }
             try display.send(input)
