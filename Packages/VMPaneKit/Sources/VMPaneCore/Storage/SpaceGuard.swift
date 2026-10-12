@@ -39,15 +39,25 @@ public enum SpaceGuard {
         return UInt64(info.f_bavail) * UInt64(info.f_bsize)
     }
 
+    /// The space `files` take on disk (allocated blocks: a sparse image counts what was written to it); 0 for one
+    /// that does not exist.
+    public static func allocatedBytes(_ files: [URL]) -> UInt64 {
+        files.reduce(0) { total, file in
+            total + UInt64((try? file.resourceValues(forKeys: [.totalFileAllocatedSizeKey]).totalFileAllocatedSize) ?? 0)
+        }
+    }
+
     /// Refuses to begin writing `bytes` (an install) at `url` unless they fit with `reserveBytes` to spare, so a
     /// long write does not leave the Mac's disk full. `url` may not exist yet: its nearest existing folder is measured.
+    /// `rewritten`: bytes already on disk that the write goes over in place (an interrupted install's disk), which
+    /// it needs no new space for.
     public static func require(
-        _ bytes: UInt64, at url: URL,
+        _ bytes: UInt64, at url: URL, rewritten: UInt64 = 0,
         available: (URL) throws -> UInt64 = SpaceGuard.freeBytes
     ) throws {
         var probe = url
         while !FileManager.default.fileExists(atPath: probe.path), probe.pathComponents.count > 1 { probe.deleteLastPathComponent() }
-        let required = bytes + reserveBytes
+        let required = bytes - min(bytes, rewritten) + reserveBytes
         let free = try available(probe)
         if free < required { throw InsufficientSpace(requiredBytes: required, availableBytes: free) }
     }

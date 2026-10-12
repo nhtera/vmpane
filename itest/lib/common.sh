@@ -110,7 +110,7 @@ it_ui_tests() {
 
 # Runs UI test $1 (VMPaneUITests/<class>/<test>) on the window of the VM whose helper answers on $socket (the
 # caller's variable), which it shows first; extra TEST_RUNNER_ variables come from the caller's environment.
-# Fails unless the test ran and passed.
+# Fails unless the test ran and passed. It must be the only VM running: XCUITest finds the helper by bundle id.
 it_ui_vm_window() {
     local log
     it_rpc "$socket" vm.display.show >/dev/null || { it_fail "the VM's window did not show"; return 1; }

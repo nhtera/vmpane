@@ -52,6 +52,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File D:\install.ps1   # D: = the 
 
 It logs to `C:\ProgramData\VMPane\tools-install.log`.
 
+The disc also holds the VMPane guest agent (`vmpane-agent.msi`). Unlike the drivers it is not code-signed for
+Windows (VMPane has no Windows signing certificate), so if you install it by hand Windows names its publisher
+as unknown. Each release's agent is built on GitHub and carries a build attestation:
+`gh attestation verify vmpane-agent.msi --repo nhtera/vmpane` checks yours.
+
 ## Finishing by hand
 
 If the automatic install stopped, the VM keeps what Windows already did. Windows Setup may still hold a copy

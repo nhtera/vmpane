@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 
 /// A running VM's window, used as a person does: what only the app may do to a VM (share folders, cancel an
@@ -17,6 +18,12 @@ final class VMWindowUITests: XCTestCase {
             throw XCTSkip("run by an itest scenario")
         }
         continueAfterFailure = false
+        // XCUITest finds a running app by its bundle id: with another VM's helper running it may drive that one.
+        let helpers = NSRunningApplication.runningApplications(withBundleIdentifier: "app.vmpane.mac.vm")
+        guard helpers.count == 1 else {
+            XCTFail("\(helpers.count) VMPane VMs run (pids \(helpers.map(\.processIdentifier))): stop all but the test's")
+            throw XCTSkip("not the only VM")
+        }
         let vm = XCUIApplication(url: URL(fileURLWithPath: helper))
         vm.activate()
         let window = vm.windows.firstMatch

@@ -22,25 +22,29 @@ open an issue and quarantine it; do not rerun until it passes.
    updates by it) in `Config/Base.xcconfig`, `VMPane.version` in `VMPaneCore.swift`, `version` in
    `agent/Cargo.toml`. Move `CHANGELOG.md`'s Unreleased entries under `## [x.y.z]`. Commit, tag `vx.y.z`, push the
    tag; wait for `agent-release.yml`.
-2. `guest-tools/fetch-agent-msi.sh` (the signed MSI from that run); the macOS agent package, signed and
-   notarized (the app embeds `build/guest-tools/macos` as it is):
+2. `guest-tools/fetch-agent-msi.sh --release vx.y.z`: the Windows agent MSI from that run, checked against its
+   build-provenance attestation. It is not Authenticode-signed: the project has no Windows code-signing
+   certificate (Windows Setup installs it unattended in the guest; someone installing it by hand sees "Unknown
+   publisher"). The macOS agent package, signed and notarized here (the app embeds `build/guest-tools/macos` as
+   it is):
    `VMPANE_SIGN_IDENTITY="Developer ID Application: …" VMPANE_INSTALLER_IDENTITY="Developer ID Installer: …"
    VMPANE_NOTARIZE=1 guest-tools/build-macos.sh`; then
    `VMPANE_SIGN_IDENTITY="Developer ID Application: …" scripts/release.sh build-candidate x.y.z`. It refuses a
-   dirty tree, an untagged HEAD, mismatched versions, a missing CI run, an unsigned MSI or a macOS agent package
-   that is not notarized; it builds Release, signs from `Config/signing-manifest.json`, verifies, makes the DMG,
+   dirty tree, an untagged HEAD, mismatched versions, a missing CI run, an MSI without the tag's attestation or a
+   macOS agent package that is not notarized; it builds Release, signs from `Config/signing-manifest.json`, verifies, makes the DMG,
    notarizes and staples it, and records the candidate's SHA-256 in `build/release/x.y.z/candidate.json`.
 3. `scripts/release.sh itest x.y.z --tier beta|release` on each required Mac (copy the DMG and
    `candidate.json`; collect the result files back into `itest/results/`), with `VMPANE_SIGN_IDENTITY` set:
    `update-under-load` signs a second version of the app. Against a Developer ID app the scenarios act as an
    agent within a policy they set the way the app does (`itest/policy`); what only the app may do (sharing a
    folder while the VM runs, cancelling a Windows install) they do in the app's own windows through UI tests
-   (`UITests/VMWindowUITests.swift`), and every UI test drives the candidate's app. Keep the Mac unlocked and
-   leave it alone while the tier runs: the UI tests take the keyboard and mouse.
+   (`UITests/VMWindowUITests.swift`), and every UI test drives the candidate's app. Keep the Mac unlocked, quit
+   other VMs and leave it alone while the tier runs: the UI tests take the keyboard and mouse, and find a VM's
+   window by its app's bundle id.
 4. `scripts/release.sh publish x.y.z` refuses unless every scenario of the tier passed for this DMG on enough
    Macs. It builds and verifies the corresponding source (GPL), writes `SHA256SUMS`, adds this DMG to the
-   appcast and writes the cask; then it creates the GitHub Release (pre-release for betas) with the DMG, source,
-   Windows guest tools ISO and sums, and only then publishes the appcast and opens the tap pull request:
+   appcast and writes the cask; then it publishes the tag's GitHub Release (agent-release.yml's draft, a
+   pre-release for betas) with the DMG, source, Windows guest tools ISO and sums, and only then publishes the appcast and opens the tap pull request:
    - **Appcast:** `appcast.xml` on the `gh-pages` branch, served by GitHub Pages at
      `https://nhtera.github.io/vmpane/appcast.xml` (the app's `SUFeedURL`, `Config/Release.xcconfig`).
      `generate_appcast` adds an item for the DMG (download from the GitHub Release), signed with the EdDSA key

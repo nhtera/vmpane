@@ -65,12 +65,15 @@ preflight() {
     local run
     run=$(gh run list --workflow agent-release.yml --branch "v$version" --json conclusion --jq '.[0].conclusion' 2>/dev/null || true)
     [[ $run == success ]] || problem "agent-release.yml has no successful run for v$version (${run:-none})"
+    # Not Authenticode-signed (no Windows code-signing certificate): the MSI must be the one agent-release.yml built
+    # for this tag, as its build-provenance attestation says.
     local msi
     msi=$(compgen -G "build/guest-tools/windows-extra/*.msi" | head -1 || true)
     if [[ -z $msi ]]; then
-        problem "no Windows agent MSI in build/guest-tools/windows-extra (guest-tools/fetch-agent-msi.sh)"
-    elif ! command -v osslsigncode >/dev/null || ! osslsigncode verify -in "$msi" >/dev/null 2>&1; then
-        problem "$msi is not Authenticode-signed (or osslsigncode is missing)"
+        problem "no Windows agent MSI in build/guest-tools/windows-extra (guest-tools/fetch-agent-msi.sh --release v$version)"
+    elif ! gh attestation verify "$msi" --repo "$repo" --source-ref "refs/tags/v$version" \
+        --signer-workflow "$repo/.github/workflows/agent-release.yml" >/dev/null 2>&1; then
+        problem "$msi was not built by agent-release.yml for v$version (guest-tools/fetch-agent-msi.sh --release v$version)"
     fi
     # The app embeds the macOS agent package as built: a guest opening an unsigned one gets a Gatekeeper refusal.
     local pkg="build/guest-tools/macos/VMPane Agent.pkg" assessment
@@ -85,7 +88,17 @@ preflight() {
 build_candidate() {
     preflight
     mkdir -p "$out"
-    compgen -G "build/guest-tools/vmpane-guest-tools-windows-*.iso" >/dev/null || guest-tools/build-iso.sh
+    # The Windows guest tools disc, always made again with this release's agent MSI (reproducible): one built
+    # earlier may have none.
+    local iso
+    VMPANE_GUEST_TOOLS_EXTRA=build/guest-tools/windows-extra guest-tools/build-iso.sh
+    iso=$(compgen -G "build/guest-tools/vmpane-guest-tools-windows-*.iso" | head -1)
+    if $dry && ! compgen -G "build/guest-tools/windows-extra/*.msi" >/dev/null; then
+        echo "warning: the guest tools disc has no Windows agent (dry run)" >&2
+    else
+        xorriso -indev "$iso" -find / -name vmpane-agent.msi 2>/dev/null | grep -q vmpane-agent.msi \
+            || { echo "error: $iso has no vmpane-agent.msi" >&2; exit 1; }
+    fi
     scripts/build.sh Release
     local app=build/Release/VMPane.app dmg=$out/VMPane-$version.dmg
     scripts/sign.sh --verify "$app"
@@ -157,12 +170,18 @@ publish() {
     cask "$sha" >"$out/vmpane.rb"
     if $dry; then
         echo "publish (dry run): would run"
-        echo "  gh release create v$version $prerelease --title 'VMPane $version' --notes-file $notes ${assets[*]}"
+        echo "  the v$version release (agent-release.yml's draft, else a new one): $prerelease, notes $notes, ${assets[*]}"
         echo "  $out/appcast/appcast.xml to the gh-pages branch ($feed)"
         echo "  a pull request to nhtera/homebrew-tap with $out/vmpane.rb"
         return 0
     fi
-    gh release create "v$version" "$prerelease" --repo "$repo" --title "VMPane $version" --notes-file "$notes" "${assets[@]}"
+    # agent-release.yml made the tag's release as a draft (with the agent archives): it is filled in and published.
+    if gh release view "v$version" --repo "$repo" >/dev/null 2>&1; then
+        gh release upload "v$version" --repo "$repo" --clobber "${assets[@]}"
+        gh release edit "v$version" --repo "$repo" --draft=false "$prerelease" --title "VMPane $version" --notes-file "$notes"
+    else
+        gh release create "v$version" "$prerelease" --repo "$repo" --title "VMPane $version" --notes-file "$notes" "${assets[@]}"
+    fi
     # The DMG is public before the appcast offers it.
     publish_appcast
     tap_pr

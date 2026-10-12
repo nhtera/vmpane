@@ -3,8 +3,10 @@ name: Agent release
 # Builds the guest agent for a release tag (v*), signs what can be signed, attests it and attaches it to the
 # tag's draft release:
 #   Linux    static aarch64 musl binary + installer + systemd units, SHA256SUMS (ubuntu-24.04-arm)
-#   macOS    "VMPane Agent.pkg": Developer ID signed and notarized on the project's Mac (identities in its keychain)
-#   Windows  vmpane-agent.exe + MSI (windows-11-arm); Authenticode once a signing route is chosen (Phase 11)
+#   macOS    "VMPane Agent.pkg": Developer ID signed and notarized on the project's Mac (identities in its keychain),
+#            when a runner there is configured (vars.MAC_RUNNER); otherwise the maintainer builds it (docs/release.md)
+#   Windows  vmpane-agent.exe + MSI (windows-11-arm), not Authenticode-signed (the project has no Windows code-signing
+#            certificate): their build-provenance attestation and SHA256SUMS are what a release checks
 # Runs in the `agent-release` environment, which must require a reviewer; tags matching v* must be protected.
 # Build-provenance attestations need a public repository (private personal repositories cannot store them).
 on:
@@ -117,11 +119,6 @@ jobs:
           echo "${wix}bin" >> "$GITHUB_PATH"
           cargo install --locked cargo-wix --version 0.3.9
       - run: cargo build --release --locked --target aarch64-pc-windows-msvc -p vmpane-agent
-      # Authenticode (exe, then MSI) goes here once the route is chosen: Azure Trusted Signing with OIDC limited to
-      # this workflow on protected tags, or an OV certificate with jsign and a hardware token. Unsigned until then.
-      - name: Authenticode (not configured)
-        if: ${{ vars.AUTHENTICODE_ROUTE == '' }}
-        run: echo "::warning::the Windows agent is not Authenticode-signed (no signing route configured)"
       - name: Build the MSI
         run: |
           cargo wix -p vmpane-agent --no-build --nocapture --target aarch64-pc-windows-msvc \

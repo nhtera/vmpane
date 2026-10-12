@@ -49,8 +49,10 @@ public final class VZBackend: VMBackend {
         let plan = plans.withLock { $0.next }
         if case .mac(let aux, let image?) = plan.platform {
             // First start of a macOS guest: install, then boot the installed system. Space is checked before
-            // anything is written (once the platform files exist, a start no longer installs).
-            try SpaceGuard.require(Self.macInstallBytes, at: aux.auxiliaryStorage)
+            // anything is written (once the platform files exist, a start no longer installs). An interrupted
+            // install starts over in the same disk image: what it already wrote there needs no new space.
+            try SpaceGuard.require(
+                Self.macInstallBytes, at: aux.auxiliaryStorage, rewritten: SpaceGuard.allocatedBytes(plan.disks.map(\.url)))
             try await runner.prepareMacInstall(restoreImage: image, aux: aux)
             try await create(plan)
             // The window (and its progress overlay) shows now: the VM counts as running only after the install.

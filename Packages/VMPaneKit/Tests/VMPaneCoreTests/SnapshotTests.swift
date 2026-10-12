@@ -300,6 +300,25 @@ func thousandSnapshotCyclesStayFastAndFree() throws {
     }
     #expect(measured?.path == "/")  // the nearest folder that exists
     try SpaceGuard.require(20 * gib, at: notYet, available: { _ in 25 * gib })
+    // An interrupted install that wrote 19 GiB of its disk needs the rest plus the reserve, never less than that.
+    try SpaceGuard.require(20 * gib, at: notYet, rewritten: 19 * gib, available: { _ in 6 * gib })
+    #expect(throws: InsufficientSpace(requiredBytes: 5 * gib, availableBytes: 4 * gib)) {
+        try SpaceGuard.require(20 * gib, at: notYet, rewritten: 30 * gib, available: { _ in 4 * gib })
+    }
+}
+
+/// A sparse image takes what was written to it, not its size.
+@Test func allocatedBytesCountWrittenBlocks() throws {
+    let file = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("vp-sparse-\(UUID().uuidString.prefix(8))")
+    defer { try? FileManager.default.removeItem(at: file) }
+    FileManager.default.createFile(atPath: file.path, contents: nil)
+    let handle = try FileHandle(forWritingTo: file)
+    try handle.truncate(atOffset: 1 << 30)
+    try handle.seek(toOffset: 0)
+    try handle.write(contentsOf: Data(repeating: 7, count: 4 << 20))
+    try handle.close()
+    let allocated = SpaceGuard.allocatedBytes([file, file.appendingPathExtension("missing")])
+    #expect(allocated >= 4 << 20 && allocated < 64 << 20)
 }
 
 /// A snapshot's disks are clones of the live set: listed, it shows the space it holds of its own (what deleting it
