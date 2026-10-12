@@ -60,6 +60,9 @@ hardened runtime: without a team ID, library validation would refuse the app's o
   `itest/scenarios/` defines `scenario_run` (return 0 pass, 77 skipped, anything else fail). Results are
   written to `itest/results/` keyed by the artifact's SHA-256, scenario, chip and macOS build;
   a skipped scenario never counts as a pass.
+- `import-parallels` imports through the app's UI (needs an unlocked session) and boots the result. Without
+  `VMPANE_ITEST_PVM` it makes a `.pvm` from the golden Linux disk; for the release tier, set
+  `VMPANE_ITEST_PVM` to a Linux VM made by Parallels Desktop (kept locally, never committed: Parallels licence).
 - CI also builds and tests the Release configuration, and runs the unit tests nightly with the address
   sanitizer: some concurrency bugs only show up in optimized builds.
 

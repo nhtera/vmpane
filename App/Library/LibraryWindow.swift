@@ -66,6 +66,11 @@ struct LibraryWindow: View {
         }
         .sheet(isPresented: $showingWizard) { NewVMWizard(store: store) }
         .sheet(item: $importing) { pvm in ImportParallelsSheet(store: store, pvm: pvm) }
+        .onChange(of: store.parallelsToImport, initial: true) { _, pvm in
+            guard let pvm else { return }
+            importing = pvm
+            store.parallelsToImport = nil
+        }
         .alert("Clone “\(cloning?.name ?? "")”", isPresented: present($cloning)) {
             TextField("Name", text: $cloneName)
             Button("Clone") {

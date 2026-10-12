@@ -57,8 +57,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         killSwitch.registerHotKey()
     }
 
-    /// A .vmpane bundle opened from Finder (double-click, Open With, or dropped on the Dock icon).
+    /// A .vmpane bundle opened from Finder (double-click, Open With, or dropped on the Dock icon) joins the library;
+    /// a Parallels .pvm opens the import sheet.
     func application(_ application: NSApplication, open urls: [URL]) {
+        if let pvm = urls.first(where: { $0.pathExtension.lowercased() == "pvm" }) { library.parallelsToImport = pvm }
         Task { await library.importBundles(urls) }
     }
 

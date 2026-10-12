@@ -43,6 +43,8 @@ public final class LibraryStore {
     public var selection: UUID?
     /// The last failed action, for an alert.
     public var lastError: String?
+    /// A Parallels VM opened from Finder, for the library window's import sheet.
+    public var parallelsToImport: URL?
 
     @ObservationIgnored private let library: VMLibrary
     @ObservationIgnored private let links: LiveVMLink

@@ -35,6 +35,14 @@
       <key>LSItemContentTypes</key><array><string>app.vmpane.vm</string></array>
       <key>LSTypeIsPackage</key><true/>
     </dict>
+    <dict>
+      <!-- Open With VMPane on a Parallels VM: the import sheet. By extension: Parallels' own type is not ours to declare. -->
+      <key>CFBundleTypeName</key><string>Parallels Virtual Machine</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>CFBundleTypeExtensions</key><array><string>pvm</string></array>
+      <key>LSTypeIsPackage</key><true/>
+    </dict>
   </array>
 </dict>
 </plist>
