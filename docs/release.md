@@ -22,11 +22,14 @@ open an issue and quarantine it; do not rerun until it passes.
    updates by it) in `Config/Base.xcconfig`, `VMPane.version` in `VMPaneCore.swift`, `version` in
    `agent/Cargo.toml`. Move `CHANGELOG.md`'s Unreleased entries under `## [x.y.z]`. Commit, tag `vx.y.z`, push the
    tag; wait for `agent-release.yml`.
-2. `guest-tools/fetch-agent-msi.sh` (the signed MSI from that run), then
+2. `guest-tools/fetch-agent-msi.sh` (the signed MSI from that run); the macOS agent package, signed and
+   notarized (the app embeds `build/guest-tools/macos` as it is):
+   `VMPANE_SIGN_IDENTITY="Developer ID Application: …" VMPANE_INSTALLER_IDENTITY="Developer ID Installer: …"
+   VMPANE_NOTARIZE=1 guest-tools/build-macos.sh`; then
    `VMPANE_SIGN_IDENTITY="Developer ID Application: …" scripts/release.sh build-candidate x.y.z`. It refuses a
-   dirty tree, an untagged HEAD, mismatched versions, a missing CI run or an unsigned MSI; it builds Release,
-   signs from `Config/signing-manifest.json`, verifies, makes the DMG, notarizes and staples it, and records the
-   candidate's SHA-256 in `build/release/x.y.z/candidate.json`.
+   dirty tree, an untagged HEAD, mismatched versions, a missing CI run, an unsigned MSI or a macOS agent package
+   that is not notarized; it builds Release, signs from `Config/signing-manifest.json`, verifies, makes the DMG,
+   notarizes and staples it, and records the candidate's SHA-256 in `build/release/x.y.z/candidate.json`.
 3. `scripts/release.sh itest x.y.z --tier beta|release` on each required Mac (copy the DMG and
    `candidate.json`; collect the result files back into `itest/results/`).
 4. `scripts/release.sh publish x.y.z` refuses unless every scenario of the tier passed for this DMG on enough

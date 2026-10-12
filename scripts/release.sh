@@ -68,6 +68,11 @@ preflight() {
     elif ! command -v osslsigncode >/dev/null || ! osslsigncode verify -in "$msi" >/dev/null 2>&1; then
         problem "$msi is not Authenticode-signed (or osslsigncode is missing)"
     fi
+    # The app embeds the macOS agent package as built: a guest opening an unsigned one gets a Gatekeeper refusal.
+    local pkg="build/guest-tools/macos/VMPane Agent.pkg" assessment
+    assessment=$(spctl -a -t install -vv "$pkg" 2>&1 || true)
+    [[ $assessment == *"source=Notarized Developer ID"* ]] \
+        || problem "$pkg is not signed and notarized (VMPANE_INSTALLER_IDENTITY=… VMPANE_NOTARIZE=1 guest-tools/build-macos.sh)"
     [[ -n ${VMPANE_SIGN_IDENTITY:-} && $VMPANE_SIGN_IDENTITY != - ]] || problem "VMPANE_SIGN_IDENTITY is not a Developer ID identity"
     ((problems == 0)) || { echo "preflight: $problems problem(s)" >&2; exit 1; }
     echo "preflight: ok"
