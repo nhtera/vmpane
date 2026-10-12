@@ -263,7 +263,14 @@ mod tests {
     #[test]
     fn relative_paths_are_refused() {
         assert!(absolute("tmp/x").is_err());
+        #[cfg(unix)]
         assert!(absolute("/tmp/x").is_ok());
+        #[cfg(windows)]
+        {
+            assert!(absolute(r"C:\Windows\Temp\x").is_ok());
+            // Rooted without a drive is relative to the current drive: refused too.
+            assert!(absolute(r"\Windows\Temp\x").is_err());
+        }
     }
 
     #[tokio::test]
