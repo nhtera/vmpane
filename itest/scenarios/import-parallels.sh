@@ -69,7 +69,7 @@ scenario_run() {
     log="$work/xcodebuild.log"
     if ! TEST_RUNNER_VMPANE_ITEST_PVM=$pvm TEST_RUNNER_VMPANE_ITEST_SUPPORT=$VMPANE_SUPPORT_DIR \
         it_ui_tests VMPaneUITests/ImportUITests "$log"; then
-        grep -E "error:|failed|Test Case .* failed" "$log" | tail -20 >&2
+        grep -E "error:|failed|Test Case .* failed|import progress" "$log" | tail -20 >&2
         it_fail "the import through the app failed"
         return 1
     fi

@@ -59,7 +59,12 @@ perf_linux() {
     it_wait_for 30 it_agent_connected || it_fail "the agent did not connect" || return 1
 
     perf_record screenshotMs "$(it_rpc "$socket" vm.screenshot '{"maxEdge": 1568}' --repeat 10)"
-    perf_record helperRSSMB "$(($(ps -o rss= -p "$pid") / 1024))"
+    # The helper's footprint (dirty memory, what memory pressure counts), not RSS: RSS keeps memory freed after
+    # screenshots that macOS reclaims at will (169 MB RSS against a 47 MB footprint after 10, flat over 100).
+    local footprint
+    footprint=$(footprint -f bytes "$pid" 2>/dev/null | sed -n 's/.*Footprint: \([0-9]*\) B.*/\1/p' | head -1)
+    [[ -n $footprint ]] || it_fail "footprint could not read the helper" || return 1
+    perf_record helperFootprintMB "$((footprint >> 20))"
 
     # A 256 MiB download through a loopback forward.
     it_agent_exec 'mkdir -p /root/www && head -c 268435456 /dev/urandom >/root/www/big.bin
@@ -157,11 +162,11 @@ EOF
 }
 
 # Targets from the plan (lower is better unless the name says otherwise).
-perf_targets='{"appLaunchMs": 1000, "linuxBootS": 20, "screenshotMs": 300, "helperRSSMB": 150, "forwardMbps": 1000,
+perf_targets='{"appLaunchMs": 1000, "linuxBootS": 20, "screenshotMs": 300, "helperFootprintMB": 150, "forwardMbps": 1000,
     "guestReadRatio": 0.7, "diskSnapshotS": 2, "windowsBootS": 90, "windowsIdleCPU": 15}'
 perf_higher_is_better='["forwardMbps", "guestReadRatio"]'
 # Run-to-run noise: a change smaller than this is not a regression, whatever its percentage.
-perf_noise='{"appLaunchMs": 150, "linuxBootS": 2, "screenshotMs": 20, "helperRSSMB": 20, "forwardMbps": 8000,
+perf_noise='{"appLaunchMs": 150, "linuxBootS": 2, "screenshotMs": 20, "helperFootprintMB": 20, "forwardMbps": 8000,
     "guestReadRatio": 0.15, "diskSnapshotS": 0.5, "windowsBootS": 10, "windowsIdleCPU": 3}'
 
 scenario_run() {

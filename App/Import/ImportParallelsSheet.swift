@@ -22,6 +22,7 @@ struct ImportParallelsSheet: View {
             Text("Import “\(pvm.deletingPathExtension().lastPathComponent)” from Parallels").font(.title3.weight(.semibold))
             if let problem {
                 Label(problem, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                    .accessibilityIdentifier("import-problem")
             } else if let parallels {
                 Form {
                     TextField("Name", text: $name)

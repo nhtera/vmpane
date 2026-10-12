@@ -33,7 +33,19 @@ final class ImportUITests: XCTestCase {
         let readable = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == true"), object: importButton)
         XCTAssertEqual(XCTWaiter().wait(for: [readable], timeout: 30), .completed, "the .pvm was read")
         importButton.click()
-        XCTAssertTrue(sheet.waitForNonExistence(timeout: 900), "the import finished (the sheet closes)")
+        // Until the sheet closes (done) or says what went wrong; the progress is logged, so a stall shows.
+        let problem = sheet.descendants(matching: .any)["import-problem"]
+        let deadline = Date().addingTimeInterval(900)
+        var logged = Date.distantPast
+        while sheet.exists, Date() < deadline {
+            if problem.exists { XCTFail("the import failed: \(problem.label)"); return }
+            if Date().timeIntervalSince(logged) > 30 {
+                print("import progress: \(sheet.progressIndicators.firstMatch.value ?? "none")")
+                logged = Date()
+            }
+            _ = sheet.waitForNonExistence(timeout: 2)
+        }
+        XCTAssertFalse(sheet.exists, "the import finished (the sheet closes)")
         app.terminate()
     }
 }
