@@ -6,11 +6,12 @@ import XCTest
 enum AppUnderTest {
     static var environment: [String: String] { ProcessInfo.processInfo.environment }
 
-    /// The app, past the welcome. A Release build's updater never asks whether to check for updates (Sparkle's
-    /// question at the second launch).
-    @MainActor static func app() -> XCUIApplication {
+    /// The app, past the welcome, quit when `test` ends (one launched by URL would outlive it). A Release build's
+    /// updater never asks whether to check for updates (Sparkle's question at the second launch).
+    @MainActor static func app(for test: XCTestCase) -> XCUIApplication {
         let app = environment["VMPANE_ITEST_APP"].map { XCUIApplication(url: URL(fileURLWithPath: $0)) } ?? XCUIApplication()
         app.launchArguments += ["-onboarded", "YES", "-SUEnableAutomaticChecks", "NO"]
+        test.addTeardownBlock { @MainActor in app.terminate() }
         return app
     }
 }

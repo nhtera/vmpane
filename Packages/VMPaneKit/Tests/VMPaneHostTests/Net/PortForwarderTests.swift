@@ -167,6 +167,24 @@ private func roundTrip(_ port: UInt16, _ payload: Data, udp: Bool = false) -> Da
     return received
 }
 
+/// Connects to 127.0.0.1:`port` and reads: true when the other end closes the connection within `seconds` (end of
+/// stream), false when the read times out or the connection fails.
+private func closedByPeer(_ port: UInt16, within seconds: Int) -> Bool {
+    let fd = socket(AF_INET, SOCK_STREAM, 0)
+    defer { close(fd) }
+    var timeout = timeval(tv_sec: seconds, tv_usec: 0)
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+    var address = sockaddr_in(
+        sin_len: UInt8(MemoryLayout<sockaddr_in>.size), sin_family: sa_family_t(AF_INET), sin_port: port.bigEndian,
+        sin_addr: in_addr(s_addr: INADDR_LOOPBACK.bigEndian), sin_zero: (0, 0, 0, 0, 0, 0, 0, 0))
+    let connected = withUnsafeMutablePointer(to: &address) {
+        $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
+    }
+    guard connected == 0 else { return false }
+    var byte: UInt8 = 0
+    return recv(fd, &byte, 1, 0) == 0
+}
+
 private func rule(_ id: String, _ proto: PortForwardConfig.Proto = .tcp, host: UInt16, guest: UInt16) throws -> PortRule {
     try PortRule(
         PortForwardConfig(id: id, proto: proto, hostAddress: "127.0.0.1", hostPort: Int(host), guestPort: Int(guest), origin: .user))
@@ -227,10 +245,9 @@ private let loopback = IPv4(127, 0, 0, 1)
     }
     let port = freePort()
     await forwarder.apply([try rule("closed", host: port, guest: freePort())])
-    let started = Date()
-    let back = await offPool { roundTrip(port, Data("x".utf8)) }
-    #expect(back?.isEmpty ?? true)
-    #expect(Date().timeIntervalSince(started) < 5)
+    // Closed by the forwarder (end of stream), not left open until the client gives up: on a loaded machine that
+    // can take seconds, so the wait is long and what is checked is how the read ended.
+    #expect(await offPool { closedByPeer(port, within: 30) })
     #expect(lookups.withLock { $0 } == [false, true])
     await forwarder.stopAll()
 }

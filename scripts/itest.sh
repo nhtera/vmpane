@@ -52,7 +52,12 @@ fi
 open_dir=""
 cleanup() {
     [[ -n "$open_dir" ]] || return 0
-    [[ -d "$open_dir/mnt" ]] && hdiutil detach -quiet "$open_dir/mnt" 2>/dev/null
+    if [[ -d "$open_dir/mnt" ]]; then
+        # Whatever still runs from this mount (an app a UI test left open) would keep it busy, and the next
+        # scenario could not attach the DMG.
+        pkill -f "^$open_dir/mnt/" 2>/dev/null && sleep 2
+        hdiutil detach -quiet "$open_dir/mnt" 2>/dev/null || hdiutil detach -quiet -force "$open_dir/mnt" 2>/dev/null
+    fi
     rm -rf "$open_dir"
 }
 trap cleanup EXIT
