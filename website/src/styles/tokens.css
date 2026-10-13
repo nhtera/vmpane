@@ -27,7 +27,23 @@
   --mac-lid: #0E0E10; --mac-bezel: #3A3A3E; --mac-base: linear-gradient(#E3E4E6, #B9BBBF 60%, #8E9095); --mac-notch: #A5A7AB;
   --menubar-bg: rgba(255,255,255,.4); --menubar-text: rgba(0,0,0,.82); --dock-bg: rgba(255,255,255,.28); --dock-line: rgba(255,255,255,.35);
   --dock-tile: linear-gradient(160deg, rgba(255,255,255,.9), rgba(255,255,255,.55)); --dock-dot: rgba(0,0,0,.6);
-  --cursor-fill: #111111; --cursor-line: #FFFFFF; --alert-default: #0A7AFF;
+  --cursor-fill: #111111; --cursor-line: #FFFFFF;
+  /* a default button or a highlighted menu item: the selection blue, so white text on it is AA */
+  --alert-default: var(--sel);
+  /* VMPane's windows drawn in HTML (mocks.tsx): window chrome and text follow the theme */
+  --win: #FFFFFF; --win-side: rgba(236,236,238,.9); --win-bar: #F6F6F6; --win-line: rgba(0,0,0,.1);
+  --win-text: rgba(0,0,0,.85); --win-text-2: rgba(0,0,0,.56); --win-group: #F2F2F4;
+  --light-close: radial-gradient(circle at 50% 28%, #FFC2BD 0 16%, #FF5F57 58%, #D63F38);
+  --light-min: radial-gradient(circle at 50% 28%, #FFEDB3 0 16%, #FEBC2E 58%, #D69610);
+  --light-zoom: radial-gradient(circle at 50% 28%, #B6F5BF 0 16%, #28C840 58%, #179A2B); --light-edge: rgba(0,0,0,.22);
+  --ok: #28C840; --denied: #FF9F0A;
+  --popup-line: rgba(0,0,0,.25); --popup-shadow: rgba(0,0,0,.12); --menu-edge: rgba(255,255,255,.2);
+  --popup-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --popup-chevrons: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M5 6.5l3-3 3 3M5 9.5l3 3 3-3' fill='none' stroke='%23fff' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  /* a guest's screen: a Linux terminal (Ubuntu's aubergine for the library's thumbnail), the macOS desktop, Windows Setup */
+  --term-bg: #1B1B1D; --term-text: #E6E6E6; --term-green: #6FE38A; --term-blue: #79B8FF; --term-dim: #8B8B90; --term-thumb: #300A24;
+  --mac-desk: radial-gradient(80% 90% at 20% 0%, #F7EFFF, transparent), linear-gradient(160deg, #EDE4FF, #B79BFF 60%, #7B57E8); --desk-shadow: rgba(60,20,140,.35);
+  --win-setup: radial-gradient(70% 80% at 30% 20%, #1E5BB8, transparent), linear-gradient(160deg, #0B2E6F, #071A3D);
   /* wallpapers: CSS gradients, never Apple's images */
   --wall-a: radial-gradient(70% 90% at 0% 100%, #1F4CFF 0%, transparent 60%), radial-gradient(60% 70% at 100% 0%, #8FD8FF 0%, transparent 65%), radial-gradient(70% 80% at 70% 90%, #6B45FF 0%, transparent 60%), linear-gradient(155deg, #DCEBFF 0%, #6FA5FF 40%, #2F5BEA 70%, #24288F 100%);
   --wall-b: radial-gradient(60% 80% at 10% 10%, #FFE0B8 0%, transparent 60%), radial-gradient(70% 90% at 100% 100%, #FF6A3D 0%, transparent 60%), linear-gradient(160deg, #FFD7A8, #FF9C6B 55%, #D9465F);
@@ -42,6 +58,7 @@
   --shadow-sticker: drop-shadow(0 14px 18px rgba(0,0,0,.14));
   --shadow-app: drop-shadow(0 24px 30px rgba(31,79,216,.35));
   --shadow-mac: 0 50px 90px -40px rgba(0,0,0,.45);
+  --shadow-cursor: drop-shadow(0 .3cqw .4cqw rgba(0,0,0,.35));
   /* type: the system font (SF Pro on Apple devices); Caveat for the one handwritten note */
   --f-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --f-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -73,6 +90,8 @@
     --shadow-win: 0 0 0 .5px rgba(255,255,255,.14), 0 10px 30px rgba(0,0,0,.5), 0 30px 60px -20px rgba(0,0,0,.6);
     --shadow-lift: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.4);
     --rim: inset 0 1px 0 rgba(255,255,255,.16), inset 0 0 0 .5px rgba(255,255,255,.08);
+    --win: #1E1E1E; --win-side: rgba(40,40,42,.9); --win-bar: #2A2A2C; --win-line: rgba(255,255,255,.1);
+    --win-text: rgba(255,255,255,.88); --win-text-2: rgba(255,255,255,.56); --win-group: #262628;
     color-scheme: dark;
   }
 }
@@ -87,6 +106,8 @@
   --shadow-win: 0 0 0 .5px rgba(255,255,255,.14), 0 10px 30px rgba(0,0,0,.5), 0 30px 60px -20px rgba(0,0,0,.6);
   --shadow-lift: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.4);
   --rim: inset 0 1px 0 rgba(255,255,255,.16), inset 0 0 0 .5px rgba(255,255,255,.08);
+  --win: #1E1E1E; --win-side: rgba(40,40,42,.9); --win-bar: #2A2A2C; --win-line: rgba(255,255,255,.1);
+  --win-text: rgba(255,255,255,.88); --win-text-2: rgba(255,255,255,.56); --win-group: #262628;
   color-scheme: dark;
 }
 

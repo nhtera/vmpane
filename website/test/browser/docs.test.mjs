@@ -204,7 +204,7 @@ test("client navigation reads the static docs index, never a server function", a
   await context.close();
 });
 
-test("the table of contents marks the section in view", async () => {
+test("the table of contents stays in view under the header and marks the section in view", async () => {
   for (const p of pages) {
     const { page, context } = await open(`/docs/${p.slug}`, { height: 500 });
     const links = page.locator(".toc a");
@@ -217,6 +217,9 @@ test("the table of contents marks the section in view", async () => {
     // The page scrolls smoothly: wait for the end of the scroll, not the first heading it passes.
     const want = await last.getAttribute("href");
     await eventually(async () => (await page.locator('.toc a[aria-current="true"]').evaluateAll((as) => as.map((a) => a.getAttribute("href")))).join() === want, `${p.slug}: ${want} is the one active heading`);
+    // Sticky: still at the top of the window at the end of the page, not scrolled away with it.
+    const top = await page.locator(".toc").evaluate((el) => el.getBoundingClientRect().top);
+    assert.ok(top >= 0 && top <= 80, `${p.slug}: the table of contents is at ${top}px`);
     await context.close();
     return;
   }

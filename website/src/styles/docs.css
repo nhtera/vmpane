@@ -119,7 +119,7 @@
   .edit { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 20px; padding-top: 18px; border-top: 1px solid var(--hair); font-size: 14px; color: var(--text-3); max-width: none !important; }
 
   /* ---------- table of contents ---------- */
-  .toc { display: none; align-content: start; gap: 8px; position: sticky; top: 76px; padding: 38px 24px 0 0; font-size: 13px; }
+  .toc { display: none; align-content: start; align-self: start; gap: 8px; position: sticky; top: 76px; padding: 38px 24px 0 0; font-size: 13px; }
   @media (min-width: 1200px) { .toc { display: grid; } }
   .toc p { font-weight: 600; color: var(--text); }
   .toc a { color: var(--text-2); text-decoration: none; line-height: 1.4; }

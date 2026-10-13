@@ -52,6 +52,16 @@ npm run check         # build:site + check-links + the browser suites (needs: np
   from it with `rsvg-convert`. `public/og.png` is captured from `/og-card` by `npm run og`. Copy lives in
   `src/content/*.ts`.
 
+## The app's windows
+
+The landing page draws VMPane's windows in HTML, as design draft v5 does (`src/components/landing/mocks.tsx`):
+the library, a VM's window, the agent's question, Settings › AI agents, the activity list, the menu bar menu,
+snapshots, port forwarding, shared folders, the Parallels import and the Windows install. Their text is the app's
+own (`landing.mock` in `src/content/landing.ts`: state labels, the dialog, the policy's refusal reasons, port rule
+and snapshot names), so a change to those strings in the app is a change here too. Their colours are tokens
+(`--win-*` and friends), so they follow the light or dark look; each one is a labelled picture to a screen reader,
+and the agents demo's activity list is real text.
+
 ## Isolation
 
 `website/` has its own `package-lock.json` and is installed with `npm ci --ignore-scripts`; nothing in the app's

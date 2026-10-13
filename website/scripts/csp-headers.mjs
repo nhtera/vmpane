@@ -39,7 +39,6 @@ export function buildHeaders(root) {
   const rules = [
     ["/*", Object.entries(SECURITY_HEADERS)],
     ["/assets/*", [["Cache-Control", IMMUTABLE]]],
-    ["/screens/*", [["Cache-Control", IMMUTABLE]]],
   ];
   for (const file of htmlFiles(root).sort()) {
     const hashes = inlineScripts(readFileSync(file, "utf8")).map(sha256);

@@ -7,7 +7,6 @@
 /.wrangler/
 /dist/
 /.output/
-/.screens/
 *.tsbuildinfo
 /src/routeTree.gen.ts
 /content.*/
