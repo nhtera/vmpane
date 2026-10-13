@@ -5,6 +5,9 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- The disk image shows how to install: VMPane beside the Applications folder, with an arrow to drag it there.
+
 ### Fixed
 - A VM's own app ("VMPane VM") has a menu bar: Quit (⌘Q), Hide, Edit and Window. Quitting it, also from its Dock
   tile, asks first while the VM runs and then shuts the VM down cleanly; before, it had no menu and a Quit from
