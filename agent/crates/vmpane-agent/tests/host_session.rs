@@ -708,3 +708,54 @@ async fn clipboard_round_trips_through_the_session_helper() {
     }
     panic!("no clipboard.changed after an outside change");
 }
+
+/// What a host sends when a QEMU port's guest kept an earlier session (QEMU started again under a guest restored from
+/// saved memory): an answer to no request. The agent ends that session and says `hello` again on a new connection.
+#[tokio::test]
+async fn an_answer_to_no_request_starts_a_new_session() {
+    let dir = scratch();
+    let socket = dir.join("s");
+    let listener = UnixListener::bind(&socket).unwrap();
+    let mut child = tokio::process::Command::new(env!("CARGO_BIN_EXE_vmpane-agent"))
+        .args(["--connect", &format!("unix:{}", socket.display())])
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
+    async fn accept_hello(listener: &UnixListener) -> tokio::net::UnixStream {
+        let (mut stream, _) = tokio::time::timeout(Duration::from_secs(10), listener.accept())
+            .await
+            .expect("the agent connects")
+            .unwrap();
+        let (mut decoder, mut buf) = (FrameDecoder::new(), BytesMut::new());
+        loop {
+            if let Some(Frame::Message(bytes)) = decoder.decode(&mut buf).unwrap() {
+                let Message::Request(hello) = Message::parse(&bytes).unwrap() else {
+                    panic!("expected hello")
+                };
+                assert_eq!(hello.method, "hello");
+                let reply: Message =
+                    Response::ok(hello.id, &json!({"proto": 1, "hostVersion": "test"})).into();
+                let frame = Frame::Message(reply.to_bytes().unwrap().into());
+                stream.write_all(&frame.to_bytes().unwrap()).await.unwrap();
+                return stream;
+            }
+            assert!(
+                stream.read_buf(&mut buf).await.unwrap() > 0,
+                "closed before hello"
+            );
+        }
+    }
+    let mut first = accept_hello(&listener).await;
+    let stray = br#"{"jsonrpc":"2.0","id":0,"error":{"code":-32600,"message":"a new host connection: say hello first"}}"#;
+    let frame = Frame::Message(Bytes::from_static(stray));
+    first.write_all(&frame.to_bytes().unwrap()).await.unwrap();
+    let mut rest = Vec::new();
+    tokio::time::timeout(Duration::from_secs(10), first.read_to_end(&mut rest))
+        .await
+        .expect("the agent ends the session")
+        .unwrap();
+    drop(accept_hello(&listener).await);
+    let _ = child.start_kill();
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -346,3 +346,31 @@ func theHostAcknowledgesWhatItReadToAgentsThatAsk(asks: Bool) async throws {
     #expect(await connection.isOpen)
     #expect(await agent.sawClose(within: 3))  // still silent after the resume: closed after three heartbeats
 }
+
+/// QEMU started again under a guest that carried on from saved memory (a resumed suspend, a restored live snapshot):
+/// its agent keeps the old session and sends heartbeats, not `hello`. On a QEMU port the host asks it to start over
+/// (an answer to no request, which every agent takes as the end of its session) and then takes its `hello`. Other
+/// transports, where a guest sees the close, still close on anything before `hello`.
+@Test func aStaleSessionOnAQEMUPortIsAskedToSayHelloAgain() async throws {
+    let heartbeat = RPCMessage.request(RPCRequest(id: nil, method: AgentMethod.agentHeartbeat, params: [:]))
+    let (agent, hostFD) = try FakeAgent.pair()
+    let connection = AgentConnection(socket: AgentSocket(fd: hostFD), hostVersion: "h", portOutlivesConnections: true)
+    let peer = Task { try await connection.open(helloTimeout: nil) }
+    try agent.send(heartbeat)
+    guard case .response(let reset)? = await agent.nextMessage() else { Issue.record("no reset"); return }
+    #expect(reset.id == .int(0))
+    try agent.send(heartbeat)  // within two seconds: not asked again
+    try agent.send(.response(RPCResponse(id: .int(9), result: [:])))  // an answer to the earlier host
+    try agent.hello()
+    _ = try await peer.value
+    guard case .response(let welcome)? = await agent.nextMessage() else { Issue.record("no hello answer"); return }
+    #expect(welcome.id == .int(1))
+    #expect(await connection.isOpen)
+
+    let (other, otherFD) = try FakeAgent.pair()
+    let vsock = AgentConnection(socket: AgentSocket(fd: otherFD), hostVersion: "h")
+    let closed = Task { try? await vsock.open(helloTimeout: nil) }
+    try other.send(heartbeat)
+    #expect(await other.sawClose(within: 3))
+    #expect(await closed.value == nil)
+}

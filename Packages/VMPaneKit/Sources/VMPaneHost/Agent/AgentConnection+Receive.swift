@@ -30,7 +30,10 @@ extension AgentConnection {
             case .success(let message): handle(message)
             }
         case .chunk(let stream, let data):
-            guard let target = inbound[stream] else { return close(.violation("data on unknown stream \(stream)")) }
+            guard let target = inbound[stream] else {
+                if peer == nil, portOutlivesConnections { return resetStaleSession() }
+                return close(.violation("data on unknown stream \(stream)"))
+            }
             if target.push(data) {
                 readingPaused = true
                 await target.waitForRoom()
@@ -39,6 +42,7 @@ extension AgentConnection {
             }
         case .end(let stream, let status):
             guard let target = inbound.removeValue(forKey: stream) else {
+                if peer == nil, portOutlivesConnections { return resetStaleSession() }
                 return close(.violation("end of unknown stream \(stream)"))
             }
             target.finish(status == .ok ? .success(()) : .failure(.ended(status)))
@@ -48,6 +52,7 @@ extension AgentConnection {
     func handle(_ message: RPCMessage) {
         switch message {
         case .request(let request) where peer == nil:
+            if portOutlivesConnections, request.method != AgentMethod.hello { return resetStaleSession() }
             acceptHello(request)
         case .request(let request)
         where request.isNotification && AgentMethod.fromGuest.contains(request.method)
@@ -62,6 +67,7 @@ extension AgentConnection {
         case .request(let request):
             close(.violation("the guest may not send \(request.method)"))
         case .response(let response):
+            if peer == nil, portOutlivesConnections { return resetStaleSession() }
             guard peer != nil, case .int(let id)? = response.id, let entry = pending.removeValue(forKey: id) else {
                 return close(.violation("response to no request"))
             }
@@ -135,6 +141,20 @@ extension AgentConnection {
         acknowledge()  // at once: the agent keeps to its window only once it knows this host acknowledges
         helloWaiter?.resume(returning: peer)
         helloWaiter = nil
+    }
+
+    /// The guest on a QEMU port still runs a session with an earlier connection: QEMU was started again while the
+    /// guest carried on from its saved memory (a resumed suspend, a restored live snapshot), and a guest never sees
+    /// a port's connection close. So it sends heartbeats (or answers, or stream data) instead of `hello`. An answer
+    /// to no request makes the agent end that session and say `hello` again (on this connection); every agent
+    /// version does so. Sent at most every two seconds, while the guest's old session lasts.
+    func resetStaleSession() {
+        let now = ContinuousClock.now
+        if let last = lastStaleReset, now - last < .seconds(2) { return }
+        lastStaleReset = now
+        Self.log.notice("the guest agent kept an earlier session: asking it to say hello again")
+        let reset = RPCResponse(id: .int(0), error: RPCError(.invalidRequest, "a new host connection: say hello first"))
+        if let frame = try? encodeMessage(.response(reset)) { enqueue(frame) }
     }
 
     /// Tells an agent that asked for it (`AgentCap.ack`) how many bytes the host has read: a macOS guest's vsock

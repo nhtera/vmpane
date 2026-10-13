@@ -5,7 +5,8 @@ import VMPaneCore
 
 /// Keeps the helper connected to a Unix socket that QEMU listens on for the agent's virtio-serial port
 /// (`run/<sid>/agent.sock`). The connection exists before the guest agent runs, so `hello` may take as long
-/// as the guest takes to boot; when it closes (the agent restarted, QEMU restarted), the link reconnects.
+/// as the guest takes to boot; when it closes (the agent restarted, QEMU restarted), the link reconnects. A guest
+/// that carried on from saved memory keeps its old session until the connection tells it to say `hello` again.
 public actor UDSAgentLink {
     private let socket: URL
     private let hub: AgentHub
@@ -39,7 +40,7 @@ public actor UDSAgentLink {
                 try? await Task.sleep(for: .seconds(1))
                 continue
             }
-            let connection = AgentConnection(fd: fd, hostVersion: hostVersion)
+            let connection = AgentConnection(fd: fd, hostVersion: hostVersion, portOutlivesConnections: true)
             self.connection = connection
             guard !Task.isCancelled else { break }
             await hub.serve(connection, helloTimeout: nil)

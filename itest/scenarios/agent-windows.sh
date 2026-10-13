@@ -1,7 +1,7 @@
 # Guest agent in a Windows 11 ARM guest on QEMU, over virtio-serial: the golden install put the agent MSI in
 # (guest-tools/fetch-agent-msi.sh before building the golden). Checks: the service connects after boot, exec as
 # LocalSystem with exit codes, 256 MiB push and pull with matching SHA-256 (target ≥ 30 MB/s on virtio-serial),
-# and the guest clock within 1 s after a 20 s pause.
+# the guest clock within 1 s after a 20 s pause, and the agent back after a suspend and a live restore.
 # Sourced by scripts/itest.sh with $APP set. Exit 77 without a Windows ISO, the MSI, or 15 GiB free.
 
 source "$VMPANE_ROOT/itest/lib/common.sh"
@@ -12,7 +12,7 @@ it_agent_connected() { [[ $(it_rpc "$socket" agent.status | jq -r .connected) ==
 it_now() { /usr/bin/python3 -c 'import time; print(time.time())'; }
 
 scenario_run() {
-    local golden work bundle pid socket start out rc big back host_sum guest_sum seconds drift status
+    local golden work bundle pid socket start out rc big back host_sum guest_sum seconds drift status id
     compgen -G "$IT_WINDOWS_EXTRA/*.msi" >/dev/null || { echo "agent-windows: no agent MSI (guest-tools/fetch-agent-msi.sh)" >&2; return 77; }
     (($(df -g "$HOME" | awk 'NR == 2 {print $4}') >= 15)) || { echo "agent-windows: needs 15 GiB free" >&2; return 77; }
     golden=$(it_golden_windows) || { status=$?; return "$status"; }
@@ -73,6 +73,24 @@ scenario_run() {
     drift=$(/usr/bin/python3 -c "import time; print(abs($out / 1000 - time.time()))")
     /usr/bin/python3 -c "import sys; sys.exit(0 if $drift < 1 else 1)" || it_fail "guest clock off by ${drift} s after a pause" || return 1
     echo "agent-windows: guest clock within $(printf '%.3f' "$drift") s of the host after a 20 s pause"
+
+    # 5. Suspend and start again, then restore a live snapshot: each time QEMU is a new process while the guest
+    # (and its agent) carries on from its saved memory; the agent must come back without a Windows restart.
+    it_rpc "$socket" vm.suspend >/dev/null || it_fail "suspend failed" || return 1
+    it_rpc "$socket" vm.start '{"headless": true}' >/dev/null || it_fail "start after suspend failed" || return 1
+    start=$SECONDS
+    it_wait_for 30 it_agent_connected || it_fail "the agent did not reconnect within 30 s of resuming a suspended VM" || return 1
+    out=$(it_agent_exec 'echo back' | tr -d '\r') || it_fail "no exec after resuming a suspended VM" || return 1
+    [[ $out == back ]] || it_fail "after resuming, echo printed '$out'" || return 1
+    echo "agent-windows: agent back $((SECONDS - start)) s after resuming a suspended VM"
+    id=$(it_rpc "$socket" vm.snapshot.create '{"name": "live", "kind": "live"}' | jq -r '.id // empty')
+    [[ -n $id ]] || it_fail "live snapshot failed" || return 1
+    out=$(it_rpc "$socket" vm.snapshot.restore "{\"id\": \"$id\"}") || it_fail "restore failed: $out" || return 1
+    start=$SECONDS
+    it_wait_for 30 it_agent_connected || it_fail "the agent did not reconnect within 30 s of a live restore" || return 1
+    out=$(it_agent_exec 'echo back' | tr -d '\r') || it_fail "no exec after a live restore" || return 1
+    [[ $out == back ]] || it_fail "after the restore, echo printed '$out'" || return 1
+    echo "agent-windows: agent back $((SECONDS - start)) s after restoring a live snapshot"
 
     it_rpc "$socket" vm.stop '{"mode": "graceful"}' >/dev/null
     it_wait_for 150 bash -c "[[ \$(/usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' '$socket' vm.info | jq -r .state) == stopped ]]" \

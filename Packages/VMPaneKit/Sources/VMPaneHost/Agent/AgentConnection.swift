@@ -50,6 +50,10 @@ public actor AgentConnection {
     let heartbeat: Duration
     /// Set while a refusal is being written: input is ignored, the connection closes once it is out.
     var refusing = false
+    /// A QEMU port (`UDSAgentLink`), whose guest never sees a connection close: what it sends before `hello` is the
+    /// session of an earlier connection, which `resetStaleSession` ends instead of closing this one.
+    let portOutlivesConnections: Bool
+    var lastStaleReset: ContinuousClock.Instant?
     var closeReason: ConnectionError?
     /// `exec.exited` and `clipboard.changed` from the guest. Finishes when the connection closes.
     public nonisolated let notifications: AsyncStream<RPCRequest>
@@ -61,9 +65,11 @@ public actor AgentConnection {
     /// `token`: required in `hello` when set (TCP). `hostRange`: protocol versions the host speaks.
     init(
         socket: AgentSocket, hostVersion: String, token: String? = nil,
-        hostRange: ClosedRange<UInt32> = AgentLimits.minProto...AgentLimits.proto, heartbeat: Duration = AgentConnection.heartbeat
+        hostRange: ClosedRange<UInt32> = AgentLimits.minProto...AgentLimits.proto, heartbeat: Duration = AgentConnection.heartbeat,
+        portOutlivesConnections: Bool = false
     ) {
         self.socket = socket
+        self.portOutlivesConnections = portOutlivesConnections
         self.heartbeat = heartbeat
         self.hostVersion = hostVersion
         self.token = token
@@ -73,8 +79,8 @@ public actor AgentConnection {
     }
 
     /// Takes ownership of a connected socket descriptor.
-    public init(fd: Int32, hostVersion: String, token: String? = nil) {
-        self.init(socket: AgentSocket(fd: fd), hostVersion: hostVersion, token: token)
+    public init(fd: Int32, hostVersion: String, token: String? = nil, portOutlivesConnections: Bool = false) {
+        self.init(socket: AgentSocket(fd: fd), hostVersion: hostVersion, token: token, portOutlivesConnections: portOutlivesConnections)
     }
 
     public var isOpen: Bool { closeReason == nil }
