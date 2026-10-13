@@ -54,7 +54,7 @@ test("variables the components and the highlighter read are tokens", () => {
 test("tokens.css defines both themes and the Reduce Transparency fallback", () => {
   assert.match(tokens, /@media \(prefers-color-scheme: dark\) \{\s*:root:not\(\[data-theme="light"\]\) \{/);
   assert.match(tokens, /:root\[data-theme="dark"\] \{/);
-  assert.match(tokens, /@media \(prefers-reduced-transparency: reduce\) \{\s*:root \{ --glass: 100% !important; \}/);
+  assert.match(tokens, /@media \(prefers-reduced-transparency: reduce\) \{\s*:root \{ --glass: 100% !important; --glass-nav: 100% !important; \}/);
   for (const name of ["--bg", "--band", "--text", "--text-2", "--text-3", "--hair", "--glass", "--rim", "--pin-top", "--f-sans", "--f-hand"]) {
     assert.ok(defined.has(name), name);
   }

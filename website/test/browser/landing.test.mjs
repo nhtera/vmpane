@@ -9,6 +9,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import sharp from "sharp";
 import { openPage, siteFixture } from "./helpers.mjs";
 
 const site = siteFixture();
@@ -300,6 +301,45 @@ test("the hero's stickers sit inside it, so its clipped edges never cut one", as
     assert.deepEqual(outside, [], `${width}px`);
     await context.close();
   }
+});
+
+test("the header pill stays steady while dark and bright sections scroll under it (no blinking glass)", async () => {
+  for (const colorScheme of ["light", "dark"]) {
+    const { page, context } = await openPage(site, "/", { width: 1440, height: 900, colorScheme, reducedMotion: "no-preference" });
+    const box = await page.locator(".nav-in").boundingBox();
+    const clip = { x: box.x + 60, y: box.y + 4, width: box.width - 120, height: box.height - 8 };
+    const total = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+    const levels = [];
+    for (let y = 0; y <= total; y += 240) {
+      await page.evaluate((top) => scrollTo({ top, behavior: "instant" }), y);
+      await page.waitForTimeout(60);
+      const png = await page.screenshot({ clip });
+      levels.push((await sharp(png).greyscale().stats()).channels[0].mean);
+    }
+    const range = Math.max(...levels) - Math.min(...levels);
+    assert.ok(range <= 28, `${colorScheme}: the pill's brightness ranges over ${range.toFixed(0)} levels`);
+    await context.close();
+  }
+});
+
+test("nothing moves under a resting pointer: cards, slides, buttons and chips keep their place on hover", async () => {
+  // A hover lift makes each card jump as the page scrolls under the pointer: it reads as flicker.
+  const { page, context } = await openPage(site, "/", { width: 1440, height: 900, reducedMotion: "no-preference" });
+  const moved = [];
+  for (const sel of [".bento .cell", ".slide", "main .btn", "#agents .lvls button"]) {
+    for (const el of await page.locator(sel).all()) {
+      await el.scrollIntoViewIfNeeded();
+      const target = sel === ".slide" ? el.locator(".media .w") : el;
+      const before = await target.boundingBox();
+      await el.hover();
+      await page.waitForTimeout(700);
+      const after = await target.boundingBox();
+      if (Math.abs(after.y - before.y) > 0.5 || Math.abs(after.width - before.width) > 0.5) moved.push(`${sel}: ${before.y}→${after.y}`);
+      await page.mouse.move(2, 2);
+    }
+  }
+  assert.deepEqual(moved, []);
+  await context.close();
 });
 
 test("the handwritten note's font loads from the site", async () => {

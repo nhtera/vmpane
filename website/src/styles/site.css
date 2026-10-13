@@ -53,7 +53,7 @@
     text-decoration: none !important;
     transition: transform var(--dur) var(--ease-out-quart), background-color var(--dur), box-shadow var(--dur);
   }
-  .btn:hover { transform: translateY(-2px); }
+  /* No hover lift: a control that moves when the page scrolls under a resting pointer reads as flicker. */
   .btn:active { transform: scale(.98); transition-duration: 100ms; }
   .btn-dark { background: var(--pill); color: var(--pill-text); box-shadow: 0 8px 20px -8px color-mix(in srgb, var(--pill) 60%, transparent); }
   .btn-light { background: var(--fill); color: var(--text); box-shadow: var(--rim); backdrop-filter: blur(12px); }
@@ -86,8 +86,8 @@
   .nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; padding: 10px 16px 0; }
   .nav-in {
     max-width: 1040px; margin-inline: auto; display: flex; align-items: center; gap: 20px; padding: 8px 8px 8px 16px; border-radius: 22px;
-    background: color-mix(in srgb, var(--bg) var(--glass), transparent); box-shadow: var(--rim);
-    backdrop-filter: saturate(180%) blur(20px); border: 1px solid var(--nav-line);
+    background: color-mix(in srgb, var(--bg) var(--glass-nav), transparent); box-shadow: var(--rim);
+    backdrop-filter: blur(20px); border: 1px solid var(--nav-line);
   }
   .logo { display: inline-flex; align-items: center; gap: 9px; color: var(--text); font: 700 19px/1 var(--f-display); letter-spacing: -.02em; text-decoration: none !important; }
   .logo img { width: 28px; height: 28px; }

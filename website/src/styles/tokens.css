@@ -71,6 +71,8 @@
   --dur-fast: 150ms; --dur: 250ms; --dur-enter: 700ms;
   /* glass (macOS 26: from clear to tinted), lit glass edges */
   --glass: 72%;
+  /* the header pill: mostly opaque, so dark and bright sections passing under it do not make it blink */
+  --glass-nav: 90%;
   --rim: inset 0 1px 0 rgba(255,255,255,.65), inset 0 0 0 .5px rgba(255,255,255,.25);
   /* layout: where pinned scenes sit (below the floating nav), the content width */
   --pin-top: 66px;
@@ -113,5 +115,5 @@
 
 /* Reduce Transparency: glass turns solid, as it does in macOS. */
 @media (prefers-reduced-transparency: reduce) {
-  :root { --glass: 100% !important; }
+  :root { --glass: 100% !important; --glass-nav: 100% !important; }
 }
