@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- Deleting or cloning a VM that was shut down from its own window works: VMPane first quits the VM's process,
+  which stays open after the VM stops (1.0.0-beta.1 refused with "VMRunning()").
 - A Windows VM's guest agent comes back at once after the VM resumes from a suspend or a live snapshot is
   restored, without a Windows restart (works with the 1.0.0-beta.1 agent too).
 - The VMPane folder in Application Support is private (0700) again: 1.0.0-beta.1 could make it readable by other

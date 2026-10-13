@@ -68,7 +68,7 @@ public final class LibraryStore {
         let ops = LibraryOps(library: library, identity: .ui)
         do {
             let bundle = try VMBundle.open(row.bundleURL)
-            _ = try await Blocking.run { try ops.clone(bundle, name: name) }
+            try await releaseHelper(of: row) { _ = try ops.clone(bundle, name: name) }
             await reload()
         } catch {
             lastError = "Cannot clone \(row.name): \(VMLibrary.problem(error, at: row.bundleURL))"
@@ -85,11 +85,27 @@ public final class LibraryStore {
         let ops = LibraryOps(library: library, identity: .ui)
         do {
             let bundle = try VMBundle.open(row.bundleURL)
-            try await Blocking.run { try ops.delete(bundle) }
+            try await releaseHelper(of: row) { try ops.delete(bundle) }
             if selection == id { selection = nil }
             await reload()
         } catch {
             lastError = "Cannot delete \(row.name): \(VMLibrary.problem(error, at: row.bundleURL))"
+        }
+    }
+
+    /// Runs `work`, which needs the stopped VM's bundle to itself. A stopped VM's helper keeps running (its window
+    /// and Dock tile stay) and holds the bundle, so it is asked to quit first; `work` is tried until it lets go.
+    private func releaseHelper(of row: Row, _ work: @escaping @Sendable () throws -> Void) async throws {
+        if row.state != nil {
+            _ = try? await links.call(row.id, ControlMethod.helperShutdown.rawValue, params: nil)
+        }
+        let deadline = ContinuousClock.now + .seconds(15)
+        while true {
+            do {
+                return try await Blocking.run(work)
+            } catch is LibraryOps.VMRunning where row.state != nil && ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(250))
+            }
         }
     }
 

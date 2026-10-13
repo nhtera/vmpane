@@ -201,6 +201,7 @@ public struct VMLibrary: Sendable {
         case BundleError.notABundle: return "This is not a VMPane VM: it has no settings file (config.json)."
         case BundleError.symlink: return "It is reached through a symbolic link, which VMPane does not follow."
         case BundleError.locked: return "Another process is using it."
+        case is LibraryOps.VMRunning: return "It is running. Shut it down first."
         case BundleError.unsafePath(let path): return "Its settings point outside the VM (\(path)), so VMPane does not open it."
         case ConfigError.newerSchema: return "It was made by a newer version of VMPane. Update VMPane to open it."
         case is ConfigError, is DecodingError: return "Its settings file (config.json) is damaged."

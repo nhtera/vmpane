@@ -18,6 +18,8 @@ final class FakeLinks: LiveVMLink, @unchecked Sendable {
 
     private(set) var calls: [Call] = []
     var failure: RPCError?
+    /// What the fake helper does on a call (after recording it), e.g. let go of its bundle on `helper.shutdown`.
+    var onCall: (@Sendable (String) -> Void)?
 
     /// Makes `vmID` look like it has a helper in `state`.
     func run(_ vmID: UUID, in state: VMRunState) {
@@ -43,6 +45,7 @@ final class FakeLinks: LiveVMLink, @unchecked Sendable {
             calls.append(Call(vm: vmID, method: method, params: params))
             if let failure { throw failure }
         }
+        lock.withLock { onCall }?(method)
         return [:]
     }
 
@@ -167,6 +170,31 @@ final class LockedFlag: @unchecked Sendable {
     await store.delete(id)
     #expect(store.rows.map(\.name) == ["Base copy"])
     #expect(store.lastError == nil)
+}
+
+/// A stopped VM's helper keeps running and holds its bundle: Delete asks it to quit, then deletes. Before, the
+/// delete failed ("VMRunning()").
+@Test @MainActor func deletingAStoppedVMWhoseHelperStillRunsQuitsTheHelperFirst() async throws {
+    let links = FakeLinks()
+    let fixture = try makeStore(links)
+    let (store, ops, root) = (fixture.store, fixture.ops, fixture.root)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let bundle = try ops.create(name: "Kept", os: .linux, diskGiB: 8)
+    let id = try ConfigStore.load(bundle).id
+    let held = try #require(try bundle.tryLock(retryingFor: 0))  // the helper's hold
+    links.onCall = { method in
+        if method == ControlMethod.helperShutdown.rawValue {
+            DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) { held.release() }  // it quits a moment later
+        }
+    }
+    links.run(id, in: .stopped)
+    await store.reload()
+    #expect(await eventually { store.row(id)?.state == .stopped })
+    await store.delete(id)
+    #expect(store.lastError == nil)
+    #expect(links.methods == [ControlMethod.helperShutdown.rawValue])
+    #expect(store.rows.isEmpty)
+    #expect(!FileManager.default.fileExists(atPath: bundle.url.path))
 }
 
 @Test @MainActor func aVMGoneFromDiskIsExplainedAndDeletingItTakesItOffTheList() async throws {
