@@ -358,10 +358,15 @@
     @keyframes rise { from { opacity: 0; transform: translateY(16px); } }
     /* the timeline fills once, when it comes into view (windows-setup.tsx arms it) */
     .timeline.armed .fill { transform: scaleX(0); }
-    .timeline.armed .tstep { opacity: .35; }
+    /* a step rises and its dot lights as the line reaches it; its text keeps full contrast throughout */
+    .timeline.armed .tstep { transform: translateY(14px); }
+    .timeline.armed .tstep::before { border-color: var(--hair); }
     .timeline.run .fill { transform: none; transition: transform 2400ms var(--ease-out-quart); }
-    .timeline.run .tstep { opacity: 1; transition: opacity 400ms var(--ease-out-quart); }
-    .timeline.run .tstep:nth-of-type(2) { transition-delay: 600ms; } .timeline.run .tstep:nth-of-type(3) { transition-delay: 1200ms; } .timeline.run .tstep:nth-of-type(4) { transition-delay: 1800ms; }
+    .timeline.run .tstep { transform: none; transition: transform 500ms var(--ease-out-expo); }
+    .timeline.run .tstep::before { border-color: var(--orange); transition: border-color 300ms; }
+    .timeline.run .tstep:nth-of-type(2), .timeline.run .tstep:nth-of-type(2)::before { transition-delay: 600ms; }
+    .timeline.run .tstep:nth-of-type(3), .timeline.run .tstep:nth-of-type(3)::before { transition-delay: 1200ms; }
+    .timeline.run .tstep:nth-of-type(4), .timeline.run .tstep:nth-of-type(4)::before { transition-delay: 1800ms; }
   }
   @media (prefers-reduced-motion: no-preference) and (max-width: 760px) { .timeline.armed .fill { transform: scaleY(0); } }
 
@@ -369,7 +374,8 @@
   @supports (animation-timeline: view()) {
     @media (prefers-reduced-motion: no-preference) {
       .head h2, .car-head h2 { animation: ink linear both; animation-timeline: view(); animation-range: entry 0% cover 30%; }
-      @keyframes ink { from { opacity: .3; transform: translateY(24px); } }
+      /* a rise, not a fade: a heading keeps its full contrast at every point of the scroll */
+      @keyframes ink { from { transform: translateY(24px); } }
 
       /* the MacBook story: a tall section with a sticky stage; each beat owns a slice of the scroll */
       .story-track { height: 340vh; view-timeline: --story block; }

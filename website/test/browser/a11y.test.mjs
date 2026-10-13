@@ -2,9 +2,10 @@
 
 // Accessibility on the built site: axe (WCAG 2.2 AA + best practices) on the
 // landing page, two docs pages and the 404 page, in both themes at four
-// viewports, with no exemptions; no sideways scrolling from 320 px up; on a
-// coarse pointer every control is at least 44×44 px (links inside running
-// text excepted); on a phone the header is one row: logo, theme, menu.
+// viewports, with no exemptions, and once with motion allowed; no sideways
+// scrolling from 320 px up; on a coarse pointer every control is at least
+// 44×44 px (links inside running text excepted); on a phone the header is one
+// row: logo, theme, menu.
 
 import AxeBuilder from "@axe-core/playwright";
 import assert from "node:assert/strict";
@@ -35,6 +36,19 @@ for (const path of PAGES) {
     });
   }
 }
+
+// With motion allowed, as Lighthouse loads the page: what is on screen while scroll animations are part-way
+// (headings rising into view, the story's first frame) must still pass, contrast included.
+test("axe with motion allowed: / at 1440 and 390 px", async () => {
+  const problems = [];
+  for (const [width, height] of [[1440, 900], [390, 844]]) {
+    const { page, context } = await openPage(site, "/", { width, height, reducedMotion: "no-preference", touch: width < 800 });
+    const { violations } = await new AxeBuilder({ page }).withTags(TAGS).analyze();
+    for (const v of violations) problems.push(`${width}px ${v.id} (${v.impact}): ${v.nodes.length}× ${v.nodes.slice(0, 3).map((n) => n.target.join(" ")).join(" | ")}`);
+    await context.close();
+  }
+  assert.deepEqual(problems, []);
+});
 
 test("no sideways scrolling at 320, 375, 390, 768 and 1280 px", async () => {
   const wide = [];
