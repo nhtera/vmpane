@@ -58,6 +58,9 @@ open an issue and quarantine it; do not rerun until it passes.
    - **Homebrew:** a pull request to `nhtera/homebrew-tap` with `Casks/vmpane.rb` (version, sha256); merge it.
 5. Manual checks: `docs/release-checklist.md`.
 
+The website (https://vmpane.erai.dev, `website/`) is not part of a release: `.github/workflows/site.yml` deploys it
+from `main` on its own.
+
 `--dry-run` on `build-candidate` and `publish` turns the release-only checks into warnings and publishes nothing:
 use it to rehearse.
 

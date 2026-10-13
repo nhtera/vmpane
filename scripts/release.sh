@@ -249,7 +249,7 @@ cask "vmpane" do
   url "https://github.com/$repo/releases/download/v#{version}/VMPane-#{version}.dmg"
   name "VMPane"
   desc "Virtual machine manager with a CLI and an MCP server for AI agents"
-  homepage "https://github.com/$repo"
+  homepage "https://vmpane.erai.dev"
 
   livecheck do
     url "$feed"
