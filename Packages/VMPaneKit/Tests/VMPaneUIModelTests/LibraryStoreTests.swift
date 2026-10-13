@@ -181,7 +181,8 @@ final class LockedFlag: @unchecked Sendable {
     defer { try? FileManager.default.removeItem(at: root) }
     let bundle = try ops.create(name: "Kept", os: .linux, diskGiB: 8)
     let id = try ConfigStore.load(bundle).id
-    let held = try #require(try bundle.tryLock(retryingFor: 0))  // the helper's hold
+    // The helper's hold (retried: a process another test is launching briefly holds copies of every descriptor).
+    let held = try #require(try bundle.tryLock(retryingFor: 5))
     links.onCall = { method in
         if method == ControlMethod.helperShutdown.rawValue {
             DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) { held.release() }  // it quits a moment later
