@@ -9,6 +9,11 @@ pinned SHA-256 after download) or from your own ISO. VMPane refuses ISOs without
 The ISO is attached as a USB drive. When the installer reboots, the installed system starts; the ISO stays
 attached until the VM next stops, then VMPane removes it from the VM's settings.
 
+- The boot loader's menu (GRUB, the first seconds) is small: it picks the largest screen the VM's display offers.
+  Linux and its installer then use the window's size.
+- Ubuntu's installer, after *Reboot Now*, waits on "Please remove the installation medium, then press ENTER",
+  which its screen can hide: press Enter in the VM's window.
+
 ## Display size
 
 A new Linux VM gets one pixel per point of its window (Settings → Display → Scaling: *Larger*), so the
