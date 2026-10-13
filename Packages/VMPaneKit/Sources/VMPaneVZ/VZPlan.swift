@@ -38,6 +38,9 @@ public struct VZPlan: Sendable, Equatable {
     public struct Display: Sendable, Equatable {
         public var widthPx: Int
         public var heightPx: Int
+        /// `.standard`: the guest gets one pixel per point of the window (a Linux console reads at its usual size).
+        public var scaling: DisplayConfig.Scaling = .retina
+        public var autoResize = true
     }
 
     public struct NIC: Sendable, Equatable {
@@ -125,7 +128,9 @@ public enum VZPlanBuilder {
             cpuCount: config.cpu.count,
             memoryBytes: UInt64(config.memory.mib) << 20,
             disks: disks,
-            display: .init(widthPx: config.display.widthPx, heightPx: config.display.heightPx),
+            display: .init(
+                widthPx: config.display.widthPx, heightPx: config.display.heightPx,
+                scaling: config.os == .macos ? .retina : config.display.scaling, autoResize: config.display.autoResize),
             networks: networks,
             audioOutput: config.audio.output,
             audioInput: config.audio.input,

@@ -12,11 +12,7 @@ public enum SpiceGuestDisplay {
     /// The guest resolution for a window content size (points): pixels with retina scaling, points with standard
     /// scaling; even (some drivers want it) and at least `minimumSize`.
     public static func resolution(forContent size: CGSize, backingScale: CGFloat, scaling: DisplayConfig.Scaling) -> CGSize {
-        let factor = scaling == .retina ? max(backingScale, 1) : 1
-        func even(_ value: CGFloat, atLeast minimum: CGFloat) -> CGFloat {
-            max((value * factor / 2).rounded(.down) * 2, minimum)
-        }
-        return CGSize(width: even(size.width, atLeast: minimumSize.width), height: even(size.height, atLeast: minimumSize.height))
+        scaling.guestResolution(forContent: size, backingScale: backingScale, minimum: minimumSize)
     }
 }
 

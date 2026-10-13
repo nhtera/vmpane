@@ -330,6 +330,17 @@ public struct WindowsConfig: ExtensibleFields {
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
 
+extension DisplayConfig.Scaling {
+    /// The guest resolution for a window content size (points): pixels with retina scaling, points with standard
+    /// scaling (the view then draws each guest pixel over a point, so text is its usual size); even (some drivers
+    /// want it) and at least `minimum`.
+    public func guestResolution(forContent size: CGSize, backingScale: CGFloat, minimum: CGSize) -> CGSize {
+        let factor = self == .retina ? max(backingScale, 1) : 1
+        func even(_ value: CGFloat, atLeast low: CGFloat) -> CGFloat { max((value * factor / 2).rounded(.down) * 2, low) }
+        return CGSize(width: even(size.width, atLeast: minimum.width), height: even(size.height, atLeast: minimum.height))
+    }
+}
+
 extension VMConfigFields {
     /// A new VM's config with VMPane's defaults for `os`.
     public static func new(id: UUID = UUID(), name: String, os: GuestOS, diskGiB: Int = 64, macAddress: String) -> VMConfigFields {
@@ -338,7 +349,9 @@ extension VMConfigFields {
             schemaVersion: schemaVersion, id: id, name: name, os: os, backend: backend,
             cpu: Extensible(CPUConfig(count: 4)),
             memory: Extensible(MemoryConfig(mib: os == .windows ? 8192 : 4096, balloon: true)),
-            display: Extensible(DisplayConfig(widthPx: 1920, heightPx: 1200, ppi: 144, autoResize: true, scaling: .retina)),
+            // Linux: one guest pixel per point, so a text console or installer is readable (it cannot scale itself).
+            display: Extensible(
+                DisplayConfig(widthPx: 1920, heightPx: 1200, ppi: 144, autoResize: true, scaling: os == .linux ? .standard : .retina)),
             disks: [
                 Extensible(
                     DiskConfig(

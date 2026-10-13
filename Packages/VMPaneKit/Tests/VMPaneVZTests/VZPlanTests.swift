@@ -205,3 +205,31 @@ private func withTemp(_ body: (URL) throws -> Void) throws {
         #expect(KeyNames.stroke(for: character).flatMap { VZKeyMap.keyCode(forHIDUsage: $0.usage) } != nil)
     }
 }
+
+/// The display's scaling reaches the plan for Linux; a macOS guest scales itself for Retina, so it stays sharp.
+@Test func displayScalingIsLinuxOnly() throws {
+    var linux = linuxConfig()
+    linux.display.scaling = .standard
+    linux.display.autoResize = false
+    try withBundle(linux) { bundle in
+        let plan = try VZPlanBuilder.plan(linux, bundle: bundle, fileExists: allExist)
+        #expect(plan.display.scaling == .standard && !plan.display.autoResize)
+    }
+    var mac = VMConfigV1(VMConfigFields.new(name: "M", os: .macos, macAddress: "52:54:00:12:34:57"))
+    mac.display.scaling = .standard
+    #expect(VZPlan.Display(widthPx: 1, heightPx: 1).scaling == .retina)
+    try withTemp { dir in
+        let bundle = try VMBundle.create(at: dir.appendingPathComponent("M.vmpane"), config: mac)
+        if let plan = try? VZPlanBuilder.plan(mac, bundle: bundle, fileExists: allExist) {
+            #expect(plan.display.scaling == .retina)
+        }
+    }
+}
+
+/// The window for a guest: half its pixels in points when sharp, the pixels themselves when larger.
+@Test @MainActor func displayWindowSizeFollowsScaling() {
+    let retina = VZDisplayHost.windowSize(for: NSSize(width: 1280, height: 800), scaling: .retina)
+    let standard = VZDisplayHost.windowSize(for: NSSize(width: 1280, height: 800), scaling: .standard)
+    #expect(standard.width >= retina.width * 1.9 || standard.width < 1280, "larger unless the screen is too small")
+    #expect(abs(standard.width / standard.height - 1.6) < 0.01, "the aspect is kept")
+}

@@ -9,6 +9,13 @@ pinned SHA-256 after download) or from your own ISO. VMPane refuses ISOs without
 The ISO is attached as a USB drive. When the installer reboots, the installed system starts; the ISO stays
 attached until the VM next stops, then VMPane removes it from the VM's settings.
 
+## Display size
+
+A new Linux VM gets one pixel per point of its window (Settings → Display → Scaling: *Larger*), so the
+installer and text consoles are readable on a Retina screen; the guest's resolution follows the window. *Sharp
+(Retina pixels)* gives the guest every pixel instead: crisper, but a console's text is half the size, and a desktop
+then needs its own scaling (GNOME: Settings → Displays → Scale 200%). The change applies at the next start.
+
 ## Shared folders
 
 Every shared folder of a VM appears under one virtiofs tag, `vmpane-shares`, one directory per share:

@@ -37,8 +37,8 @@ public struct SettingsSheet: View {
                         }
                     }
                     row("display.autoResize") { Toggle("Follow the window size", isOn: $model.draft.display.autoResize) }
-                    if model.draft.backend == .qemu {
-                        // VZ follows the window's backing pixels itself; the SPICE window picks the guest size.
+                    if model.draft.os != .macos {
+                        // A macOS guest scales itself for Retina; Linux and Windows draw what they are given.
                         row("display.scaling") {
                             Picker("Scaling", selection: $model.draft.display.scaling) {
                                 Text("Sharp (Retina pixels)").tag(DisplayConfig.Scaling.retina)

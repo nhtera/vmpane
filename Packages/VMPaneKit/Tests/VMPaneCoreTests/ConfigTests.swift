@@ -65,6 +65,8 @@ func newConfigRoundTrips(os: GuestOS) throws {
     #expect(decoded == config)
     #expect(decoded.backend == (os == .windows ? .qemu : .vz))
     #expect((decoded.qemu != nil) == (os == .windows))
+    // A Linux text console or installer cannot scale itself: one guest pixel per point, so its text is readable.
+    #expect(decoded.display.scaling == (os == .linux ? .standard : .retina))
 }
 
 @Test func jsonValueKeepsIntegersExact() throws {

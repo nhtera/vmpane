@@ -3,6 +3,7 @@ import IOSurface
 import QuartzCore
 import VMPaneCore
 import Virtualization
+import os
 
 /// The VM's view and window. Visible when the user opens it; otherwise kept on screen at alpha 0, so
 /// capture and input keep working headless. Main actor only; it only sets `virtualMachine` (ADR 0003).
@@ -14,11 +15,27 @@ import Virtualization
 public final class VZDisplayHost {
     public let window: NSWindow
     public let view: VZVirtualMachineView
+    /// `.retina`: the view itself gives the guest the window's backing pixels. `.standard`: the guest gets one pixel
+    /// per point (`resizeGuest`), which the view draws scaled up, so a Linux console's text is its usual size.
+    private let scaling: DisplayConfig.Scaling
+    private var followsWindow: Bool
+    private let resizeGuest: @MainActor (Int, Int) -> Void
+    private var lastGuestSize: CGSize?
+    private var observers: [NSObjectProtocol] = []
+    private static let log = Logger(subsystem: "app.vmpane.mac.vm", category: "display")
+    /// Linux's smallest useful console.
+    static let minimumGuestSize = CGSize(width: 800, height: 600)
 
-    public init(box: VMBox, title: String, guestSize: NSSize) {
+    public init(
+        box: VMBox, title: String, guestSize: NSSize, scaling: DisplayConfig.Scaling = .retina, autoResize: Bool = true,
+        resizeGuest: @escaping @MainActor (Int, Int) -> Void = { _, _ in }
+    ) {
+        self.scaling = scaling
+        self.followsWindow = autoResize
+        self.resizeGuest = resizeGuest
         view = VZVirtualMachineView(frame: NSRect(origin: .zero, size: guestSize))
         window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: NSSize(width: guestSize.width / 2, height: guestSize.height / 2)),
+            contentRect: NSRect(origin: .zero, size: Self.windowSize(for: guestSize, scaling: scaling)),
             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = title
         window.contentView = view
@@ -28,9 +45,45 @@ public final class VZDisplayHost {
         view.virtualMachine = box.virtualMachine
         // ⌘-shortcuts stay with the Mac (window toolbar, ⌘Q, ⌘-Tab) until the user captures the keyboard.
         view.capturesSystemKeys = false
-        view.automaticallyReconfiguresDisplay = true
+        view.automaticallyReconfiguresDisplay = scaling == .retina && autoResize
+        if scaling == .standard {
+            // A resize (dragged, zoomed, full screen) is sent once it ends, not for every frame of a drag.
+            for name in [NSWindow.didEndLiveResizeNotification, NSWindow.didResizeNotification] {
+                observers.append(
+                    NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                        // Next turn of the run loop: the view's bounds follow the window only after layout.
+                        DispatchQueue.main.async {
+                            MainActor.assumeIsolated {
+                                guard let self, !self.window.inLiveResize else { return }
+                                self.followWindow()
+                            }
+                        }
+                    })
+            }
+        }
         hide()
         window.orderFront(nil)
+    }
+
+    /// The window for a guest of `guestSize` pixels: half that in points when sharp (Retina), else the size itself,
+    /// within most of the screen.
+    static func windowSize(for guestSize: NSSize, scaling: DisplayConfig.Scaling) -> NSSize {
+        let size = scaling == .retina ? NSSize(width: guestSize.width / 2, height: guestSize.height / 2) : guestSize
+        guard let screen = NSScreen.main?.visibleFrame.size else { return size }
+        let fit = min(1, screen.width * 0.85 / size.width, screen.height * 0.85 / size.height)
+        return NSSize(width: (size.width * fit).rounded(), height: (size.height * fit).rounded())
+    }
+
+    /// `.standard` scaling: the guest's resolution follows the window's content size in points.
+    private func followWindow() {
+        guard scaling == .standard, followsWindow else { return }
+        let size = scaling.guestResolution(
+            forContent: view.bounds.size, backingScale: window.backingScaleFactor, minimum: Self.minimumGuestSize)
+        guard size != lastGuestSize else { return }
+        let view = self.view.bounds.size
+        Self.log.info("guest display \(Int(size.width))x\(Int(size.height)) for a \(Int(view.width))x\(Int(view.height)) pt view")
+        lastGuestSize = size
+        resizeGuest(Int(size.width), Int(size.height))
     }
 
     public var isVisible: Bool { window.alphaValue > 0 }
@@ -43,6 +96,7 @@ public final class VZDisplayHost {
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(view)
         NSApp.activate()
+        followWindow()
     }
 
     /// Invisible but on screen: the guest keeps rendering, so capture and input still work.
@@ -55,6 +109,8 @@ public final class VZDisplayHost {
     /// Releases the VM: AppKit keeps every unclosed window, and a window's view keeps its VM (and the VM's
     /// files) alive, so a later restore in this process would fail with "permission denied".
     public func close() {
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers = []
         view.virtualMachine = nil
         window.orderOut(nil)
         window.close()
@@ -62,7 +118,9 @@ public final class VZDisplayHost {
 
     /// Whether the guest display follows the window size; true when applied.
     public func setAutoResize(_ value: Bool) -> Bool {
-        view.automaticallyReconfiguresDisplay = value
+        followsWindow = value
+        view.automaticallyReconfiguresDisplay = scaling == .retina && value
+        if value { followWindow() }
         return true
     }
 

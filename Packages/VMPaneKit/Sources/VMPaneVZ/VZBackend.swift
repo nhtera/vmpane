@@ -117,8 +117,13 @@ public final class VZBackend: VMBackend {
         plans.withLock { $0.running = plan }
         let size = NSSize(width: plan.display.widthPx, height: plan.display.heightPx)
         let title = title
+        let runner = runner
         await MainActor.run {
-            let host = VZDisplayHost(box: box, title: title, guestSize: size)
+            let host = VZDisplayHost(
+                box: box, title: title, guestSize: size, scaling: plan.display.scaling, autoResize: plan.display.autoResize
+            ) { width, height in
+                Task { _ = await runner.reconfigureDisplay(widthPx: width, heightPx: height) }
+            }
             display = host
             onDisplayCreated?(host.window, host.view)
         }
