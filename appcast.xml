@@ -6,6 +6,29 @@
         <description>VMPane updates</description>
         <language>en</language>
         <item>
+            <title>1.0.0-beta.2</title>
+            <pubDate>Tue, 13 Oct 2026 22:00:35 +0700</pubDate>
+            <link>https://github.com/nhtera/vmpane</link>
+            <sparkle:fullReleaseNotesLink>https://github.com/nhtera/vmpane/releases/tag/v1.0.0-beta.2</sparkle:fullReleaseNotesLink>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:version>2</sparkle:version>
+            <sparkle:shortVersionString>1.0.0-beta.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[Fixes for the first beta.
+
+### Fixed
+- Deleting or cloning a VM that was shut down from its own window works: VMPane first quits the VM's process,
+  which stays open after the VM stops (1.0.0-beta.1 refused with "VMRunning()").
+- A Windows VM's guest agent comes back at once after the VM resumes from a suspend or a live snapshot is
+  restored, without a Windows restart (works with the 1.0.0-beta.1 agent too).
+- The VMPane folder in Application Support is private (0700) again: 1.0.0-beta.1 could make it readable by other
+  accounts on the Mac (the files in it were already private). `vmpane doctor` reported it.
+
+]]></description>
+            <enclosure url="https://github.com/nhtera/vmpane/releases/download/v1.0.0-beta.2/VMPane-1.0.0-beta.2.dmg" length="30035073" type="application/octet-stream" sparkle:edSignature="7s5uFKmTH8A/ByIZWSEN0Vne1RCb4jzncm4N/LcFezD+FxfV5MhhkWubHXMo9V5utqIxouF6kZsLR7Esxsd8CQ=="/>
+        </item>
+        <item>
             <title>1.0.0-beta.1</title>
             <pubDate>Tue, 13 Oct 2026 12:49:52 +0700</pubDate>
             <link>https://github.com/nhtera/vmpane</link>
