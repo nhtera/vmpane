@@ -2,3 +2,8 @@
 [target.aarch64-unknown-linux-musl]
 linker = "rust-lld"
 rustflags = ["-C", "target-feature=+crt-static"]
+
+# The Windows agent carries the C runtime: Windows does not ship the Visual C++ redistributable (vcruntime140.dll),
+# and without it the service's process cannot load at all (STATUS_DLL_NOT_FOUND, SCM error 7009).
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

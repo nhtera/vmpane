@@ -119,6 +119,12 @@ jobs:
           echo "${wix}bin" >> "$GITHUB_PATH"
           cargo install --locked cargo-wix --version 0.3.9
       - run: cargo build --release --locked --target aarch64-pc-windows-msvc -p vmpane-agent
+      # Windows has no Visual C++ runtime of its own: an agent that needs vcruntime140.dll never starts in a guest
+      # (this runner has it, so running the binary here would not tell). agent/.cargo/config.toml links it in.
+      - name: The agent needs no Visual C++ runtime
+        run: |
+          ! grep -a -q -i 'vcruntime140' target/aarch64-pc-windows-msvc/release/vmpane-agent.exe \
+            || { echo "vmpane-agent.exe imports the Visual C++ runtime (crt-static missing?)"; exit 1; }
       - name: Build the MSI
         run: |
           cargo wix -p vmpane-agent --no-build --nocapture --target aarch64-pc-windows-msvc \
