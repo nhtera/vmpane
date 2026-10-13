@@ -147,7 +147,9 @@
   .cursor path { fill: var(--cursor-fill); stroke: var(--cursor-line); stroke-width: 1.4; stroke-linejoin: round; }
 
   /* ---------- the story: a VM on the Mac, an agent asking first ---------- */
-  .story { overflow-x: clip; }
+  /* No overflow clip on the story or any other box around its sticky stage (html and body already clip
+     sideways): with one, Safari (iPhone and Mac) shakes the pinned stage up and down a few pixels on
+     every frame of a scroll. */
   .story-head { padding: 24px 0 40px; }
   .story .mac { padding-inline: 16px; }
   .s-lib { left: 5cqw; top: 6.5cqw; width: 54cqw; height: 38cqw; z-index: 1; }

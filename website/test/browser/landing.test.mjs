@@ -362,6 +362,29 @@ test("the story shows one caption at a time: never two on top of each other, nev
   }
 });
 
+test("nothing between the page and a pinned element clips it (Safari shakes a sticky box inside one)", async () => {
+  // With overflow clip on the story section, Safari moved the pinned stage up and down a few pixels on every
+  // frame of a touch or trackpad scroll; html and body clip sideways for the whole page instead.
+  for (const width of [390, 1440]) {
+    const { page, context } = await openPage(site, "/", { width, height: 844, touch: width < 800, reducedMotion: "no-preference" });
+    const clipped = await page.evaluate(() =>
+      [...document.querySelectorAll("body *")]
+        .filter((el) => getComputedStyle(el).position === "sticky")
+        .flatMap((el) => {
+          const out = [];
+          for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+            const cs = getComputedStyle(a);
+            if (cs.overflowX !== "visible" || cs.overflowY !== "visible") out.push(`${el.className} inside ${a.tagName}.${a.className}: ${cs.overflowX}/${cs.overflowY}`);
+          }
+          return out;
+        }),
+    );
+    assert.ok(await page.evaluate(() => getComputedStyle(document.querySelector(".story-stage")).position === "sticky"), `${width}px: the stage is pinned`);
+    assert.deepEqual(clipped, [], `${width}px`);
+    await context.close();
+  }
+});
+
 test("the header pill stays steady while dark and bright sections scroll under it (no blinking glass)", async () => {
   for (const [colorScheme, width, height, limit] of [["light", 1440, 900, 28], ["dark", 1440, 900, 28], ["light", 390, 844, 15], ["dark", 390, 844, 15]]) {
     const { page, context } = await openPage(site, "/", { width, height, colorScheme, reducedMotion: "no-preference", touch: width < 800 });
