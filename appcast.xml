@@ -6,6 +6,33 @@
         <description>VMPane updates</description>
         <language>en</language>
         <item>
+            <title>1.0.0-beta.3</title>
+            <pubDate>Wed, 14 Oct 2026 02:26:41 +0700</pubDate>
+            <link>https://github.com/nhtera/vmpane</link>
+            <sparkle:fullReleaseNotesLink>https://github.com/nhtera/vmpane/releases/tag/v1.0.0-beta.3</sparkle:fullReleaseNotesLink>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:version>3</sparkle:version>
+            <sparkle:shortVersionString>1.0.0-beta.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[A readable Linux display, a menu bar and clean Quit for each VM, and an install guide in the disk image.
+
+### Changed
+- VoiceOver finds a VM's screen (named after the VM), and the settings' "Live" and "Next start" badges are
+  easier to read.
+- A new Linux VM gets one pixel per point of its window, so the installer and consoles are readable on a Retina
+  screen (they were half size). Settings → Display → Scaling now applies to Linux VMs too.
+- The disk image shows how to install: VMPane beside the Applications folder, with an arrow to drag it there.
+
+### Fixed
+- A VM's own app ("VMPane VM") has a menu bar: Quit, Hide, Edit and Window (⌘ keys typed into the VM's screen
+  still go to the VM). Quitting it, also from its Dock tile, asks first while the VM runs and then shuts the VM
+  down cleanly; before, it had no menu and a Quit from the Dock ended a running VM at once.
+
+]]></description>
+            <enclosure url="https://github.com/nhtera/vmpane/releases/download/v1.0.0-beta.3/VMPane-1.0.0-beta.3.dmg" length="27605911" type="application/octet-stream" sparkle:edSignature="UAQ/RA8SM+mWlqStASNH/FFs8131VxRsyx2Ci53AvvB22eHsoxJIKPMotA+ZLnLsR3mKj5bY8A56cuOJe5bqAQ=="/>
+        </item>
+        <item>
             <title>1.0.0-beta.2</title>
             <pubDate>Tue, 13 Oct 2026 22:00:35 +0700</pubDate>
             <link>https://github.com/nhtera/vmpane</link>
