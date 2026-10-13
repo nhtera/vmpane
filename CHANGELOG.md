@@ -5,6 +5,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- A Linux VM with Larger scaling starts at its size in points, so its boot messages and installer are readable
+  from the start (only the boot loader's own menu, e.g. GRUB, still picks the largest screen and shows small).
+
 ## [1.0.0-beta.3]
 A readable Linux display, a menu bar and clean Quit for each VM, and an install guide in the disk image.
 
