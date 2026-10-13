@@ -113,6 +113,12 @@
   color-scheme: dark;
 }
 
+/* Phones: the header pill spans the screen, so the full-width black button and the dark Mac pass under all of
+   it; nearly solid there keeps it from darkening and clearing as they go by. */
+@media (max-width: 760px) {
+  :root { --glass-nav: 96%; }
+}
+
 /* Reduce Transparency: glass turns solid, as it does in macOS. */
 @media (prefers-reduced-transparency: reduce) {
   :root { --glass: 100% !important; --glass-nav: 100% !important; }
