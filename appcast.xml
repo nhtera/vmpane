@@ -6,6 +6,25 @@
         <description>VMPane updates</description>
         <language>en</language>
         <item>
+            <title>1.0.0-beta.4</title>
+            <pubDate>Wed, 14 Oct 2026 03:43:27 +0700</pubDate>
+            <link>https://github.com/nhtera/vmpane</link>
+            <sparkle:fullReleaseNotesLink>https://github.com/nhtera/vmpane/releases/tag/v1.0.0-beta.4</sparkle:fullReleaseNotesLink>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:version>4</sparkle:version>
+            <sparkle:shortVersionString>1.0.0-beta.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[A Linux VM's boot and installer are readable from the start.
+
+### Fixed
+- A Linux VM with Larger scaling starts at its size in points, so its boot messages and installer are readable
+  from the start (only the boot loader's own menu, e.g. GRUB, still picks the largest screen and shows small).
+
+]]></description>
+            <enclosure url="https://github.com/nhtera/vmpane/releases/download/v1.0.0-beta.4/VMPane-1.0.0-beta.4.dmg" length="27607751" type="application/octet-stream" sparkle:edSignature="9IB76cOmX0RxlmKB2ZppVNm07IdWgw3d7v73bo9kYbMSXtrOdBLbTXytkVf2oy3oZenghiqspw2+NnNmKDyPCw=="/>
+        </item>
+        <item>
             <title>1.0.0-beta.3</title>
             <pubDate>Wed, 14 Oct 2026 02:26:41 +0700</pubDate>
             <link>https://github.com/nhtera/vmpane</link>
