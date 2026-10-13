@@ -15,7 +15,6 @@ import { FAQ, plainAnswer } from "@/content/faq";
 import { strings } from "@/content/strings";
 import { faqPage, jsonForScript, softwareApplication } from "@/lib/json-ld";
 import { pageHead } from "@/lib/seo";
-import { fontPreloads } from "@/styles/fonts";
 
 // Structured data: an inline script, hashed into this page's CSP at build time.
 const JSON_LD = jsonForScript([
@@ -28,8 +27,6 @@ export const Route = createFileRoute("/")({
     const head = pageHead({ title: strings.site.title, description: strings.site.description, path: "/" });
     return {
       ...head,
-      // The handwritten notes' font, on the one page that uses it.
-      links: [...head.links, ...fontPreloads],
       scripts: [{ type: "application/ld+json", children: JSON_LD }],
     };
   },

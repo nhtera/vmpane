@@ -8,7 +8,7 @@ import { RELEASES_URL } from "@/lib/urls";
 
 const t = landing.hero;
 
-/** The hero: meta strip, the headline with its self-drawing underline, one CTA, the handwritten note, stickers. */
+/** The hero: meta strip, the headline with its self-drawing underline, one CTA, stickers. */
 export function Hero() {
   return (
     <section className="hero">
@@ -43,12 +43,6 @@ export function Hero() {
         </h1>
         <p className="sub">{t.sub}</p>
         <div className="cta">
-          <span className="hand">
-            {t.note}
-            <svg viewBox="0 0 46 40" aria-hidden="true">
-              <path d="M4 4c10 4 22 14 26 30M30 34l-8-4M30 34l3-9" />
-            </svg>
-          </span>
           <a className="btn btn-dark" href={RELEASES_URL}>
             <Icon name="download" />
             {strings.nav.cta}

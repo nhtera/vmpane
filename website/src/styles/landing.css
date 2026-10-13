@@ -115,15 +115,12 @@
   .underline svg { position: absolute; left: -2%; bottom: -.12em; width: 104%; height: .32em; overflow: visible; }
   .underline path { fill: none; stroke: var(--yellow); stroke-width: 7; stroke-linecap: round; opacity: .9; }
   .hero .sub { font-size: clamp(19px, 2vw, 22px); line-height: 1.42; color: var(--text-2); max-width: 600px; }
-  .hero .cta { position: relative; margin-top: 34px; }
-  .hero .cta .hand { position: absolute; left: 62%; bottom: calc(100% + 2px); }
-  .hero .cta .hand svg { transform: translateY(14px) scaleX(-1); }
-  @media (max-width: 600px) { .hero .cta .hand { left: 50%; transform: translateX(-50%); } .hero .cta .hand svg { display: none; } }
+  .hero .cta { position: relative; margin-top: 12px; }
   .stickers { position: absolute; inset: 24px 0 0; pointer-events: none; z-index: 1; }
   .st { position: absolute; filter: var(--shadow-sticker); }
   @media (max-width: 1080px) { .stickers { display: none; } }
   /* room for the lowest sticker (and its shadow) above the hero's clipped edge */
-  @media (min-width: 1081px) { .hero { padding-bottom: 120px; } }
+  @media (min-width: 1081px) { .hero { padding-bottom: 142px; } }
 
   /* ---------- the MacBook ---------- */
   .mac { max-width: 1040px; margin-inline: auto; }
@@ -275,7 +272,7 @@
   .track::-webkit-scrollbar { display: none; }
   .slide { scroll-snap-align: start; display: grid; gap: 16px; align-content: start; }
   .slide .media { aspect-ratio: 4 / 3; }
-  .slide .media .w { left: 8cqw; right: 8cqw; top: 10cqw; font-size: 3cqw; border-radius: 2.6cqw; transition: transform 600ms var(--ease-out-expo); }
+  .slide .media .w { left: 8cqw; right: 8cqw; top: 8cqw; font-size: 2.7cqw; border-radius: 2.6cqw; transition: transform 600ms var(--ease-out-expo); }
   .slide .media .w .term { height: auto; padding: 1.3em; font-size: .95em; }
   .slide:hover .media .w { transform: translateY(-1.5cqw) scale(1.01); }
   .slide h3 { font-size: 22px; letter-spacing: -.02em; }
@@ -318,7 +315,7 @@
     .hero .copy { gap: 20px; }
     .hero .meta { font-size: 12px; gap: 4px 8px; }
     .hero .meta span + span { padding-left: 8px; }
-    .hero .cta { width: 100%; max-width: 440px; margin-top: 40px; }
+    .hero .cta { width: 100%; max-width: 440px; margin-top: 16px; }
     .hero .cta .btn { width: 100%; justify-content: center; min-height: 54px; }
     .car-head h2 { font-size: clamp(32px, 9.2vw, 40px); }
     .car-head { margin-bottom: 24px; gap: 16px; }
@@ -394,7 +391,8 @@
       @keyframes grow { from { transform: scaleX(0); } }
       /* the library rises out of the Dock as the Mac scrolls in */
       .s-lib { transform-origin: 50% 120%; animation: libin linear both; animation-timeline: --story; animation-range: entry 20% entry 75%; }
-      @keyframes libin { from { opacity: 0; transform: translateY(18cqw) scale(.2); } 60% { opacity: 1; } }
+      /* it grows out of the Dock like a window opening, without fading: its text keeps full contrast */
+      @keyframes libin { from { transform: translateY(18cqw) scale(.2); } }
       .s-vm { animation: vmin linear both; animation-timeline: --story; animation-range: contain 4% contain 18%; }
       @keyframes vmin { from { opacity: 0; transform: translateX(14cqw) scale(.92); } }
       .s-typed { animation: typed linear both; animation-timeline: --story; animation-range: contain 38% contain 44%; }

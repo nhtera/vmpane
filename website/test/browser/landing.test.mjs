@@ -306,7 +306,7 @@ test("the handwritten note's font loads from the site", async () => {
   const { page, context } = await openPage(site, "/");
   await page.evaluate(() => document.fonts.ready);
   assert.ok(await page.evaluate(() => document.fonts.check('600 26px "Caveat"')));
-  assert.equal(await page.locator(".hero .hand").evaluate((el) => getComputedStyle(el).fontFamily.split(",")[0].replaceAll('"', "")), "Caveat");
+  assert.equal(await page.locator(".demo-hand .hand").evaluate((el) => getComputedStyle(el).fontFamily.split(",")[0].replaceAll('"', "")), "Caveat");
   await context.close();
 });
 

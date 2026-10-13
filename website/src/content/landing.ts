@@ -13,7 +13,6 @@ export const landing = {
     meta: ["Free and open source", "macOS 15 or later", "Apple silicon"],
     title: ["Three systems.", "One Mac."],
     sub: "Run macOS, Linux and Windows 11 in native Mac windows. Lend one to an AI agent, within limits you set.",
-    note: "Public beta soon",
   },
   story: {
     label: "How VMPane feels: a VM on your Mac and an agent asking first",
