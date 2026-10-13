@@ -109,13 +109,23 @@ for name in "${scenarios[@]}"; do
     )
     rc=$?
     set -e
-    # A scenario must not leave helpers (and their VMs) running: report, stop them, and fail it.
+    # A scenario must not leave helpers (and their VMs) running: report them and fail it. Stop only test VMs (in a
+    # temporary folder or ~/VMPaneItest): a helper that started meanwhile for a VM elsewhere is someone's own VM,
+    # left running (it still fails the scenario, which no longer had the Mac to itself).
     leaked=$(comm -13 <(echo "$helpers_before") <(pgrep -f 'VMPaneVM.app/Contents/MacOS/VMPaneVM' | sort || true) | sed '/^$/d')
     if [[ -n $leaked ]]; then
         echo "itest $name: leaked helper(s): $(echo $leaked)" >&2
-        kill -TERM $leaked 2>/dev/null || true
-        sleep 3
-        kill -KILL $leaked 2>/dev/null || true
+        test_vms=
+        for helper in $leaked; do
+            command=$(ps -o command= -p "$helper" || true)
+            echo "  $helper: $command" >&2
+            [[ $command =~ --vm\ (/private)?(/tmp/|/var/folders/)|--vm\ $HOME/VMPaneItest/ ]] && test_vms+=" $helper"
+        done
+        if [[ -n $test_vms ]]; then
+            kill -TERM $test_vms 2>/dev/null || true
+            sleep 3
+            kill -KILL $test_vms 2>/dev/null || true
+        fi
         [[ $rc == 0 ]] && rc=1
     fi
     duration=$(($(date +%s) - start))

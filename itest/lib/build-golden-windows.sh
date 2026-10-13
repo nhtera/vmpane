@@ -48,6 +48,6 @@ pid=
 rm -rf "$golden.partial/install"  # only install.json (done) is left there
 chmod -R go-rwx "$golden.partial"
 mv "$golden.partial" "$golden"
-[[ -n $with_agent ]] && touch "$golden/.agent"
+[[ -n $with_agent ]] && it_windows_extra_sum >"$golden/.agent"
 echo "$IT_GOLDEN_WINDOWS_VERSION" >"$golden/.ready"
 du -sh "$golden" | awk '{print "golden Windows bundle ready: " $1}'
