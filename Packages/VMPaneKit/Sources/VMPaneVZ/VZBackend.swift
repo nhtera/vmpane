@@ -112,15 +112,25 @@ public final class VZBackend: VMBackend {
             display?.close()
             display = nil
         }
-        let box = try await runner.create(plan, serialLog: serialLog)
+        var plan = plan
+        if plan.display.scaling == .standard {
+            // Boot at the configured size in points (half its pixels): the firmware and the boot loader (GRUB) keep
+            // the size the VM starts with, and the configured pixels shown in the window make their text tiny until
+            // Linux resizes. From the settings only, never the screen: a saved state resumes only on the same hardware.
+            let size = plan.display.standardBootSize
+            plan.display.widthPx = size.width
+            plan.display.heightPx = size.height
+        }
+        let started = plan
+        let box = try await runner.create(started, serialLog: serialLog)
         self.box.value = box
-        plans.withLock { $0.running = plan }
-        let size = NSSize(width: plan.display.widthPx, height: plan.display.heightPx)
+        plans.withLock { $0.running = started }
+        let size = NSSize(width: started.display.widthPx, height: started.display.heightPx)
         let title = title
         let runner = runner
         await MainActor.run {
             let host = VZDisplayHost(
-                box: box, title: title, guestSize: size, scaling: plan.display.scaling, autoResize: plan.display.autoResize
+                box: box, title: title, guestSize: size, scaling: started.display.scaling, autoResize: started.display.autoResize
             ) { width, height in
                 Task { _ = await runner.reconfigureDisplay(widthPx: width, heightPx: height) }
             }

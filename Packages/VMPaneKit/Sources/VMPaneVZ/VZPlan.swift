@@ -41,6 +41,13 @@ public struct VZPlan: Sendable, Equatable {
         /// `.standard`: the guest gets one pixel per point of the window (a Linux console reads at its usual size).
         public var scaling: DisplayConfig.Scaling = .retina
         public var autoResize = true
+
+        /// The guest size a `.standard` display boots at: the configured size in points (half its pixels), even and at
+        /// least 800 × 600.
+        public var standardBootSize: (width: Int, height: Int) {
+            func even(_ value: Int, atLeast low: Int) -> Int { max(value / 4 * 2, low) }
+            return (even(widthPx, atLeast: 800), even(heightPx, atLeast: 600))
+        }
     }
 
     public struct NIC: Sendable, Equatable {

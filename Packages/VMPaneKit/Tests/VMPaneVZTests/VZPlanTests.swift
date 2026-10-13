@@ -233,3 +233,12 @@ private func withTemp(_ body: (URL) throws -> Void) throws {
     #expect(standard.width >= retina.width * 1.9 || standard.width < 1280, "larger unless the screen is too small")
     #expect(abs(standard.width / standard.height - 1.6) < 0.01, "the aspect is kept")
 }
+
+/// A `.standard` display boots at its configured size in points, from the settings alone (a saved state resumes only on
+/// the same hardware, so never from the screen).
+@Test func standardDisplaysBootAtTheirSizeInPoints() {
+    #expect(VZPlan.Display(widthPx: 1920, heightPx: 1200).standardBootSize == (960, 600))
+    #expect(VZPlan.Display(widthPx: 2560, heightPx: 1600).standardBootSize == (1280, 800))
+    #expect(VZPlan.Display(widthPx: 1024, heightPx: 768).standardBootSize == (800, 600), "at least 800 × 600")
+    #expect(VZPlan.Display(widthPx: 1922, heightPx: 1202).standardBootSize == (960, 600), "even")
+}
