@@ -5,6 +5,11 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- A VM's own app ("VMPane VM") has a menu bar: Quit (⌘Q), Hide, Edit and Window. Quitting it, also from its Dock
+  tile, asks first while the VM runs and then shuts the VM down cleanly; before, it had no menu and a Quit from
+  the Dock ended a running VM at once.
+
 ## [1.0.0-beta.2]
 Fixes for the first beta.
 

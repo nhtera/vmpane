@@ -55,6 +55,75 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
         self.arguments = arguments
     }
 
+    /// Quit (its menu item, ⌘Q, the Dock tile's menu) ends the VM as the helper's shutdown does: shut down cleanly,
+    /// or suspended when closing its window suspends it, then the process exits. Asked first while the VM runs.
+    /// (Left to AppKit, the process would end at once and take a running VM with it.)
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let controller else { return .terminateNow }
+        if let model = windowModel, [.starting, .running, .paused, .stopping].contains(model.state) {
+            let alert = NSAlert()
+            alert.messageText = "Stop \(model.name ?? "the VM") and quit?"
+            alert.informativeText =
+                "It is running. Quitting shuts it down first (or suspends it, if closing its window suspends it)."
+            alert.addButton(withTitle: "Stop and Quit")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }
+        }
+        Task { await controller.shutdown() }  // exits once the VM is down (the controller's onShutdown)
+        return .terminateLater
+    }
+
+    /// The menu bar: the app menu (About, Hide, Quit), Edit (for the settings' text fields) and Window. Without
+    /// one the app's menu is empty and ⌘Q does nothing. Keys a captured guest display takes still go to the guest.
+    static func mainMenu() -> NSMenu {
+        let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "VMPane VM"
+        let main = NSMenu()
+        func submenu(_ title: String, _ items: [NSMenuItem]) -> NSMenu {
+            let menu = NSMenu(title: title)
+            items.forEach(menu.addItem)
+            let holder = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            holder.submenu = menu
+            main.addItem(holder)
+            return menu
+        }
+        func item(_ title: String, _ action: Selector, _ key: String = "", _ modifiers: NSEvent.ModifierFlags = .command) -> NSMenuItem {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+            item.keyEquivalentModifierMask = modifiers
+            return item
+        }
+        _ = submenu(
+            name,
+            [
+                item("About \(name)", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
+                .separator(),
+                item("Hide \(name)", #selector(NSApplication.hide(_:)), "h"),
+                item("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),
+                item("Show All", #selector(NSApplication.unhideAllApplications(_:))),
+                .separator(),
+                item("Quit \(name)", #selector(NSApplication.terminate(_:)), "q"),
+            ])
+        _ = submenu(
+            "Edit",
+            [
+                item("Undo", Selector(("undo:")), "z"),
+                item("Redo", Selector(("redo:")), "z", [.command, .shift]),
+                .separator(),
+                item("Cut", #selector(NSText.cut(_:)), "x"),
+                item("Copy", #selector(NSText.copy(_:)), "c"),
+                item("Paste", #selector(NSText.paste(_:)), "v"),
+                item("Select All", #selector(NSText.selectAll(_:)), "a"),
+            ])
+        NSApp.windowsMenu = submenu(
+            "Window",
+            [
+                item("Minimize", #selector(NSWindow.performMiniaturize(_:)), "m"),
+                item("Zoom", #selector(NSWindow.performZoom(_:))),
+                .separator(),
+                item("Bring All to Front", #selector(NSApplication.arrangeInFront(_:))),
+            ])
+        return main
+    }
+
     /// A click on the Dock tile brings a closed window back.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         if !hasVisibleWindows, !arguments.headless { MainActor.assumeIsolated { showWindow?() } }
@@ -78,6 +147,7 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Signals first: a SIGTERM during start-up must not kill the helper half-way through preparing.
         handleTerminationSignals()
+        NSApp.mainMenu = Self.mainMenu()
         let paths = VMPanePaths.standard()
         crashReports = .start(paths: paths, process: "helper")
         RunDirectoryReconciler.reconcile(paths: paths)
