@@ -30,8 +30,9 @@ export function siteFixture() {
 
 /**
  * A fresh page. `theme`: stored theme ("light" | "dark" | any string to
- * store as is) or undefined (follow the OS, `colorScheme`). `touch`: a
- * coarse pointer (mobile emulation).
+ * store as is) or undefined (nothing stored: the site is light; `colorScheme`
+ * is the OS setting, which does not change it). `touch`: a coarse pointer
+ * (mobile emulation).
  */
 export async function openPage(site, path, { width = 1280, height = 900, theme, colorScheme = "light", reducedMotion = "reduce", touch = false, storage = {}, wait = true } = {}) {
   const context = await site.browser.newContext({ viewport: { width, height }, colorScheme, reducedMotion, hasTouch: touch, isMobile: touch });

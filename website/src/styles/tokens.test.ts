@@ -52,7 +52,8 @@ test("variables the components and the highlighter read are tokens", () => {
 });
 
 test("tokens.css defines both themes and the Reduce Transparency fallback", () => {
-  assert.match(tokens, /@media \(prefers-color-scheme: dark\) \{\s*:root:not\(\[data-theme="light"\]\) \{/);
+  // light by default: the OS setting never turns the site dark, only the reader's pick (data-theme="dark")
+  assert.doesNotMatch(tokens, /prefers-color-scheme/);
   assert.match(tokens, /:root\[data-theme="dark"\] \{/);
   assert.match(tokens, /@media \(prefers-reduced-transparency: reduce\) \{\s*:root \{ --glass: 100% !important; --glass-nav: 100% !important; \}/);
   for (const name of ["--bg", "--band", "--text", "--text-2", "--text-3", "--hair", "--glass", "--rim", "--pin-top", "--f-sans", "--f-hand"]) {
@@ -60,10 +61,11 @@ test("tokens.css defines both themes and the Reduce Transparency fallback", () =
   }
 });
 
-test("the dark blocks redefine the same names", () => {
-  const blocks = [...tokens.matchAll(/(?::root:not\(\[data-theme="light"\]\)|:root\[data-theme="dark"\]) \{([^}]*)\}/g)].map((m) => [...declared(m[1])].sort());
-  assert.equal(blocks.length, 2);
-  assert.deepEqual(blocks[0], blocks[1]);
+test("the dark block redefines only names the light theme defines", () => {
+  const blocks = [...tokens.matchAll(/:root\[data-theme="dark"\] \{([^}]*)\}/g)].map((m) => [...declared(m[1])]);
+  assert.equal(blocks.length, 1);
+  const light = declared(tokens.match(/:root \{([^}]*)\}/)?.[1] ?? "");
+  assert.deepEqual(blocks[0].filter((n) => !light.has(n)), []);
 });
 
 /** Colour values: hex, colour functions, named colours as CSS values, Tailwind palette classes. */

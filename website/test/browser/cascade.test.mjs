@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // The theme, in a real browser on the built site: data-theme is set before
-// first paint from the stored pick, else the OS setting; a bad stored value
-// falls back to the OS; the toggle switches and persists; and the token
-// variables resolve (body font and background, button radius).
+// first paint from the stored pick, else light, whatever the OS setting; a
+// bad stored value falls back to light; the toggle switches and persists; and
+// the token variables resolve (body font and background, button radius).
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -19,8 +19,8 @@ async function firstPaintTheme(page) {
 for (const [stored, os, want] of [
   ["dark", "light", "dark"],
   ["light", "dark", "light"],
-  ["blue", "dark", "dark"],
-  [undefined, "dark", "dark"],
+  ["blue", "dark", "light"],
+  [undefined, "dark", "light"],
   [undefined, "light", "light"],
 ]) {
   test(`stored ${stored ?? "nothing"}, OS ${os} → ${want}, before hydration`, async () => {
@@ -35,11 +35,12 @@ for (const [stored, os, want] of [
   });
 }
 
-test("without JavaScript the page is light", async () => {
+test("without JavaScript the page is light, also on a dark OS", async () => {
   const ctx = await site.browser.newContext({ colorScheme: "dark", javaScriptEnabled: false });
   const page = await ctx.newPage();
   await page.goto(`${site.base}/`);
   assert.equal(await page.evaluate(() => document.documentElement.dataset.theme ?? null), null);
+  assert.equal(await page.evaluate(() => getComputedStyle(document.body).backgroundColor), "rgb(255, 255, 255)");
   await ctx.close();
 });
 
@@ -57,10 +58,12 @@ test("the toggle switches, persists across reload, and labels the next theme", a
   await context.close();
 });
 
-test("an OS change applies while nothing is stored", async () => {
-  const { page, context } = await openPage(site, "/docs", { colorScheme: "light" });
+test("an OS change does not change the theme", async () => {
+  const { page, context } = await openPage(site, "/", { colorScheme: "light" });
   await page.emulateMedia({ colorScheme: "dark" });
-  await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), "light");
+  assert.equal(await page.evaluate(() => getComputedStyle(document.body).backgroundColor), "rgb(255, 255, 255)");
   await context.close();
 });
 

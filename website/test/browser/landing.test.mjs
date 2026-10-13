@@ -386,8 +386,8 @@ test("nothing between the page and a pinned element clips it (Safari shakes a st
 });
 
 test("the header pill stays steady while dark and bright sections scroll under it (no blinking glass)", async () => {
-  for (const [colorScheme, width, height, limit] of [["light", 1440, 900, 28], ["dark", 1440, 900, 28], ["light", 390, 844, 15], ["dark", 390, 844, 15]]) {
-    const { page, context } = await openPage(site, "/", { width, height, colorScheme, reducedMotion: "no-preference", touch: width < 800 });
+  for (const [theme, width, height, limit] of [["light", 1440, 900, 28], ["dark", 1440, 900, 28], ["light", 390, 844, 15], ["dark", 390, 844, 15]]) {
+    const { page, context } = await openPage(site, "/", { width, height, theme, reducedMotion: "no-preference", touch: width < 800 });
     const box = await page.locator(".nav-in").boundingBox();
     const inset = width < 800 ? 50 : 60;
     const clip = { x: box.x + inset, y: box.y + 4, width: box.width - 2 * inset, height: box.height - 8 };
@@ -400,7 +400,7 @@ test("the header pill stays steady while dark and bright sections scroll under i
       levels.push((await sharp(png).greyscale().stats()).channels[0].mean);
     }
     const range = Math.max(...levels) - Math.min(...levels);
-    assert.ok(range <= limit, `${colorScheme} ${width}px: the pill's brightness ranges over ${range.toFixed(0)} levels`);
+    assert.ok(range <= limit, `${theme} ${width}px: the pill's brightness ranges over ${range.toFixed(0)} levels`);
     await context.close();
   }
 });

@@ -5,8 +5,8 @@
    neutrals and the macOS system colours, light and dark. The only file with
    colour values; every other stylesheet uses these variables.
 
-   The theme: data-theme on <html> (set before first paint by the init script
-   in src/lib/theme.ts), else the OS setting (no JavaScript). */
+   The theme: light by default (also without JavaScript), dark when data-theme="dark" is on <html> (set before
+   first paint by the init script in src/lib/theme.ts from the reader's pick). The OS setting does not change it. */
 :root {
   /* surfaces and text; --text-3 is AA on --band too (the draft's #86868B was not), so small print stays readable */
   --bg: #FFFFFF; --band: #F5F5F7; --card: #F5F5F7; --text: #1D1D1F; --text-2: #6E6E73; --text-3: #707075;
@@ -80,23 +80,6 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0A0A0B; --band: #141416; --card: #1A1A1C; --text: #F5F5F7; --text-2: #A1A1A6; --text-3: #8E8E93;
-    --hair: #38383C; --pill: #F5F5F7; --pill-text: #1D1D1F; --nav-line: rgba(255,255,255,.1);
-    --scrim: rgba(0,0,0,.55);
-    --sel: #0A6CF0;
-    --blue: #0A84FF; --green: #30D158; --orange: #FF9F0A; --red: #FF453A; --purple: #BF5AF2; --indigo: #5E5CE6;
-    --teal: #40C8E0; --yellow: #FFD60A; --pink: #FF375F; --gray: #98989D;
-    --t-blue: #2997FF; --t-orange: #FF9F0A; --t-green: #30D158; --t-purple: #BF5AF2; --t-red: #FF6961;
-    --shadow-win: 0 0 0 .5px rgba(255,255,255,.14), 0 10px 30px rgba(0,0,0,.5), 0 30px 60px -20px rgba(0,0,0,.6);
-    --shadow-lift: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.4);
-    --rim: inset 0 1px 0 rgba(255,255,255,.16), inset 0 0 0 .5px rgba(255,255,255,.08);
-    --win: #1E1E1E; --win-side: rgba(40,40,42,.9); --win-bar: #2A2A2C; --win-line: rgba(255,255,255,.1);
-    --win-text: rgba(255,255,255,.88); --win-text-2: rgba(255,255,255,.56); --win-group: #262628;
-    color-scheme: dark;
-  }
-}
 :root[data-theme="dark"] {
   --sel: #0A6CF0;
   --bg: #0A0A0B; --band: #141416; --card: #1A1A1C; --text: #F5F5F7; --text-2: #A1A1A6; --text-3: #8E8E93;

@@ -13,7 +13,7 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { name: "color-scheme", content: "light dark" },
+      { name: "color-scheme", content: "light" },
       // The not-found state (a docs link to a page that does not exist, on
       // client navigation) gets the 404 page's title and noindex.
       ...(matches.some((m) => m.status === "notFound" || ("globalNotFound" in m && m.globalNotFound))
