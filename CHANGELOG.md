@@ -5,6 +5,9 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.0-beta.3]
+A readable Linux display, a menu bar and clean Quit for each VM, and an install guide in the disk image.
+
 ### Changed
 - VoiceOver finds a VM's screen (named after the VM), and the settings' "Live" and "Next start" badges are
   easier to read.
@@ -13,9 +16,9 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - The disk image shows how to install: VMPane beside the Applications folder, with an arrow to drag it there.
 
 ### Fixed
-- A VM's own app ("VMPane VM") has a menu bar: Quit (⌘Q), Hide, Edit and Window. Quitting it, also from its Dock
-  tile, asks first while the VM runs and then shuts the VM down cleanly; before, it had no menu and a Quit from
-  the Dock ended a running VM at once.
+- A VM's own app ("VMPane VM") has a menu bar: Quit, Hide, Edit and Window (⌘ keys typed into the VM's screen
+  still go to the VM). Quitting it, also from its Dock tile, asks first while the VM runs and then shuts the VM
+  down cleanly; before, it had no menu and a Quit from the Dock ended a running VM at once.
 
 ## [1.0.0-beta.2]
 Fixes for the first beta.
