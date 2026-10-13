@@ -59,6 +59,13 @@ scenario_run() {
     ! grep -qE "disk.img|\.vmpane/|state|tpm" "$work/diag.txt" || it_fail "the diagnostics carry VM data" || return 1
     echo "cli-e2e: cp both ways; doctor sees the running VM; diagnostics without VM data"
 
+    # install-cli --user, in a temporary home: a link in ~/.local/bin that runs this vmpane. (Without --user it
+    # asks for an administrator's password.)
+    HOME="$work/home" "$cli" install-cli --user >/dev/null || it_fail "install-cli --user failed" || return 1
+    [[ -L $work/home/.local/bin/vmpane && $("$work/home/.local/bin/vmpane" --version) == "$("$cli" --version)" ]] \
+        || it_fail "install-cli --user made no working link" || return 1
+    echo "cli-e2e: install-cli --user links vmpane into ~/.local/bin"
+
     # 3. ports
     "$cli" exec "$id" --as admin -- sh -c 'mkdir -p /root/w && echo served >/root/w/f && setsid -f python3 -m http.server 8000 --directory /root/w >/dev/null 2>&1 </dev/null; sleep 1' \
         || it_fail "cannot start a web server" || return 1
