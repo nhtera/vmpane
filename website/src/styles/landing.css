@@ -379,17 +379,32 @@
       .story-stage { position: sticky; top: var(--pin-top); height: calc(100svh - var(--pin-top)); display: grid; align-content: start; gap: 24px; padding-top: 20px; }
       .story .mac { width: min(1000px, calc((100svh - var(--pin-top) - 230px) * 1.48), 100%); }
       .steps { grid-template-columns: 1fr; text-align: center; margin-top: 8px; min-height: 92px; }
-      /* The captions cross-fade: at each step's boundary the outgoing one slides up and out while the next
-         slides in over the same stretch of scroll, so the caption area is never empty (a blank between two
-         steps read as the text blinking). capin fills both ways (hidden before its range), capout only
-         forwards (it must not hold the caption visible before its range starts). */
-      .steps li { grid-area: 1 / 1; animation: capin linear both, capout linear forwards; animation-timeline: --story, --story; }
-      .steps li:nth-child(1) { animation-range: entry 70% entry 100%, contain 20% contain 24%; }
-      .steps li:nth-child(2) { animation-range: contain 20% contain 24%, contain 43% contain 47%; }
-      .steps li:nth-child(3) { animation-range: contain 43% contain 47%, contain 66% contain 70%; }
-      .steps li:nth-child(4) { animation: capin linear both; animation-timeline: --story; animation-range: contain 66% contain 70%; }
-      @keyframes capin { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-      @keyframes capout { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-10px); } }
+      /* One caption at a time: at each step's boundary the next one replaces the last outright (and rises
+         into place), so two never sit on top of each other and the caption area is never empty. Each caption
+         has one animation over the same range as the bar, whose keyframes split the story at 22/45/68%: the
+         captions' visibility never depends on several animations or ranges composing (two captions stacked
+         on Safari for iPhone with an out-animation and an in-animation per caption). If the animations
+         never run, only the first caption shows. */
+      .steps li { grid-area: 1 / 1; animation: linear both; animation-timeline: --story; animation-range: contain 0% contain 100%; }
+      .steps li + li { opacity: 0; }
+      .steps li:nth-child(1) { animation-name: cap1; }
+      .steps li:nth-child(2) { animation-name: cap2; }
+      .steps li:nth-child(3) { animation-name: cap3; }
+      .steps li:nth-child(4) { animation-name: cap4; }
+      /* step-end holds a keyframe's opacity until the next one: the switch is a single point of the scroll */
+      @keyframes cap1 { 0% { opacity: 1; animation-timing-function: step-end; } 22%, 100% { opacity: 0; } }
+      @keyframes cap2 {
+        0% { opacity: 0; animation-timing-function: step-end; } 22% { opacity: 1; transform: translateY(10px); animation-timing-function: ease-out; }
+        26% { opacity: 1; transform: none; animation-timing-function: step-end; } 45%, 100% { opacity: 0; }
+      }
+      @keyframes cap3 {
+        0% { opacity: 0; animation-timing-function: step-end; } 45% { opacity: 1; transform: translateY(10px); animation-timing-function: ease-out; }
+        49% { opacity: 1; transform: none; animation-timing-function: step-end; } 68%, 100% { opacity: 0; }
+      }
+      @keyframes cap4 {
+        0% { opacity: 0; animation-timing-function: step-end; } 68% { opacity: 1; transform: translateY(10px); animation-timing-function: ease-out; }
+        72%, 100% { opacity: 1; transform: none; }
+      }
       .story-bar { display: block; width: min(260px, 60%); height: 4px; margin: 0 auto; border-radius: 4px; background: var(--fill); overflow: hidden; }
       .story-bar i { display: block; height: 100%; background: var(--blue); transform-origin: left; animation: grow linear both; animation-timeline: --story; animation-range: contain 0% contain 100%; }
       @keyframes grow { from { transform: scaleX(0); } }

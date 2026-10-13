@@ -113,7 +113,7 @@ jobs:
       - run: npm run finalize
       - run: npm run check-links
       - run: node scripts/ci-paths.mjs covers content/generated/inputs.json
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:browser
       - name: The build changed no tracked or untracked file
         working-directory: .

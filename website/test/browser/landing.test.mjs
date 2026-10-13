@@ -8,7 +8,9 @@
 // width; and privacy: every request goes to the site itself, no cookie.
 
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { test } from "node:test";
+import { webkit } from "playwright";
 import sharp from "sharp";
 import { openPage, siteFixture } from "./helpers.mjs";
 
@@ -303,25 +305,61 @@ test("the hero's stickers sit inside it, so its clipped edges never cut one", as
   }
 });
 
-test("the story's caption is never blank: steps cross-fade instead of fading out and in", async () => {
-  // A gap between two captions read as the text blinking at every step of the pinned story.
-  const { page, context } = await openPage(site, "/", { width: 1512, height: 857, reducedMotion: "no-preference" });
-  if (!(await page.evaluate(() => CSS.supports("animation-timeline: view()")))) return context.close();
-  const blank = await page.evaluate(async () => {
-    document.documentElement.style.scrollBehavior = "auto";
-    const t = document.querySelector(".story-track");
-    const len = t.offsetHeight - innerHeight;
-    const out = [];
-    for (let f = 0; f <= 1.0001; f += 0.005) {
-      scrollTo(0, t.offsetTop + len * f);
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      const max = Math.max(...[...document.querySelectorAll(".steps li")].map((li) => +getComputedStyle(li).opacity));
-      if (max < 0.45) out.push(`${f.toFixed(3)}: ${max.toFixed(2)}`);
+// The pinned story's captions at every point of the scroll, down and back up, with the viewport's height
+// changing in between (a phone browser's toolbar collapsing): exactly one caption shows, fully opaque. Two
+// captions on top of each other are unreadable (three stacked on Safari for iPhone with per-caption in and out
+// animations), and none at all read as the text blinking. Without its animations the story still shows one.
+async function storyCaptions(browser, base) {
+  const problems = [];
+  for (const [width, height, height2, phone] of [[1512, 857, 760, false], [390, 700, 780, true]]) {
+    const context = await browser.newContext({ viewport: { width, height }, reducedMotion: "no-preference", hasTouch: phone, isMobile: phone });
+    const page = await context.newPage();
+    await page.goto(`${base}/`, { waitUntil: "networkidle" });
+    if (!(await page.evaluate(() => CSS.supports("animation-timeline: view()")))) {
+      await context.close();
+      continue;
     }
-    return out;
-  });
-  assert.deepEqual(blank, []);
-  await context.close();
+    const sweep = (down) =>
+      page.evaluate(async (down) => {
+        document.documentElement.style.scrollBehavior = "auto";
+        const t = document.querySelector(".story-track");
+        const len = t.offsetHeight - innerHeight;
+        const lis = [...document.querySelectorAll(".steps li")];
+        const at = [];
+        for (let i = 0; i <= 240; i++) at.push(-0.1 + (1.2 * i) / 240);
+        if (!down) at.reverse();
+        const out = [];
+        for (const f of at) {
+          scrollTo(0, t.offsetTop + len * f);
+          await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+          const shown = lis.map((li, i) => [i + 1, +getComputedStyle(li).opacity]).filter(([, o]) => o > 0.01);
+          if (shown.length !== 1 || shown[0][1] < 0.99) out.push(`${f.toFixed(3)}: ${shown.map(([i, o]) => `${i}@${o.toFixed(2)}`).join(" ") || "none"}`);
+        }
+        return out;
+      }, down);
+    for (const p of await sweep(true)) problems.push(`${width}x${height} down ${p}`);
+    await page.setViewportSize({ width, height: height2 });
+    for (const p of await sweep(false)) problems.push(`${width}x${height2} up ${p}`);
+    const still = await page.evaluate(() => {
+      for (const li of document.querySelectorAll(".steps li")) for (const a of li.getAnimations()) a.cancel();
+      return [...document.querySelectorAll(".steps li")].filter((li) => +getComputedStyle(li).opacity > 0.01).length;
+    });
+    if (still !== 1) problems.push(`${width}px without animations: ${still} captions show`);
+    await context.close();
+  }
+  return problems;
+}
+
+test("the story shows one caption at a time: never two on top of each other, never none", async () => {
+  assert.deepEqual(await storyCaptions(site.browser, site.base), []);
+  // and in WebKit (Safari's engine) where it is installed (CI installs it)
+  if (!existsSync(webkit.executablePath())) return;
+  const browser = await webkit.launch();
+  try {
+    assert.deepEqual(await storyCaptions(browser, site.base), [], "WebKit");
+  } finally {
+    await browser.close();
+  }
 });
 
 test("the header pill stays steady while dark and bright sections scroll under it (no blinking glass)", async () => {
