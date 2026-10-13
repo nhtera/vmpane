@@ -90,13 +90,18 @@ jobs:
   # Agent protocol decoders: cargo-fuzz targets (5 min each) and the Swift decoders' 1M seeded mutations.
   fuzz-smoke:
     if: contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event_name) && github.ref == 'refs/heads/main'
-    runs-on: [self-hosted, macOS, ARM64, vmpane]
+    # A hosted runner: it has rustup (the project Mac's CI account has no Rust toolchain).
+    runs-on: macos-26
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-xcode
+      - name: Nightly Rust and cargo-fuzz (pinned)
+        run: |
+          rustup toolchain install nightly --profile minimal
+          cargo install --locked cargo-fuzz --version 0.13.2
       - name: Fuzz smoke
         run: scripts/fuzz.sh 300
       - name: Keep crashing inputs
@@ -105,9 +110,6 @@ jobs:
         with:
           name: fuzz-artifacts
           path: agent/fuzz/artifacts
-      - name: Clean workspace
-        if: always()
-        run: find "$GITHUB_WORKSPACE" -mindepth 1 -delete
 
   rust-lint-test:
     if: github.event_name != 'schedule'
