@@ -5,5 +5,32 @@
         <link>https://github.com/nhtera/vmpane</link>
         <description>VMPane updates</description>
         <language>en</language>
+        <item>
+            <title>1.0.0-beta.1</title>
+            <pubDate>Tue, 13 Oct 2026 12:49:52 +0700</pubDate>
+            <link>https://github.com/nhtera/vmpane</link>
+            <sparkle:fullReleaseNotesLink>https://github.com/nhtera/vmpane/releases/tag/v1.0.0-beta.1</sparkle:fullReleaseNotesLink>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:version>1</sparkle:version>
+            <sparkle:shortVersionString>1.0.0-beta.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[The first public beta.
+
+### Added
+- macOS and Linux guests on Virtualization.framework: install macOS from an Apple restore image (IPSW) and Linux
+  from an ISO; suspend and resume; live and offline snapshots.
+- Windows 11 ARM guests on QEMU with Hypervisor.framework, a software TPM and Secure Boot; an unattended install
+  from your own ISO that resumes after an interruption.
+- The VMPane guest agent for Linux, macOS and Windows: shared clipboard, drag and drop of files, file transfer
+  and commands.
+- Shared folders and port forwarding.
+- Import of Parallels Desktop VMs.
+- The `vmpane` command-line tool and a built-in MCP server (`vmpane mcp`): AI coding agents drive only the VMs
+  you open to them, at the level you choose (every VM starts at Off), and the kill switch stops them all.
+- Updates through Sparkle; VMPane asks before installing one, and running VMs keep running.
+]]></description>
+            <enclosure url="https://github.com/nhtera/vmpane/releases/download/v1.0.0-beta.1/VMPane-1.0.0-beta.1.dmg" length="29947592" type="application/octet-stream" sparkle:edSignature="CMnmISRXJcVenkytuz041MXhWojWLS/jRp6BdR+aZgbg6VLu2PUill7kVApVjnS9HkB2lXRn7rjymfL8wlnXCw=="/>
+        </item>
     </channel>
 </rss>
