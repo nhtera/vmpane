@@ -5,6 +5,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- The VMPane folder in Application Support is private (0700) again: 1.0.0-beta.1 could make it readable by other
+  accounts on the Mac (the files in it were already private). `vmpane doctor` reported it.
+
 ## [1.0.0-beta.1]
 The first public beta.
 

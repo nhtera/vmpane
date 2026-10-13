@@ -189,9 +189,7 @@ public struct VMLibrary: Sendable {
     }
 
     private func ensureRoot() throws {
-        try FileManager.default.createDirectory(
-            at: paths.root, withIntermediateDirectories: true,
-            attributes: [.posixPermissions: 0o700])
+        try paths.ensureRoot()
     }
 
     /// Why the bundle at `url` cannot be listed or acted on, in words for the library's "Problem" section and alerts.

@@ -23,7 +23,7 @@ public struct PolicyKeyFile: PolicyKeyProvider {
     public func key(create: Bool) -> SymmetricKey? {
         if let data = try? Data(contentsOf: url), data.count == 32 { return SymmetricKey(data: data) }
         guard create else { return nil }
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? paths.ensureRoot()
         let fresh = SymmetricKey(size: .bits256)
         // Written whole beside it, then linked in place (fails if someone made it meanwhile): a reader never
         // sees a short key.

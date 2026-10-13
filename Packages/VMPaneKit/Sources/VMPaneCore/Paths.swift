@@ -19,6 +19,15 @@ public struct VMPanePaths: Sendable, Equatable {
         return VMPanePaths(root: support.appendingPathComponent("VMPane", isDirectory: true))
     }
 
+    /// Makes `root` if needed and keeps it private (0700). A folder made by 1.0.0-beta.1, which the policy key
+    /// could create 0755, is tightened.
+    public func ensureRoot() throws {
+        try FileManager.default.createDirectory(
+            at: root, withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700])
+        chmod(root.path, 0o700)
+    }
+
     public var defaultLibrary: URL { root.appendingPathComponent("VMs", isDirectory: true) }
     public var libraryIndex: URL { root.appendingPathComponent("library.json") }
     public var runDirectory: URL { root.appendingPathComponent("run", isDirectory: true) }

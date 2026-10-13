@@ -44,3 +44,11 @@ import Testing
     #expect(throws: DecodingError.self) { try JSONDecoder().decode(ShortID.self, from: Data("\"XYZ\"".utf8)) }
     #expect(id.description == "0123abcd")
 }
+
+@Test func theSupportFolderIsKeptPrivate() throws {
+    let root = URL(fileURLWithPath: "/tmp/vp-root-\(UUID().uuidString.prefix(8))")
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o755])
+    try VMPanePaths(root: root).ensureRoot()  // a folder an earlier version left open
+    #expect(try FileManager.default.attributesOfItem(atPath: root.path)[.posixPermissions] as? Int == 0o700)
+}

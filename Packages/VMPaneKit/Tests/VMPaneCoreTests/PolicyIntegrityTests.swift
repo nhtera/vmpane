@@ -37,6 +37,7 @@ private func config(_ level: PolicyLevel) -> VMConfigV1 {
     let made = try #require(file.key(create: true))
     #expect(file.key(create: true) == made && file.key(create: false) == made)
     #expect(try FileManager.default.attributesOfItem(atPath: file.url.path)[.posixPermissions] as? Int == 0o600)
+    #expect(try FileManager.default.attributesOfItem(atPath: root.path)[.posixPermissions] as? Int == 0o700, "the folder is private")
 }
 
 /// Agents (automated clients) see a VM only when its tagged policy is at least observe.
