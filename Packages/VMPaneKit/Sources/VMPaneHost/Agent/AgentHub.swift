@@ -40,6 +40,11 @@ public actor AgentHub {
     public var status: Status { Status(connected: current != nil, peer: currentPeer) }
     public var connection: AgentConnection? { current }
 
+    /// The VM paused or continued (`AgentConnection.setGuestPaused`).
+    public func setGuestPaused(_ paused: Bool) async {
+        await current?.setGuestPaused(paused)
+    }
+
     /// Waits until the backoff after a violation is over.
     public func waitOutBackoff() async {
         guard let until = refuseUntil, until > .now else { return }

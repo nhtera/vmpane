@@ -61,14 +61,15 @@ scenario_run() {
     [[ $(shasum -a 256 "$back" | cut -d' ' -f1) == "$host_sum" ]] || it_fail "pulled file differs" || return 1
     echo "agent-windows: pulled 256 MiB in ${seconds} s ($(/usr/bin/python3 -c "print(int(268435456 / $seconds / 1e6))") MB/s)"
     rm -f "$big" "$back"
-    it_agent_exec 'del C:\Windows\Temp\big.bin' >/dev/null
+    it_agent_exec 'del C:\Windows\Temp\big.bin' >/dev/null || it_fail "deleting the pushed file failed" || return 1
 
     # 4. Clock after a 20 s pause (the host sets it on resume).
     it_rpc "$socket" vm.pause >/dev/null || it_fail "pause failed" || return 1
     sleep 20
     it_rpc "$socket" vm.resume >/dev/null || it_fail "resume failed" || return 1
     sleep 3
-    out=$(it_agent_exec 'powershell -NoProfile -Command "[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()"' | tr -d '\r')
+    out=$(it_agent_exec 'powershell -NoProfile -Command "[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()"' | tr -d '\r') \
+        || it_fail "no agent after the 20 s pause" || return 1
     drift=$(/usr/bin/python3 -c "import time; print(abs($out / 1000 - time.time()))")
     /usr/bin/python3 -c "import sys; sys.exit(0 if $drift < 1 else 1)" || it_fail "guest clock off by ${drift} s after a pause" || return 1
     echo "agent-windows: guest clock within $(printf '%.3f' "$drift") s of the host after a 20 s pause"

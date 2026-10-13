@@ -90,10 +90,14 @@ extension HelperController {
             if previous == .paused {
                 let hub = agentHub
                 Task {
+                    await hub.setGuestPaused(false)
                     let status = await hub.status
                     if let connection = await hub.connection, let peer = status.peer { await Self.syncClock(connection, peer: peer) }
                 }
             }
+        case .paused:
+            let hub = agentHub
+            Task { await hub.setGuestPaused(true) }
         case .stopped, .error:
             let (link, hub) = (agentLink, agentHub)
             agentLink = nil

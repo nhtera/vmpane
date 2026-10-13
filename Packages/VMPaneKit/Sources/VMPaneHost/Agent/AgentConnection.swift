@@ -36,6 +36,8 @@ public actor AgentConnection {
     /// When the last bytes arrived, and whether reading is held back by a full stream (`watchIdle`).
     var lastReceived = ContinuousClock.now
     var readingPaused = false
+    /// The VM is paused: its agent cannot send heartbeats, so silence then is not a dead agent (`setGuestPaused`).
+    var guestPaused = false
     /// Bytes read from the agent on this connection, and up to where they were acknowledged (`transport.ack`).
     var receivedBytes: UInt64 = 0
     var acknowledgedBytes: UInt64 = 0
@@ -44,6 +46,8 @@ public actor AgentConnection {
 
     /// `vmpane-agent-proto::limits::HEARTBEAT_SECONDS`.
     static let heartbeat: Duration = .seconds(5)
+    /// The agent's heartbeat period here (tests shorten it); `watchIdle` allows three of them.
+    let heartbeat: Duration
     /// Set while a refusal is being written: input is ignored, the connection closes once it is out.
     var refusing = false
     var closeReason: ConnectionError?
@@ -57,9 +61,10 @@ public actor AgentConnection {
     /// `token`: required in `hello` when set (TCP). `hostRange`: protocol versions the host speaks.
     init(
         socket: AgentSocket, hostVersion: String, token: String? = nil,
-        hostRange: ClosedRange<UInt32> = AgentLimits.minProto...AgentLimits.proto
+        hostRange: ClosedRange<UInt32> = AgentLimits.minProto...AgentLimits.proto, heartbeat: Duration = AgentConnection.heartbeat
     ) {
         self.socket = socket
+        self.heartbeat = heartbeat
         self.hostVersion = hostVersion
         self.token = token
         self.hostRange = hostRange
@@ -112,15 +117,24 @@ public actor AgentConnection {
     }
 
     /// Closes a connection that has been silent for three heartbeats after `hello` (a guest that froze, or a QEMU
-    /// port whose agent died without the host noticing). Not while the host itself holds back reading.
+    /// port whose agent died without the host noticing). Not while the host itself holds back reading, nor while
+    /// the VM is paused.
     func watchIdle() async {
         while closeReason == nil {
-            try? await Task.sleep(for: Self.heartbeat)
-            guard peer != nil, !readingPaused else { continue }
-            if ContinuousClock.now - lastReceived > Self.heartbeat * 3 {
+            try? await Task.sleep(for: heartbeat)
+            guard peer != nil, !readingPaused, !guestPaused else { continue }
+            if ContinuousClock.now - lastReceived > heartbeat * 3 {
                 close(.closed("no heartbeat from the agent"))
             }
         }
+    }
+
+    /// The VM paused (true) or continued (false). A paused guest sends nothing; closing its connection then would
+    /// lose the agent for good on a QEMU port, where the guest never learns of the close and keeps the old session
+    /// (its heartbeats are no `hello` to a new connection). Its silence counts again from the resume.
+    public func setGuestPaused(_ paused: Bool) {
+        guestPaused = paused
+        if !paused { lastReceived = .now }
     }
 
     func helloTimedOut() {

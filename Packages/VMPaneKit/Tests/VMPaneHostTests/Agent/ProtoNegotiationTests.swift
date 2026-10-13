@@ -329,3 +329,20 @@ func theHostAcknowledgesWhatItReadToAgentsThatAsk(asks: Bool) async throws {
         #expect(acks.isEmpty)
     }
 }
+
+/// A paused VM's agent sends nothing: its silence must not close the connection (on a QEMU port the guest would
+/// never learn of the close, and its agent would be lost until it restarts). Silence after the resume still does.
+@Test func silenceWhileTheVMIsPausedKeepsTheConnection() async throws {
+    let (agent, hostFD) = try FakeAgent.pair()
+    let connection = AgentConnection(socket: AgentSocket(fd: hostFD), hostVersion: "h", heartbeat: .milliseconds(100))
+    let peer = Task { try await connection.open(helloTimeout: .seconds(5)) }
+    try agent.hello()
+    _ = try await peer.value
+    _ = await agent.nextMessage()  // the hello response
+    await connection.setGuestPaused(true)
+    try await Task.sleep(for: .milliseconds(800))  // eight heartbeats of silence
+    #expect(await connection.isOpen)
+    await connection.setGuestPaused(false)
+    #expect(await connection.isOpen)
+    #expect(await agent.sawClose(within: 3))  // still silent after the resume: closed after three heartbeats
+}

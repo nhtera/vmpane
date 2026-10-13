@@ -116,15 +116,22 @@ for name in "${scenarios[@]}"; do
     if [[ -n $leaked ]]; then
         echo "itest $name: leaked helper(s): $(echo $leaked)" >&2
         test_vms=
+        bundles=()
         for helper in $leaked; do
             command=$(ps -o command= -p "$helper" || true)
             echo "  $helper: $command" >&2
-            [[ $command =~ --vm\ (/private)?(/tmp/|/var/folders/)|--vm\ $HOME/VMPaneItest/ ]] && test_vms+=" $helper"
+            if [[ $command =~ --vm\ ((/private)?(/tmp/|/var/folders/)[^ ]*|$HOME/VMPaneItest/[^ ]*) ]]; then
+                test_vms+=" $helper"
+                bundles+=("${BASH_REMATCH[1]}")
+            fi
         done
         if [[ -n $test_vms ]]; then
+            # A helper stops its VM on TERM (a Windows guest takes a while); one that is killed leaves QEMU and
+            # swtpm running, so whatever still runs for those bundles goes too.
             kill -TERM $test_vms 2>/dev/null || true
-            sleep 3
+            for _ in {1..60}; do kill -0 $test_vms 2>/dev/null || break; sleep 1; done
             kill -KILL $test_vms 2>/dev/null || true
+            for bundle in "${bundles[@]}"; do pkill -KILL -f -- "$bundle/" 2>/dev/null || true; done
         fi
         [[ $rc == 0 ]] && rc=1
     fi
