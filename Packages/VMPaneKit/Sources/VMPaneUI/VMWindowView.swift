@@ -44,7 +44,10 @@ public struct VMWindowView: View {
     public var body: some View {
         ZStack {
             DisplayHost(view: display)
-                .accessibilityLabel("Virtual machine display")
+                // An element of its own (Virtualization's view is none, so VoiceOver would not find the screen).
+                .accessibilityElement(children: .ignore)
+                .accessibilityAddTraits(.isImage)
+                .accessibilityLabel("\(model.name ?? "Virtual machine") screen")
                 .dropDestination(for: URL.self) { urls, _ in
                     let files = urls.filter(\.isFileURL)
                     guard !files.isEmpty, model.state == .running, model.transfer == nil else { return false }

@@ -69,6 +69,81 @@ final class VMWindowUITests: XCTestCase {
         XCTAssertTrue(sheet.waitForNonExistence(timeout: 5))
     }
 
+    /// The VM's window and its settings sheet pass the accessibility audit (`VMPANE_ITEST_AUDIT=1`).
+    @MainActor
+    func testVMWindowPassesTheAccessibilityAudit() throws {
+        guard AppUnderTest.environment["VMPANE_ITEST_AUDIT"] == "1" else { throw XCTSkip("run by an itest scenario") }
+        let (vm, window) = try vmWindow()
+        XCTAssertTrue(window.images["\(window.title) screen"].exists, "VoiceOver finds the VM's screen, by its name")
+        try AppUnderTest.audit(vm, window: window)
+        window.toolbars.buttons["Settings"].firstMatch.click()
+        let sheet = window.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 10))
+        // Audited once it has slid in: mid-animation its controls report no actions yet.
+        let settled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == true"), object: sheet.buttons["Done"])
+        XCTAssertEqual(XCTWaiter().wait(for: [settled], timeout: 10), .completed)
+        try AppUnderTest.audit(vm, window: window)
+        sheet.buttons["Done"].click()
+        XCTAssertTrue(sheet.waitForNonExistence(timeout: 5))
+    }
+
+    /// The running VM has its own Dock tile, whose menu acts on it: Pause, then Resume (`VMPANE_ITEST_DOCK=1`).
+    @MainActor
+    func testDockMenuActsOnTheVM() throws {
+        guard AppUnderTest.environment["VMPANE_ITEST_DOCK"] == "1" else { throw XCTSkip("run by an itest scenario") }
+        let dock = XCUIApplication(bundleIdentifier: "com.apple.dock")
+        // (the Dock names a tile after its app's file)
+        let tiles = dock.descendants(matching: .dockItem).matching(NSPredicate(format: "title IN %@", ["VMPane VM", "VMPaneVM"]))
+        XCTAssertTrue(tiles.firstMatch.waitForExistence(timeout: 10), "the VM has a Dock tile")
+        let (_, window) = try vmWindow()
+        XCTAssertEqual(tiles.count, 1, "one tile for the one running VM")
+        /// A hidden Dock shows when the pointer reaches its screen edge (whichever edge that is, by the tile's place).
+        func reveal() {
+            let tile = tiles.firstMatch.frame
+            guard !tiles.firstMatch.isHittable, let screen = NSScreen.main?.frame else { return }
+            let edge = CGPoint(
+                x: tile.midX < screen.minX + 10 ? screen.minX + 1 : tile.midX > screen.maxX - 10 ? screen.maxX - 1 : tile.midX,
+                y: tile.midY > screen.maxY - 10 ? screen.maxY - 1 : tile.midY)
+            let origin = window.coordinate(withNormalizedOffset: .zero)
+            origin.withOffset(CGVector(dx: edge.x - window.frame.minX, dy: edge.y - window.frame.minY)).hover()
+            let shown = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == true"), object: tiles.firstMatch)
+            _ = XCTWaiter().wait(for: [shown], timeout: 5)
+        }
+        func choose(_ title: String) {
+            reveal()
+            tiles.firstMatch.rightClick()
+            let item = dock.menuItems[title]
+            XCTAssertTrue(item.waitForExistence(timeout: 5), "the Dock menu offers \(title)")
+            XCTAssertTrue(dock.menuItems["Show Window"].exists && dock.menuItems["Take Snapshot"].exists)
+            item.click()
+        }
+        choose("Pause")
+        choose("Resume")  // offered only once the VM paused
+        reveal()
+        tiles.firstMatch.rightClick()
+        XCTAssertTrue(dock.menuItems["Pause"].waitForExistence(timeout: 5), "running again")
+        dock.typeKey(.escape, modifierFlags: [])
+    }
+
+    /// The VM's app has a menu bar with Quit; Quit while the VM runs asks first, and Cancel keeps it running
+    /// (`VMPANE_ITEST_DOCK=1`). (⌘Q typed into the VM's screen goes to the guest, as other keys do.)
+    @MainActor
+    func testQuitAsksWhileTheVMRuns() throws {
+        guard AppUnderTest.environment["VMPANE_ITEST_DOCK"] == "1" else { throw XCTSkip("run by an itest scenario") }
+        let (vm, window) = try vmWindow()
+        let appMenu = vm.menuBars.menuBarItems["VMPane VM"]
+        XCTAssertTrue(appMenu.exists, "the app menu")
+        appMenu.click()
+        let quit = vm.menuBars.menuItems["Quit VMPane VM"]
+        XCTAssertTrue(quit.waitForExistence(timeout: 5))
+        quit.click()
+        let asked = vm.buttons["Stop and Quit"]
+        XCTAssertTrue(asked.waitForExistence(timeout: 5), "Quit asks before stopping a running VM")
+        vm.buttons["Cancel"].firstMatch.click()
+        XCTAssertTrue(asked.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(window.exists, "Cancel keeps the VM's app")
+    }
+
     /// Cancels the Windows install shown in the VM's window (`VMPANE_ITEST_CANCEL_INSTALL=1`), confirming it.
     @MainActor
     func testWindowsInstallCancelledFromItsWindow() throws {

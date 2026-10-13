@@ -11,4 +11,19 @@ final class SmokeUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10))
     }
+
+    /// A first launch shows the welcome (which passes the accessibility audit), and Get Started leaves an empty
+    /// library.
+    @MainActor
+    func testFirstLaunchShowsTheWelcome() throws {
+        let support = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("vp-ui-\(UUID().uuidString.prefix(8))")
+        defer { try? FileManager.default.removeItem(at: support) }
+        let app = AppUnderTest.app(for: self, onboarded: false)
+        app.launchEnvironment["VMPANE_SUPPORT_DIR"] = support.path
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Welcome to VMPane"].waitForExistence(timeout: 10))
+        try AppUnderTest.audit(app, window: app.windows.firstMatch)
+        app.buttons["Get Started"].click()
+        XCTAssertTrue(app.staticTexts["No Virtual Machines"].waitForExistence(timeout: 10))
+    }
 }

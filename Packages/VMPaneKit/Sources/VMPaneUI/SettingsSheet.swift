@@ -33,7 +33,7 @@ public struct SettingsSheet: View {
                 Section("Display") {
                     row("display.widthPx") {
                         Picker("Resolution", selection: resolution) {
-                            ForEach(resolutionChoices, id: \.self) { size in Text("\(size.width) × \(size.height)").tag(size) }
+                            ForEach(resolutionChoices, id: \.self) { size in Text(verbatim: "\(size.width) × \(size.height)").tag(size) }
                         }
                     }
                     row("display.autoResize") { Toggle("Follow the window size", isOn: $model.draft.display.autoResize) }
@@ -180,8 +180,8 @@ public struct ApplyModeBadge: View {
             .font(.caption2.weight(.medium))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .foregroundStyle(color)
-            .background(color.opacity(0.12), in: Capsule())
+            .foregroundStyle(.primary)  // the tint is in the capsule: coloured small text is too faint to read
+            .background(color.opacity(0.2), in: Capsule())
             .accessibilityLabel("Takes effect: \(text)")
     }
 }

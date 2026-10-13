@@ -46,7 +46,8 @@ private struct DAV {
                 let process = Process()
                 process.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
                 process.arguments =
-                    ["-s", "--path-as-is", "--unix-socket", socket, "-D", "-", "-o", "-", "-w", "\n%{http_code}"] + arguments
+                    ["-s", "--max-time", "30", "--path-as-is", "--unix-socket", socket, "-D", "-", "-o", "-", "-w", "\n%{http_code}"]
+                    + arguments  // (a request that never gets its answer fails its test instead of holding up the run)
                 let output = Pipe()
                 let stdin = Pipe()
                 process.standardOutput = output

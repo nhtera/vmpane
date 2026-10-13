@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- VoiceOver finds a VM's screen (named after the VM), and the settings' "Live" and "Next start" badges are
+  easier to read.
 - A new Linux VM gets one pixel per point of its window, so the installer and consoles are readable on a Retina
   screen (they were half size). Settings → Display → Scaling now applies to Linux VMs too.
 - The disk image shows how to install: VMPane beside the Applications folder, with an arrow to drag it there.
