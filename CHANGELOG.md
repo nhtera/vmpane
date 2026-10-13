@@ -5,6 +5,9 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.0-beta.2]
+Fixes for the first beta.
+
 ### Fixed
 - Deleting or cloning a VM that was shut down from its own window works: VMPane first quits the VM's process,
   which stays open after the VM stops (1.0.0-beta.1 refused with "VMRunning()").
