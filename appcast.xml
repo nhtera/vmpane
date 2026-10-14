@@ -6,6 +6,29 @@
         <description>VMPane updates</description>
         <language>en</language>
         <item>
+            <title>1.0.0-beta.5</title>
+            <pubDate>Wed, 14 Oct 2026 20:52:13 +0700</pubDate>
+            <link>https://github.com/nhtera/vmpane</link>
+            <sparkle:fullReleaseNotesLink>https://github.com/nhtera/vmpane/releases/tag/v1.0.0-beta.5</sparkle:fullReleaseNotesLink>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:version>5</sparkle:version>
+            <sparkle:shortVersionString>1.0.0-beta.5</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[A Linux VM's boot menu is readable too.
+
+### Fixed
+- A Linux VM's boot menu (GRUB) and first boot messages are readable: VMPane shows the top-left corner of the VM
+  firmware's 8192 × 4320 boot screen at one guest pixel per point until Linux sets the VM's own size.
+- An AI agent's file transfer or command cut by the kill switch ends with a result the agent can read, not a
+  protocol error, when the switch closes its connection before the transfer's own answer arrives.
+- The kill switch stops an agent's command that was still waiting (for the person's answer, the session's undo
+  snapshot or the VM to start it), also when the app lets agents act again before the wait ends.
+
+]]></description>
+            <enclosure url="https://github.com/nhtera/vmpane/releases/download/v1.0.0-beta.5/VMPane-1.0.0-beta.5.dmg" length="27650355" type="application/octet-stream" sparkle:edSignature="gwmolGj/5bNXsW/xDNCHeYghRUguLbiyQ988aSIO+kHEZyQ71vDjCHXAL/r5UPdb1mMlvCav64y9Dk0XvE0mBQ=="/>
+        </item>
+        <item>
             <title>1.0.0-beta.4</title>
             <pubDate>Wed, 14 Oct 2026 03:43:27 +0700</pubDate>
             <link>https://github.com/nhtera/vmpane</link>
