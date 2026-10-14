@@ -6,6 +6,26 @@
         <description>VMPane updates</description>
         <language>en</language>
         <item>
+            <title>1.0.0-beta.6</title>
+            <pubDate>Thu, 15 Oct 2026 01:40:57 +0700</pubDate>
+            <link>https://github.com/nhtera/vmpane</link>
+            <sparkle:fullReleaseNotesLink>https://github.com/nhtera/vmpane/releases/tag/v1.0.0-beta.6</sparkle:fullReleaseNotesLink>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:version>6</sparkle:version>
+            <sparkle:shortVersionString>1.0.0-beta.6</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[The new-VM wizard no longer looks as if macOS were chosen.
+
+### Fixed
+- With keyboard navigation on, the new-VM wizard opened with a focus ring on the macOS card that looked like a
+  choice, and the ring stayed there after a click on another system. Focus now follows the chosen system, and the
+  chosen card shows one border, not two.
+
+]]></description>
+            <enclosure url="https://github.com/nhtera/vmpane/releases/download/v1.0.0-beta.6/VMPane-1.0.0-beta.6.dmg" length="27652192" type="application/octet-stream" sparkle:edSignature="99Y4o/Lf/5uz+2jvPsvdc5n4twUve5iHRWIHiEudUMQEWkbQsM2+wi5altapsCdiy2oWJnunUZZBZ3VKlR4VCQ=="/>
+        </item>
+        <item>
             <title>1.0.0-beta.5</title>
             <pubDate>Wed, 14 Oct 2026 20:52:13 +0700</pubDate>
             <link>https://github.com/nhtera/vmpane</link>
