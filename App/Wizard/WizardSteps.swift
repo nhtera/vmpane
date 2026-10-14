@@ -7,8 +7,9 @@ import VMPaneUI
 /// Step 1: which system.
 struct OSChoiceStep: View {
     @Bindable var wizard: WizardModel
-    /// The card with keyboard focus. Its ring follows the card's shape and sits outside it, so a card that only
-    /// has focus (the first one, when the step opens) does not look chosen.
+    /// The card with keyboard focus (Full Keyboard Access). It follows the choice: the step opens with focus on the
+    /// chosen card or on none (macOS focused the first card, which then looked chosen), and a click moves it along.
+    /// Its ring shows only on a card that is not chosen: the chosen card's own border marks it, and two looked busy.
     @FocusState private var focused: GuestOS?
 
     var body: some View {
@@ -20,11 +21,14 @@ struct OSChoiceStep: View {
                 choice(.windows, "Windows 11", "Windows 11 for Arm, installed for you from Microsoft's ISO.")
             }
         }
+        // After AppKit gives the sheet's first control focus, which happens after onAppear.
+        .task { focused = wizard.os }
     }
 
     private func choice(_ os: GuestOS, _ title: String, _ detail: String) -> some View {
         Button {
             wizard.os = os
+            focused = os
         } label: {
             VStack(spacing: 8) {
                 Image(systemName: OSBadge.symbol(os)).font(.system(size: 34))
@@ -46,7 +50,7 @@ struct OSChoiceStep: View {
             .padding(3)
             .overlay(
                 RoundedRectangle(cornerRadius: 13)
-                    .strokeBorder(Color(nsColor: .keyboardFocusIndicatorColor), lineWidth: focused == os ? 3 : 0)
+                    .strokeBorder(Color(nsColor: .keyboardFocusIndicatorColor), lineWidth: focused == os && wizard.os != os ? 3 : 0)
             )
             .contentShape(Rectangle())
         }
