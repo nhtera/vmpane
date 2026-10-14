@@ -6,6 +6,26 @@
         <description>VMPane updates</description>
         <language>en</language>
         <item>
+            <title>1.0.0-beta.7</title>
+            <pubDate>Thu, 15 Oct 2026 03:03:56 +0700</pubDate>
+            <link>https://github.com/nhtera/vmpane</link>
+            <sparkle:fullReleaseNotesLink>https://github.com/nhtera/vmpane/releases/tag/v1.0.0-beta.7</sparkle:fullReleaseNotesLink>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:version>7</sparkle:version>
+            <sparkle:shortVersionString>1.0.0-beta.7</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[A Linux VM's text keeps its size when its resolution changes while it runs.
+
+### Fixed
+- A resolution changed in a running Linux VM's settings reached the VM in pixels, not in points as at its start, so
+  at Standard scaling a desktop or installer (e.g. Debian's) redrew its text at half its size until the VM restarted
+  or its window was resized.
+
+]]></description>
+            <enclosure url="https://github.com/nhtera/vmpane/releases/download/v1.0.0-beta.7/VMPane-1.0.0-beta.7.dmg" length="27652948" type="application/octet-stream" sparkle:edSignature="O0UT9je8wn4Cn6myiVP6foipcRt3atqVl1Xxu+zuyTMRJxoA/3NJA99BiccHqdpcc9ZhDSlsBHhb3uTsLa4eDg=="/>
+        </item>
+        <item>
             <title>1.0.0-beta.6</title>
             <pubDate>Thu, 15 Oct 2026 01:40:57 +0700</pubDate>
             <link>https://github.com/nhtera/vmpane</link>
