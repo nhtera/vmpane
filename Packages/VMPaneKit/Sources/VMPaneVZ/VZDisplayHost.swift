@@ -22,13 +22,14 @@ public final class VZDisplayHost {
     private let resizeGuest: @MainActor (Int, Int) -> Void
     private var lastGuestSize: CGSize?
     private var observers: [NSObjectProtocol] = []
+    private var zoom: VZFirmwareZoom?
     private static let log = Logger(subsystem: "app.vmpane.mac.vm", category: "display")
     /// Linux's smallest useful console.
     static let minimumGuestSize = CGSize(width: 800, height: 600)
 
     public init(
         box: VMBox, title: String, guestSize: NSSize, scaling: DisplayConfig.Scaling = .retina, autoResize: Bool = true,
-        resizeGuest: @escaping @MainActor (Int, Int) -> Void = { _, _ in }
+        zoomsBootScreen: Bool = false, resizeGuest: @escaping @MainActor (Int, Int) -> Void = { _, _ in }
     ) {
         self.scaling = scaling
         self.followsWindow = autoResize
@@ -46,6 +47,9 @@ public final class VZDisplayHost {
         // ⌘-shortcuts stay with the Mac (window toolbar, ⌘Q, ⌘-Tab) until the user captures the keyboard.
         view.capturesSystemKeys = false
         view.automaticallyReconfiguresDisplay = scaling == .retina && autoResize
+        if zoomsBootScreen {
+            zoom = VZFirmwareZoom(over: view) { [weak self] in self?.guestSurface() }
+        }
         if scaling == .standard {
             // A resize (dragged, zoomed, full screen) is sent once it ends, not for every frame of a drag.
             for name in [NSWindow.didEndLiveResizeNotification, NSWindow.didResizeNotification] {
@@ -111,6 +115,8 @@ public final class VZDisplayHost {
     public func close() {
         observers.forEach(NotificationCenter.default.removeObserver)
         observers = []
+        zoom?.stop()
+        zoom = nil
         view.virtualMachine = nil
         window.orderOut(nil)
         window.close()
@@ -154,7 +160,7 @@ public final class VZDisplayHost {
     }
 
     private func framebuffer() -> CGImage? {
-        guard let root = view.layer, let surface = Self.findSurface(root) else { return nil }
+        guard let surface = guestSurface() else { return nil }
         IOSurfaceLock(surface, .readOnly, nil)
         defer { IOSurfaceUnlock(surface, .readOnly, nil) }
         let width = IOSurfaceGetWidth(surface), height = IOSurfaceGetHeight(surface), rowBytes = IOSurfaceGetBytesPerRow(surface)
@@ -167,6 +173,9 @@ public final class VZDisplayHost {
             bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue),
             provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
     }
+
+    /// The guest framebuffer: the IOSurface behind Virtualization's view.
+    private func guestSurface() -> IOSurfaceRef? { view.layer.flatMap(Self.findSurface) }
 
     private static func findSurface(_ layer: CALayer) -> IOSurfaceRef? {
         if let contents = layer.contents, CFGetTypeID(contents as CFTypeRef) == IOSurfaceGetTypeID() {
@@ -250,7 +259,7 @@ public final class VZDisplayHost {
     /// Guest display coordinates (origin top-left, guest pixels) → view coordinates.
     private func pointer(x: Double, y: Double, buttons: Int) {
         let bounds = view.bounds
-        guard let surface = view.layer.flatMap(Self.findSurface) else { return }
+        guard let surface = guestSurface() else { return }
         let guestWidth = Double(IOSurfaceGetWidth(surface)), guestHeight = Double(IOSurfaceGetHeight(surface))
         let point = NSPoint(x: x / guestWidth * bounds.width, y: bounds.height - y / guestHeight * bounds.height)
         let location = view.convert(point, to: nil)

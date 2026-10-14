@@ -5,6 +5,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- A Linux VM's boot menu (GRUB) and first boot messages are readable: VMPane shows the top-left corner of the VM
+  firmware's 8192 × 4320 boot screen at one guest pixel per point until Linux sets the VM's own size.
+
 ## [1.0.0-beta.4]
 A Linux VM's boot and installer are readable from the start.
 

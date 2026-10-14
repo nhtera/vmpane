@@ -9,8 +9,11 @@ pinned SHA-256 after download) or from your own ISO. VMPane refuses ISOs without
 The ISO is attached as a USB drive. When the installer reboots, the installed system starts; the ISO stays
 attached until the VM next stops, then VMPane removes it from the VM's settings.
 
-- The boot loader's menu (GRUB, the first seconds) is small: it picks the largest screen the VM's display offers.
-  Linux and its installer then use the window's size.
+- Until Linux starts its display driver, the screen is the VM firmware's: Apple's firmware always starts at
+  8192 × 4320 and has no setting for it, and boot loaders such as GRUB keep it. VMPane shows that screen's
+  top-left corner, where the firmware, GRUB's menu and the first boot messages are, at a readable size; the
+  rest (GRUB's countdown, at the bottom) is off screen. GRUB redraws slowly at that size: a key takes a second
+  or two to show. Linux and its installer then use the window's size.
 - Ubuntu's installer, after *Reboot Now*, waits on "Please remove the installation medium, then press ENTER",
   which its screen can hide: press Enter in the VM's window.
 

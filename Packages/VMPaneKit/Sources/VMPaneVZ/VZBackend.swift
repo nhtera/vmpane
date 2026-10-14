@@ -114,14 +114,17 @@ public final class VZBackend: VMBackend {
         }
         var plan = plan
         if plan.display.scaling == .standard {
-            // Boot at the configured size in points (half its pixels): the firmware and the boot loader (GRUB) keep
-            // the size the VM starts with, and the configured pixels shown in the window make their text tiny until
-            // Linux resizes. From the settings only, never the screen: a saved state resumes only on the same hardware.
+            // Boot at the configured size in points (half its pixels): Linux's display driver starts at the size the
+            // VM starts with, and the configured pixels shown in the window would make its text tiny until the window
+            // resizes it. (The firmware ignores it: VZFirmwareZoom.) From the settings only, never the screen: a saved
+            // state resumes only on the same hardware.
             let size = plan.display.standardBootSize
             plan.display.widthPx = size.width
             plan.display.heightPx = size.height
         }
         let started = plan
+        // Linux boots through the EFI firmware, whose screen starts at 8192 × 4320 (VZFirmwareZoom).
+        let zoomsBootScreen = if case .generic = started.platform { true } else { false }
         let box = try await runner.create(started, serialLog: serialLog)
         self.box.value = box
         plans.withLock { $0.running = started }
@@ -130,7 +133,8 @@ public final class VZBackend: VMBackend {
         let runner = runner
         await MainActor.run {
             let host = VZDisplayHost(
-                box: box, title: title, guestSize: size, scaling: started.display.scaling, autoResize: started.display.autoResize
+                box: box, title: title, guestSize: size, scaling: started.display.scaling, autoResize: started.display.autoResize,
+                zoomsBootScreen: zoomsBootScreen
             ) { width, height in
                 Task { _ = await runner.reconfigureDisplay(widthPx: width, heightPx: height) }
             }
