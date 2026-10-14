@@ -7,7 +7,7 @@ A native macOS app for running virtual machines on Apple silicon:
 - a `vmpane` command-line tool and a built-in **MCP server** (`vmpane mcp`) so AI coding agents can drive VMs
 - snapshots as undo, port forwarding and shared folders
 
-Status: public beta ([1.0.0-beta.5](https://github.com/nhtera/vmpane/releases/tag/v1.0.0-beta.5)). Requires macOS 15 or
+Status: public beta ([1.0.0-beta.6](https://github.com/nhtera/vmpane/releases/tag/v1.0.0-beta.6)). Requires macOS 15 or
 later on Apple silicon.
 
 ## Install
