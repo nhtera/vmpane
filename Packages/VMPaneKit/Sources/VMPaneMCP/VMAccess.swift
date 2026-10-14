@@ -53,6 +53,8 @@ public actor VMAccess {
             return try await session.client.call(method.rawValue, params: params, timeout: timeout)
         } catch let error as RPCError {
             throw ToolFailure(Self.explain(error, vm: item.config?.name ?? selector))
+        } catch let error as ControlClientError {
+            throw ToolFailure(Self.explain(error, vm: item.config?.name ?? selector))
         }
     }
 
@@ -69,6 +71,8 @@ public actor VMAccess {
         do {
             return try await body(session.client)
         } catch let error as RPCError {
+            throw ToolFailure(Self.explain(error, vm: item.config?.name ?? selector))
+        } catch let error as ControlClientError {
             throw ToolFailure(Self.explain(error, vm: item.config?.name ?? selector))
         }
     }
@@ -102,6 +106,17 @@ public actor VMAccess {
             "\(error.message). Commands, files and the clipboard need VMPane's guest tools running in \(vm)."
         default:
             error.message
+        }
+    }
+
+    /// A call the helper never answered, a result the model reads like a refusal. The kill switch closes agents'
+    /// connections, which can reach a call before the helper's own answer does.
+    static func explain(_ error: ControlClientError, vm: String) -> String {
+        switch error {
+        case .connectionClosed:
+            "\(vm)'s helper closed the connection: the VM stopped or restarted, or VMPane's kill switch stopped AI agents."
+        case .timedOut(let method):
+            "\(vm) did not answer in time (\(method))."
         }
     }
 }

@@ -5,6 +5,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- An AI agent's file transfer or command cut by the kill switch ends with a result the agent can read, not a
+  protocol error, when the switch closes its connection before the transfer's own answer arrives.
+
 ## [1.0.0-beta.5]
 A Linux VM's boot menu is readable too.
 

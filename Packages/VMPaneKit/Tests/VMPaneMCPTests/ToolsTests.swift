@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import VMPaneControl
 
 @testable import VMPaneMCP
 
@@ -22,4 +23,10 @@ import Testing
         #expect(throws: ToolFailure.self) { try GuestTools.exchangeFile(root, vm: "Ubuntu", bad) }
     }
     #expect(throws: ToolFailure.self) { try GuestTools.exchangeFile(root, vm: "../evil", "x") }
+}
+
+@Test func aCallTheHelperNeverAnsweredIsReadable() {
+    // The kill switch closes an agent's connection; a transfer cut that way is a result, not a protocol error.
+    #expect(VMAccess.explain(ControlClientError.connectionClosed, vm: "Ubuntu").contains("kill switch"))
+    #expect(VMAccess.explain(ControlClientError.timedOut(method: "agent.file.pull"), vm: "Ubuntu").hasPrefix("Ubuntu did not answer"))
 }
