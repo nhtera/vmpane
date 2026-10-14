@@ -48,6 +48,13 @@ public struct VZPlan: Sendable, Equatable {
             func even(_ value: Int, atLeast low: Int) -> Int { max(value / 4 * 2, low) }
             return (even(widthPx, atLeast: 800), even(heightPx, atLeast: 600))
         }
+
+        /// The guest size for a running VM whose settings change to `widthPx` × `heightPx`: a `.standard` display takes
+        /// it in points, as at boot (the pixels themselves made a Linux installer's text half its size).
+        public func liveSize(widthPx: Int, heightPx: Int) -> (width: Int, height: Int) {
+            guard scaling == .standard else { return (widthPx, heightPx) }
+            return Display(widthPx: widthPx, heightPx: heightPx).standardBootSize
+        }
     }
 
     public struct NIC: Sendable, Equatable {

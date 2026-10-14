@@ -242,3 +242,13 @@ private func withTemp(_ body: (URL) throws -> Void) throws {
     #expect(VZPlan.Display(widthPx: 1024, heightPx: 768).standardBootSize == (800, 600), "at least 800 × 600")
     #expect(VZPlan.Display(widthPx: 1922, heightPx: 1202).standardBootSize == (960, 600), "even")
 }
+
+/// A size changed in the settings while the VM runs reaches a `.standard` display in points too, as at boot: in pixels
+/// a Linux installer started at 1280 × 800 went to 2560 × 1600 and its text to half its size. Retina takes the pixels.
+@Test func liveDisplaySizeChangesKeepTheBootScale() {
+    let standard = VZPlan.Display(widthPx: 1280, heightPx: 800, scaling: .standard)
+    #expect(standard.liveSize(widthPx: 2560, heightPx: 1600) == (1280, 800))
+    #expect(standard.liveSize(widthPx: 1920, heightPx: 1080) == (960, 600), "at least 800 × 600, even")
+    let retina = VZPlan.Display(widthPx: 2560, heightPx: 1600, scaling: .retina)
+    #expect(retina.liveSize(widthPx: 1920, heightPx: 1200) == (1920, 1200))
+}

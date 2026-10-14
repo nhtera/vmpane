@@ -159,7 +159,8 @@ public final class VZBackend: VMBackend {
                 let value = config.display.autoResize
                 if await MainActor.run(body: { display?.setAutoResize(value) ?? false }) { applied.insert(path) }
             case "display":
-                if await runner.reconfigureDisplay(widthPx: config.display.widthPx, heightPx: config.display.heightPx) {
+                let size = running.display.liveSize(widthPx: config.display.widthPx, heightPx: config.display.heightPx)
+                if await runner.reconfigureDisplay(widthPx: size.width, heightPx: size.height) {
                     applied.insert(path)
                 }
             case "network":
