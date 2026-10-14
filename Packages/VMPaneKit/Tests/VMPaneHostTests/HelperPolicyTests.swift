@@ -244,6 +244,35 @@ private actor Person {
     await helper.tearDown()
 }
 
+/// A call the kill switch stopped while it waited stays stopped when the app releases the switch before the wait
+/// ends (an answer, or the session's undo snapshot on a busy disk).
+@Test func aCallStoppedWhileItWaitedStaysStoppedAfterTheRelease() async throws {
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.settings.apply", params: ["patch": ["mcp": ["policy": "admin", "autoSnapshot": false]]])
+    let socket = await helper.controller.prepared.runFiles.socketURL
+    let paths = helper.paths
+    await helper.controller.setClassifier(strangers)
+    await helper.controller.setConfirmationPresenter(
+        { _ in
+            try? KillSwitch.engage(paths: paths)  // stopped while the question is open…
+            try? await Task.sleep(for: .milliseconds(1300))
+            try? KillSwitch.release(paths: paths)  // …let act again…
+            try? await Task.sleep(for: .milliseconds(1300))
+            return true  // …and then allowed
+        }, dismiss: {})
+    let agent = try UDSClient.connect(to: socket)
+    defer { agent.close() }
+    try await hello(agent, session: "s1")
+    await #expect(throws: (any Error).self) { try await agent.call("vm.snapshot.delete", params: ["id": .string(UUID().uuidString)]) }
+    var refusal: AuditEntry?
+    for _ in 0..<40 where refusal == nil {
+        refusal = try entries(helper).last { $0.method == "vm.snapshot.delete" }
+        try await Task.sleep(for: .milliseconds(100))
+    }
+    #expect(refusal?.reason?.contains("kill switch") == true)
+    await helper.tearDown()
+}
+
 /// Concurrent first calls of a session share one undo snapshot; agents cannot fake or delete one.
 @Test func undoSnapshotsAreOnePerSessionAndProtected() async throws {
     let helper = try await Harness.make()

@@ -13,6 +13,8 @@ A Linux VM's boot menu is readable too.
   firmware's 8192 × 4320 boot screen at one guest pixel per point until Linux sets the VM's own size.
 - An AI agent's file transfer or command cut by the kill switch ends with a result the agent can read, not a
   protocol error, when the switch closes its connection before the transfer's own answer arrives.
+- The kill switch stops an agent's command that was still waiting (for the person's answer, the session's undo
+  snapshot or the VM to start it), also when the app lets agents act again before the wait ends.
 
 ## [1.0.0-beta.4]
 A Linux VM's boot and installer are readable from the start.

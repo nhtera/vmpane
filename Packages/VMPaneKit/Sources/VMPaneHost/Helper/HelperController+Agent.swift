@@ -114,6 +114,7 @@ extension HelperController {
 
     func agentRequest(_ method: String, _ params: JSONValue?, from owner: ControlConnection) async -> Result<JSONValue, RPCError> {
         if ControlMethod(rawValue: method) == .agentStatus { return await agentStatus() }
+        let stopped = agentStop(owner)
         guard let connection = await agentHub.waitForConnection(timeout: Self.agentWait) else {
             return .failure(RPCError(.agentUnavailable, "the guest agent is not connected"))
         }
@@ -125,6 +126,12 @@ extension HelperController {
                     throw RPCError(.invalidParams, "input is at most 64 KiB (feed more with agent.exec.input)")
                 }
                 let execId = try await agentExecs.start(request.agentParams, owner: owner, on: connection)
+                // The kill switch only finds the execs already started: one that was starting (the guest slow to
+                // answer, e.g. busy with a transfer) is ended here.
+                if let stopped, await stopped() {
+                    try? await agentExecs.signal(execId, signal: .kill, owner: owner)
+                    throw RPCError(.policyDenied, "AI agents are stopped (VMPane's kill switch); the app can let them act again")
+                }
                 // Input given with the command (shown in the confirmation, recorded as a hash): fed, then closed.
                 if let input = request.input {
                     try await agentExecs.input(execId, data: Data(input.utf8), eof: true, owner: owner)

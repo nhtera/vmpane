@@ -1,6 +1,7 @@
 import Foundation
 import VMPaneControl
 import VMPaneCore
+import os
 
 /// Processes started through `agent.exec`: their output goes to the control connection that started them
 /// (`exec.output`, then `exec.exited` once all output is delivered), and only that connection may feed their
@@ -110,9 +111,16 @@ actor AgentExecs {
     /// Kills every process started through the connections in `owners` (the kill switch's agents).
     func kill(ownedBy owners: Set<ObjectIdentifier>) async {
         let doomed = routes.filter { _, route in route.owner.map { owners.contains(ObjectIdentifier($0)) } ?? false }
+        AgentConnection.log.notice(
+            "kill switch: \(doomed.count, privacy: .public) of \(self.routes.count, privacy: .public) exec(s) to kill")
         for (key, route) in doomed {
             let params = RPCParams.encode(AgentExecSignalParams(execId: key.execId, signal: .kill))
-            _ = try? await route.connection.call(AgentMethod.execSignal, try? params.get(), timeout: .seconds(2))
+            do {
+                _ = try await route.connection.call(AgentMethod.execSignal, try? params.get(), timeout: .seconds(2))
+            } catch {
+                AgentConnection.log.error(
+                    "kill switch: exec \(key.execId, privacy: .public) not killed: \(String(describing: error), privacy: .public)")
+            }
         }
     }
 
