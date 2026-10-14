@@ -5,6 +5,14 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.0-beta.6]
+The new-VM wizard no longer looks as if macOS were chosen.
+
+### Fixed
+- With keyboard navigation on, the new-VM wizard opened with a focus ring on the macOS card that looked like a
+  choice, and the ring stayed there after a click on another system. Focus now follows the chosen system, and the
+  chosen card shows one border, not two.
+
 ## [1.0.0-beta.5]
 A Linux VM's boot menu is readable too.
 
