@@ -5,6 +5,14 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.0-beta.7]
+A Linux VM's text keeps its size when its resolution changes while it runs.
+
+### Fixed
+- A resolution changed in a running Linux VM's settings reached the VM in pixels, not in points as at its start, so
+  at Standard scaling a desktop or installer (e.g. Debian's) redrew its text at half its size until the VM restarted
+  or its window was resized.
+
 ## [1.0.0-beta.6]
 The new-VM wizard no longer looks as if macOS were chosen.
 
