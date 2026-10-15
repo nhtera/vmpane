@@ -6,6 +6,29 @@
         <description>VMPane updates</description>
         <language>en</language>
         <item>
+            <title>1.0.0-beta.8</title>
+            <pubDate>Thu, 15 Oct 2026 21:03:37 +0700</pubDate>
+            <link>https://github.com/nhtera/vmpane</link>
+            <sparkle:fullReleaseNotesLink>https://github.com/nhtera/vmpane/releases/tag/v1.0.0-beta.8</sparkle:fullReleaseNotesLink>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:version>8</sparkle:version>
+            <sparkle:shortVersionString>1.0.0-beta.8</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[The new-VM wizard starts with macOS chosen, and a VM closed during a Windows install stays as it was left.
+
+### Changed
+- The new-VM wizard opens with macOS chosen, so Continue works at once; click Linux or Windows 11 to change it.
+
+### Fixed
+- A VM's process that shut down during an automatic Windows install could still write the install's progress or
+  the VM's settings after letting go of the VM, and start the VM again if the install had just finished. It now
+  finishes that work first and leaves the VM off; the next start continues from there.
+
+]]></description>
+            <enclosure url="https://github.com/nhtera/vmpane/releases/download/v1.0.0-beta.8/VMPane-1.0.0-beta.8.dmg" length="27652820" type="application/octet-stream" sparkle:edSignature="IjKTflQFcG7MwUlYmD7+iT6Pf7OvaPOTiLuHyfo/WA8mgejIDw2ucL9bS5szE/LWZK9pvlYp+qu8ev6my8EJBg=="/>
+        </item>
+        <item>
             <title>1.0.0-beta.7</title>
             <pubDate>Thu, 15 Oct 2026 03:03:56 +0700</pubDate>
             <link>https://github.com/nhtera/vmpane</link>
