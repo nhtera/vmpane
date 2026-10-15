@@ -28,8 +28,12 @@ extension HelperController {
         case .suspended: transition(.suspended)
         case .stopped(let reason):
             transition(.stopped, reason: reason)
-            if afterStop != nil, state == .stopped { Task { await self.vmStopped() } }
-            if windowsInstall != nil, state == .stopped { Task { await self.installStopped() } }
+            if state == .stopped, afterStop != nil || windowsInstall != nil {
+                stopHandling = Task {
+                    await self.vmStopped()
+                    await self.installStopped()
+                }
+            }
         case .failed(let message): transition(.failed, reason: message)
         case .diskFull(let message):
             // Paused with the reason; "Resume" continues once space has been freed. Already paused: the
@@ -302,6 +306,7 @@ extension HelperController {
     /// Before the helper exits: suspend (if the VM's close action says so and the backend can), else a
     /// graceful stop, then a forced one. The bundle lock is released only after this.
     func stopBackendForShutdown() async {
+        stopInstallWatchers()  // no install reports or timeouts while the helper goes (nor a phase change)
         guard let backend, [.starting, .running, .paused, .stopping].contains(state) else { return }
         if config.ui.closeAction == .suspend, backend.capabilities.contains(.suspend), state != .starting,
             (try? await suspendVM(backend)) != nil

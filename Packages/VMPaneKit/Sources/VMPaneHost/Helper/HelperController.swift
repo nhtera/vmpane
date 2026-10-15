@@ -13,7 +13,9 @@ public actor HelperController {
     let backend: VMBackend?
     var server: UDSServer?
     private let onShutdown: @Sendable () -> Void
-    private var shuttingDown = false
+    private(set) var shuttingDown = false
+    /// What the VM's last stop does to the bundle (the after-stop hook, an install's finalize or clean-up).
+    var stopHandling: Task<Void, Never>?
     var pumpTask: Task<Void, Never>?
     /// How long shutdown waits for a guest to power off after the ACPI request before forcing it off.
     /// Windows takes 36–120 s (S2), and forcing it off risks Automatic Repair on the next boot.
@@ -138,6 +140,7 @@ public actor HelperController {
         guard !shuttingDown else { return }
         shuttingDown = true
         await stopBackendForShutdown()  // the VM must be down before its disks' lock is released
+        await stopHandling?.value  // its writes to the bundle too
         pumpTask?.cancel()
         stopKillSwitchWatch()
         for task in agentTasks { task.cancel() }

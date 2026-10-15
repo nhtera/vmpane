@@ -115,7 +115,7 @@ extension HelperController {
     }
 
     func advanceInstall(to phase: InstallState.Phase) async {
-        guard var state = windowsInstall, !state.isFinished else { return }
+        guard !shuttingDown, var state = windowsInstall, !state.isFinished else { return }
         state.advance(to: phase)
         guard state != windowsInstall else { return }
         await persistInstall(state)
@@ -148,7 +148,8 @@ extension HelperController {
         guard let state = windowsInstall else { return }
         switch state.phase {
         case .toolsInstalled:
-            guard let backend, await finalizeInstall() else { return }
+            // A helper on its way out finalizes but leaves the VM off: the next start boots the installed system.
+            guard let backend, await finalizeInstall(), !shuttingDown else { return }
             _ = try? await startVM(backend, headless: lastStartHeadless)
         case .failed, .cancelled:
             _ = await saveConfig(WindowsInstall.cleanUp(config, bundle: prepared.lock.bundle))
@@ -176,7 +177,7 @@ extension HelperController {
     }
 
     func checkInstallTimeout() async {
-        guard let state = windowsInstall, !state.isFinished, state.timedOut() else { return }
+        guard !shuttingDown, let state = windowsInstall, !state.isFinished, state.timedOut() else { return }
         await endInstall(.failed, reason: "Windows Setup did not reach \(state.phase.rawValue) in time")
     }
 
@@ -256,7 +257,7 @@ extension HelperController {
         }
     }
 
-    private func stopInstallWatchers() {
+    func stopInstallWatchers() {
         installReader?.stop()
         installReader = nil
         installWatch?.cancel()

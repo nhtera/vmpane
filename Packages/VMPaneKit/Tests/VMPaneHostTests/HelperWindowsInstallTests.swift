@@ -66,7 +66,6 @@ private func waitUntil(_ condition: () async throws -> Bool) async throws -> Boo
 
 @Test func windowsInstallRunsFromFirstBootToFinalize() async throws {
     let (helper, port) = try await installingHarness()
-    defer { Task { await helper.tearDown() } }
     _ = try await helper.client.call("vm.start", params: ["headless": true])
     let bundle = helper.bundle
 
@@ -95,13 +94,13 @@ private func waitUntil(_ condition: () async throws -> Bool) async throws -> Boo
     #expect(helper.backend.recordedCalls.filter { $0 == "start" }.count == 2)
     #expect(helper.backend.recordedCalls.contains("stop.graceful"))
     #expect(!FileManager.default.fileExists(atPath: UnattendMedia.url(in: bundle).path))
+    await helper.tearDown()
 }
 
 /// A client that subscribes while the install runs (a window opened then) hears at once where it is, and can
 /// cancel it: the VM stops without the unattend image.
 @Test func aWindowOpenedDuringTheInstallSeesItAndCancelsIt() async throws {
     let (helper, _) = try await installingHarness()
-    defer { Task { await helper.tearDown() } }
     _ = try await helper.client.call("vm.start", params: ["headless": true])
     let bundle = helper.bundle
     #expect(try await waitUntil { InstallState.load(from: bundle)?.phase == .setupRunning })
@@ -120,6 +119,7 @@ private func waitUntil(_ condition: () async throws -> Bool) async throws -> Boo
     #expect(cancelled)
     #expect(try await waitUntil { try await helper.state() == "stopped" })
     #expect(!FileManager.default.fileExists(atPath: UnattendMedia.url(in: bundle).path))
+    await helper.tearDown()
 }
 
 /// A helper that restarts mid-Setup resumes without key presses, and a phase that runs out of time fails the
@@ -129,7 +129,6 @@ private func waitUntil(_ condition: () async throws -> Bool) async throws -> Boo
     stale.advance(to: .firstBoot, now: Date().addingTimeInterval(-4 * 3600))
     stale.advance(to: .setupRunning, now: Date().addingTimeInterval(-3 * 3600))
     let (helper, _) = try await installingHarness(state: stale)
-    defer { Task { await helper.tearDown() } }
     _ = try await helper.client.call("vm.start", params: ["headless": true])
     let bundle = helper.bundle
 
@@ -142,16 +141,17 @@ private func waitUntil(_ condition: () async throws -> Bool) async throws -> Boo
     #expect(try await waitUntil { (try? ConfigStore.load(bundle))?.install == nil })
     #expect(try ConfigStore.load(bundle).removable.isEmpty)
     #expect(InstallState.load(from: bundle)?.reason?.contains("in time") == true)
+    await helper.tearDown()
 }
 
 /// Setup may already have written the disk: a lost state file never means a fresh first boot (no key presses).
 @Test func aLostStateFileResumesSetupWithoutKeyPresses() async throws {
     let (helper, _) = try await installingHarness(state: nil)
-    defer { Task { await helper.tearDown() } }
     _ = try await helper.client.call("vm.start", params: ["headless": true])
     #expect(try await waitUntil { InstallState.load(from: helper.bundle)?.phase == .setupRunning })
     try await Task.sleep(for: .milliseconds(400))  // longer than the key window
     #expect(!helper.backend.recordedCalls.contains { $0.hasPrefix("input.") })
+    await helper.tearDown()
 }
 
 /// An install that failed while no helper saw the VM stop is cleaned up at the next start.
@@ -159,12 +159,12 @@ private func waitUntil(_ condition: () async throws -> Bool) async throws -> Boo
     var failed = InstallState()
     failed.end(.failed, reason: "timed out")
     let (helper, _) = try await installingHarness(state: failed)
-    defer { Task { await helper.tearDown() } }
     _ = try await helper.client.call("vm.start", params: ["headless": true])
     let config = try ConfigStore.load(helper.bundle)
     #expect(config.install == nil && config.removable.isEmpty)
     #expect(!FileManager.default.fileExists(atPath: UnattendMedia.url(in: helper.bundle).path))
     #expect(!helper.backend.recordedCalls.contains { $0.hasPrefix("input.") })
+    await helper.tearDown()
 }
 
 /// Tools installed, but the helper stopped before finalize: the next start finalizes first.
@@ -172,19 +172,18 @@ private func waitUntil(_ condition: () async throws -> Bool) async throws -> Boo
     var installed = InstallState()
     for phase in [InstallState.Phase.firstBoot, .setupRunning, .firstLogon, .toolsInstalled] { installed.advance(to: phase) }
     let (helper, _) = try await installingHarness(state: installed)
-    defer { Task { await helper.tearDown() } }
     _ = try await helper.client.call("vm.start", params: ["headless": true])
     let config = try ConfigStore.load(helper.bundle)
     #expect(config.install == nil && config.removable.isEmpty && config.qemu?.gpu == .virtio)
     #expect(InstallState.load(from: helper.bundle)?.phase == .done)
     #expect(helper.backend.recordedCalls.filter { $0 == "start" }.count == 1)
+    await helper.tearDown()
 }
 
 /// Cancel takes both discs away from the running QEMU (a deleted image stays readable through its open file), ends
 /// the install, stops the VM and cleans up.
 @Test func cancellingEjectsTheDiscsAndStopsTheVM() async throws {
     let (helper, _) = try await installingHarness()
-    defer { Task { await helper.tearDown() } }
     _ = try await helper.client.call("vm.start", params: ["headless": true])
     let bundle = helper.bundle
     #expect(try await waitUntil { InstallState.load(from: bundle)?.phase == .setupRunning })
@@ -195,13 +194,13 @@ private func waitUntil(_ condition: () async throws -> Bool) async throws -> Boo
     #expect(try await waitUntil { try await helper.state() == "stopped" })
     #expect(try await waitUntil { (try? ConfigStore.load(bundle))?.install == nil })
     await #expect(throws: (any Error).self) { _ = try await helper.client.call("vm.install.cancel", params: [:]) }
+    await helper.tearDown()
 }
 
 /// Setup holds the password in RAM and the disk holds its answers until the first sign-in: an installing VM is
 /// neither suspended nor snapshotted.
 @Test func anInstallingVMIsNeitherSuspendedNorSnapshotted() async throws {
     let (helper, _) = try await installingHarness()
-    defer { Task { await helper.tearDown() } }
     _ = try await helper.client.call("vm.start", params: ["headless": true])
     for (method, params) in [("vm.suspend", [:]), ("vm.snapshot.create", ["name": "s", "kind": "live"])] as [(String, JSONValue)] {
         do {
@@ -213,4 +212,16 @@ private func waitUntil(_ condition: () async throws -> Bool) async throws -> Boo
     }
     #expect(try await helper.state() == "running")
     #expect(helper.stateFiles().isEmpty)
+    await helper.tearDown()
+}
+
+/// A helper that shuts down mid-install writes nothing to the bundle once it has let go of it: its key presses,
+/// watchers and the stop's clean-up end first (they recreated a test's deleted bundle, and could write over a bundle
+/// another helper had locked).
+@Test func aHelperShutDownMidInstallLeavesTheBundleAlone() async throws {
+    let (helper, _) = try await installingHarness()
+    _ = try await helper.client.call("vm.start", params: ["headless": true])
+    await helper.tearDown()
+    try await Task.sleep(for: .milliseconds(600))  // past the key window and a timeout check
+    #expect(!FileManager.default.fileExists(atPath: helper.root.path))
 }
