@@ -81,6 +81,9 @@ public final class WizardModel {
     public init(host: Host = .current, existingNames: some Sequence<String>) {
         self.host = host
         self.existingNames = Set(existingNames.map { $0.lowercased() })
+        // macOS is chosen at the start, as the first card: Continue works at once (an observer does not run here).
+        os = .macos
+        applyDefaults()
     }
 
     /// Steps this OS goes through (only Windows asks for an account).

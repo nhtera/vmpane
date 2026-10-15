@@ -35,8 +35,10 @@ final class LibraryUITests: XCTestCase {
         app.typeKey("n", modifierFlags: .command)
         let sheet = app.sheets.firstMatch
         XCTAssertTrue(sheet.waitForExistence(timeout: 5))
-        XCTAssertFalse(sheet.buttons["Continue"].isEnabled, "nothing chosen yet")
+        XCTAssertTrue(sheet.buttons["macOS"].isSelected, "macOS is chosen at the start")
+        XCTAssertTrue(sheet.buttons["Continue"].isEnabled)
         sheet.buttons["Linux"].click()
+        XCTAssertTrue(sheet.buttons["Linux"].isSelected && !sheet.buttons["macOS"].isSelected)
         XCTAssertTrue(sheet.buttons["Continue"].isEnabled)
         sheet.buttons["Continue"].click()
         XCTAssertTrue(sheet.buttons["Choose an arm64 ISO…"].waitForExistence(timeout: 5))

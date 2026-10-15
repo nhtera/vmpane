@@ -8,7 +8,7 @@ import VMPaneUI
 struct OSChoiceStep: View {
     @Bindable var wizard: WizardModel
     /// The card with keyboard focus (Full Keyboard Access). It follows the choice: the step opens with focus on the
-    /// chosen card or on none (macOS focused the first card, which then looked chosen), and a click moves it along.
+    /// chosen card (AppKit's own pick, the first card, could differ from it), and a click moves it along.
     /// Its ring shows only on a card that is not chosen: the chosen card's own border marks it, and two looked busy.
     @FocusState private var focused: GuestOS?
 

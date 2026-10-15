@@ -6,7 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ## [1.0.0-beta.8]
-A VM closed during a Windows install stays as it was left.
+The new-VM wizard starts with macOS chosen, and a VM closed during a Windows install stays as it was left.
+
+### Changed
+- The new-VM wizard opens with macOS chosen, so Continue works at once; click Linux or Windows 11 to change it.
 
 ### Fixed
 - A VM's process that shut down during an automatic Windows install could still write the install's progress or

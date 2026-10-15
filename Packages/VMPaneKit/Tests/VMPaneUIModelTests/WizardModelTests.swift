@@ -23,6 +23,12 @@ private let mac = WizardModel.Host(cores: 10, memoryGiB: 16)
     #expect(wizard.name == "My Mac", "a name the user typed stays")
 }
 
+@Test @MainActor func theWizardStartsWithMacOSChosen() {
+    let wizard = WizardModel(host: mac, existingNames: ["macOS"])
+    #expect(wizard.os == .macos && wizard.canLeave(.os))
+    #expect((wizard.memoryGiB, wizard.diskGiB, wizard.name) == (8, 80, "macOS 2"))
+}
+
 @Test @MainActor func resourcesStayWithinWhatTheMacHas() {
     let wizard = WizardModel(host: mac, existingNames: [])
     wizard.os = .linux
@@ -84,6 +90,7 @@ private let mac = WizardModel.Host(cores: 10, memoryGiB: 16)
 
 @Test @MainActor func nextStopsAtTheFirstUnfinishedStep() {
     let wizard = WizardModel(host: mac, existingNames: [])
+    wizard.os = nil  // (macOS is chosen at the start)
     wizard.next()
     #expect(wizard.step == .os)
     wizard.os = .linux
