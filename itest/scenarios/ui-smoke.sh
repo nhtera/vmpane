@@ -22,6 +22,10 @@ scenario_run() {
     fi
     grep -E "Executed [0-9]+ tests" "$log" | tail -1 | sed 's/^/ui-smoke: /'
 
+    # The Mac's available memory as the helper sees it (VMPANE_TEST_AVAILABLE_MIB_FILE): plenty, until the low-memory
+    # test below.
+    export VMPANE_TEST_AVAILABLE_MIB_FILE="$ui/available-mib"
+    echo 1000000 >"$VMPANE_TEST_AVAILABLE_MIB_FILE"
     it_boot_linux_clone || return 1  # (sets work, bundle, pid, socket)
     TEST_RUNNER_VMPANE_ITEST_AUDIT=1 it_ui_vm_window VMPaneUITests/VMWindowUITests/testVMWindowPassesTheAccessibilityAudit || return 1
     echo "ui-smoke: a running VM's window and its settings pass the accessibility audit"
@@ -29,6 +33,11 @@ scenario_run() {
     TEST_RUNNER_VMPANE_ITEST_DOCK=1 it_ui_vm_window VMPaneUITests/VMWindowUITests/testQuitAsksWhileTheVMRuns || return 1
     [[ $(it_state "$bundle") == running ]] || it_fail "the VM is not running after a cancelled Quit" || return 1
     echo "ui-smoke: the VM's app has a menu bar; Quit asks while the VM runs"
+    # Nearly out of memory: the window warns; the test shuts the VM down and starts it again from its window.
+    echo 512 >"$VMPANE_TEST_AVAILABLE_MIB_FILE"
+    TEST_RUNNER_VMPANE_ITEST_LOW_MEMORY=1 it_ui_vm_window VMPaneUITests/VMWindowUITests/testLowMemoryWarnsAndAsksBeforeAStart || return 1
+    [[ $(it_state "$bundle") == running ]] || it_fail "Start Anyway did not start the VM" || return 1
+    echo "ui-smoke: a Mac low on memory: the VM's window warns, and Start asks first"
     it_rpc "$socket" vm.stop '{"mode": "force"}' >/dev/null
     it_rpc "$socket" helper.shutdown >/dev/null
     it_wait_exit "$pid" 30 || true

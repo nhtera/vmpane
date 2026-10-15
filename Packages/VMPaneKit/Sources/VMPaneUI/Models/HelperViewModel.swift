@@ -51,6 +51,10 @@ public final class HelperViewModel {
     public private(set) var inputInUse = false
     /// Files being copied into the guest (dropped on the window), with progress; nil when none.
     public internal(set) var transfer: Transfer?
+    /// The Mac is nearly out of memory while the VM runs (`watchMemory`).
+    public private(set) var memoryLow = false
+    /// Asks before a start on a Mac low on memory, and reads the Mac's memory for `memoryLow`; nil: neither.
+    @ObservationIgnored public var lowMemoryGuard: LowMemoryGuard?
 
     public struct Transfer: Equatable, Sendable {
         public var bytesDone: Int64
@@ -116,6 +120,22 @@ public final class HelperViewModel {
         }
     }
 
+    /// Follows the Mac's memory while the VM runs or is paused: `memoryLow` once the Mac is nearly out, until it has
+    /// room again.
+    public func watchMemory(every interval: Duration = .seconds(5)) async {
+        guard let read = lowMemoryGuard?.memory else { return }
+        while !Task.isCancelled {
+            if state == .running || state == .paused {
+                if let host = read() {
+                    if host.nearlyOut { memoryLow = true } else if host.recovered { memoryLow = false }
+                }
+            } else {
+                memoryLow = false
+            }
+            try? await Task.sleep(for: interval)
+        }
+    }
+
     func apply(_ note: RPCRequest) {
         switch note.method {
         case ControlNotification.vmStateChanged.rawValue:
@@ -171,6 +191,7 @@ public final class HelperViewModel {
             case .suspend: (.vmSuspend, nil)
             case .snapshot: (.vmSnapshotCreate, ["name": .string(Self.snapshotName()), "kind": "live"])
             }
+        if action == .start, let lowMemoryGuard, !(await hasMemoryToStart(lowMemoryGuard)) { return }
         if action == .snapshot { takingSnapshot = true }
         defer { if action == .snapshot { takingSnapshot = false } }
         do {
@@ -181,6 +202,13 @@ public final class HelperViewModel {
         } catch {
             lastError = String(describing: error)
         }
+    }
+
+    /// Whether to start: the VM's memory (its settings now) fits in what the Mac has, or the person said to go ahead.
+    private func hasMemoryToStart(_ lowMemoryGuard: LowMemoryGuard) async -> Bool {
+        let config = try? await channel.call(ControlMethod.vmSettingsGet.rawValue, params: nil, timeout: .seconds(5))
+        guard let mib = config?["memory"]?["mib"]?.intValue else { return true }
+        return await lowMemoryGuard.allows(name: name ?? "This VM", guestMiB: Int(mib))
     }
 
     /// Ends the Windows install as cancelled; the helper stops the VM.

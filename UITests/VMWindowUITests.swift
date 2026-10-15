@@ -144,6 +144,33 @@ final class VMWindowUITests: XCTestCase {
         XCTAssertTrue(window.exists, "Cancel keeps the VM's app")
     }
 
+    /// With the Mac nearly out of memory (the scenario fakes it, `VMPANE_ITEST_LOW_MEMORY=1`), the running VM's window
+    /// warns; shut down from its toolbar, the VM's Start asks first: Cancel keeps it off, Start Anyway starts it.
+    @MainActor
+    func testLowMemoryWarnsAndAsksBeforeAStart() throws {
+        guard AppUnderTest.environment["VMPANE_ITEST_LOW_MEMORY"] == "1" else { throw XCTSkip("run by an itest scenario") }
+        let (vm, window) = try vmWindow()
+        let warning = window.descendants(matching: .any)["low-memory-warning"]
+        XCTAssertTrue(warning.waitForExistence(timeout: 20), "the running VM's window warns")
+        window.buttons["Shut Down"].firstMatch.click()
+        let start = window.buttons["Start"].firstMatch
+        XCTAssertTrue(start.waitForExistence(timeout: 90), "the stopped VM's window offers Start")
+        XCTAssertTrue(warning.waitForNonExistence(timeout: 10), "a stopped VM shows no warning")
+        for answer in ["Cancel", "Start Anyway"] {
+            start.click()
+            let inSheet = window.sheets.buttons[answer]
+            let inDialog = vm.dialogs.buttons[answer]
+            let asked = Date().addingTimeInterval(10)
+            while !inSheet.exists, !inDialog.exists, Date() < asked { _ = inSheet.waitForExistence(timeout: 1) }
+            XCTAssertTrue(inSheet.exists || inDialog.exists, "Start asks first on a Mac low on memory")
+            (inSheet.exists ? inSheet : inDialog).click()
+            if answer == "Cancel" {
+                XCTAssertTrue(start.waitForExistence(timeout: 5), "Cancel keeps the VM off")
+            }
+        }
+        XCTAssertTrue(window.buttons["Shut Down"].firstMatch.waitForExistence(timeout: 60), "Start Anyway starts the VM")
+    }
+
     /// Cancels the Windows install shown in the VM's window (`VMPANE_ITEST_CANCEL_INSTALL=1`), confirming it.
     @MainActor
     func testWindowsInstallCancelledFromItsWindow() throws {

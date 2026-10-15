@@ -46,6 +46,8 @@ public final class LibraryStore {
     /// A Parallels VM opened from Finder, for the library window's import sheet.
     public var parallelsToImport: URL?
 
+    /// Asks before a VM starts on a Mac low on memory; nil: starts without asking.
+    @ObservationIgnored public var lowMemoryGuard: LowMemoryGuard?
     @ObservationIgnored private let library: VMLibrary
     @ObservationIgnored private let links: LiveVMLink
     @ObservationIgnored private let launch: @Sendable (VMBundle, Bool) async throws -> Void
@@ -252,6 +254,7 @@ public final class LibraryStore {
         do {
             switch action {
             case .start(let headless):
+                if let lowMemoryGuard, !row.isRunning, !(await hasMemoryToStart(row, lowMemoryGuard)) { return }
                 var id = id
                 if row.state == nil {
                     let bundle = try VMBundle.open(row.bundleURL)
@@ -271,6 +274,14 @@ public final class LibraryStore {
         } catch {
             lastError = String(describing: error)
         }
+    }
+
+    /// Whether to start `row`: its memory fits in what the Mac has, or the person said to go ahead.
+    private func hasMemoryToStart(_ row: Row, _ lowMemoryGuard: LowMemoryGuard) async -> Bool {
+        let url = row.bundleURL
+        let mib = await Blocking.run { try? ConfigStore.load(VMBundle.open(url)).memory.mib }
+        guard let mib else { return true }
+        return await lowMemoryGuard.allows(name: row.name, guestMiB: mib)
     }
 
     /// A launched helper takes a moment to listen: attach once it does (up to 10 s). Returns the VM's id, which is

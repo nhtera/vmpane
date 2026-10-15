@@ -39,6 +39,10 @@ See [VMPane for AI agents](mcp.md) and the [Security model](security-model.md).
   virtualization inside it. The Windows licence is yours: VMPane installs from your ISO.
 - **macOS guests**: Apple allows two macOS VMs running at once per Mac. See [macOS guests](guides/macos.md).
 - **No USB passthrough** in 1.0.
+- **Memory comes from your Mac.** A VM uses up to the memory set in its settings. On a Mac out of memory, VMs
+  slow down and can crash (Linux guests were seen to fail with memory that changed under them), so VMPane asks
+  before starting a VM that needs more than the Mac has available, and a VM's window warns while the Mac is almost
+  out. Quit apps you don't need, or give the VM less memory.
 
 ## Where to go next
 

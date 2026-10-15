@@ -25,8 +25,20 @@ struct Start: AsyncParsableCommand {
 
     func run() async throws {
         try await CLI.guarded {
+            warnIfLowOnMemory(try CLI.item(vm))
             try await lifecycle(vm, .vmStart, params: ["headless": .bool(headless)], launching: true, json: output.json)
         }
+    }
+
+    /// Says so (on stderr) when the Mac has less memory available than the VM may use; it still starts.
+    private func warnIfLowOnMemory(_ item: VMLibrary.Item) {
+        guard let config = item.config, let host = HostMemory.current() else { return }
+        let guestBytes = UInt64(max(0, config.memory.mib)) << 20
+        guard host.tooLow(forGuest: guestBytes) else { return }
+        let warning =
+            "vmpane: warning: \(config.name) can use \(HostMemory.describe(guestBytes)) of memory, but only "
+            + "\(HostMemory.describe(host.availableBytes)) is available on this Mac: it may run slowly or crash.\n"
+        FileHandle.standardError.write(Data(warning.utf8))
     }
 }
 

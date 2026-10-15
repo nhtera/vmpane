@@ -65,24 +65,29 @@ public struct VMWindowView: View {
                     .frame(maxHeight: .infinity, alignment: .bottom)
                     .padding(.bottom, 16)
             }
-            if hud {
-                CaptureHUD(capturing: capturing)
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .padding(.top, 12)
-                    .transition(.opacity)
-            } else if let notice = model.notice {
-                Label(notice, systemImage: "checkmark.circle.fill")
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(.regularMaterial, in: Capsule())
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .padding(.top, 12)
-                    .transition(.opacity)
-                    .accessibilityAddTraits(.updatesFrequently)
+            VStack(spacing: 8) {
+                if model.memoryLow && (model.state == .running || model.state == .paused) {
+                    LowMemoryBanner().transition(.opacity)
+                }
+                if hud {
+                    CaptureHUD(capturing: capturing)
+                        .transition(.opacity)
+                } else if let notice = model.notice {
+                    Label(notice, systemImage: "checkmark.circle.fill")
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.regularMaterial, in: Capsule())
+                        .transition(.opacity)
+                        .accessibilityAddTraits(.updatesFrequently)
+                }
             }
+            .frame(maxHeight: .infinity, alignment: .top)
+            .padding(.top, 12)
+            .animation(.default, value: model.memoryLow)
         }
         .onGeometryChange(for: CGFloat.self, of: \.size.height) { room = $0 }
         .task { await model.watchInput() }
+        .task { await model.watchMemory() }
         .task(id: model.notice) {
             guard model.notice != nil else { return }
             try? await Task.sleep(for: .seconds(3))
@@ -263,6 +268,25 @@ struct StoppedOverlay: View {
         .padding(16)
         .background(.regularMaterial, in: Capsule())
         .disabled(!model.can(.start))
+    }
+}
+
+/// The Mac is nearly out of memory while the VM runs: it may slow down or crash.
+struct LowMemoryBanner: View {
+    var body: some View {
+        Label {
+            Text("Your Mac is almost out of memory. This VM may slow down or crash: quit apps you don’t need, or suspend a VM.")
+        } icon: {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+        }
+        .font(.callout)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .frame(maxWidth: 520)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.updatesFrequently)
+        .accessibilityIdentifier("low-memory-warning")
     }
 }
 

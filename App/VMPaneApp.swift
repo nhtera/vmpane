@@ -40,9 +40,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let supervisor = HelperSupervisor()
     lazy var library: LibraryStore = {
         let supervisor = supervisor
-        return LibraryStore(
+        let store = LibraryStore(
             library: VMLibrary(paths: supervisor.paths), links: HelperLinks(paths: supervisor.paths),
             launch: { bundle, headless in try await supervisor.launch(bundle, headless: headless) })
+        store.lowMemoryGuard = .alert { NSApp.keyWindow }
+        return store
     }()
 
     lazy var killSwitch = AgentKillSwitch(paths: supervisor.paths)

@@ -291,3 +291,30 @@ final class LockedFlag: @unchecked Sendable {
     #expect(StateDot.label(row.state, suspended: row.suspended) == "Suspended")
     #expect(StateDot.label(.running, suspended: true) == "Running")
 }
+
+@Test @MainActor func aStartOnAMacLowOnMemoryAsksBeforeTheHelperLaunches() async throws {
+    let links = FakeLinks()
+    let launched = LockedFlag()
+    let fixture = try makeStore(links) { bundle, _ in
+        launched.set()
+        let id = try ConfigStore.load(bundle).id
+        Task {
+            try? await Task.sleep(for: .milliseconds(100))
+            links.run(id, in: .stopped)
+        }
+    }
+    let (store, ops, root) = (fixture.store, fixture.ops, fixture.root)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let id = try ConfigStore.load(try ops.create(name: "Dev", os: .linux, diskGiB: 8)).id  // 4 GB of memory
+    await store.reload()
+    let answers = LowMemoryAnswers()
+    store.lowMemoryGuard = answers.guardOver(MemoryBox(available: 1 << 30))
+
+    await store.perform(.start(headless: false), on: id)
+    #expect(answers.asked == [LowMemoryStart(name: "Dev", guestBytes: 4 << 30, availableBytes: 1 << 30)])
+    #expect(!launched.value && links.methods.isEmpty, "Cancel launches nothing")
+
+    answers.startAnyway = true
+    await store.perform(.start(headless: false), on: id)
+    #expect(launched.value && links.methods == ["vm.start"])
+}

@@ -235,3 +235,81 @@ final class SlowChannel: HelperChannel, @unchecked Sendable {
         return try await inner.call(method, params: params, timeout: timeout)
     }
 }
+
+/// What a low-memory guard was asked, and its answer.
+@MainActor
+final class LowMemoryAnswers {
+    var asked: [LowMemoryStart] = []
+    var startAnyway = false
+
+    /// A guard over a Mac with `memory` available (of 16 GB) that records each question.
+    func guardOver(_ memory: MemoryBox) -> LowMemoryGuard {
+        LowMemoryGuard(
+            memory: { memory.host },
+            confirm: { start in
+                self.asked.append(start)
+                return self.startAnyway
+            })
+    }
+}
+
+/// The Mac's memory as a test sets it.
+final class MemoryBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var available: UInt64
+
+    init(available: UInt64) { self.available = available }
+    func set(_ bytes: UInt64) { lock.withLock { available = bytes } }
+    var host: HostMemory { lock.withLock { HostMemory(availableBytes: available, physicalBytes: 16 << 30) } }
+}
+
+@Test @MainActor func aStartOnAMacLowOnMemoryAsksFirst() async {
+    let channel = FakeChannel()
+    channel.answer("vm.info", .success(["state": "stopped", "name": "Dev", "allowedRequests": ["start"]]))
+    channel.answer("vm.settings.get", .success(["memory": ["mib": 8192]]))
+    let model = HelperViewModel(channel: channel)
+    await model.start()
+    let memory = MemoryBox(available: 2 << 30)
+    let answers = LowMemoryAnswers()
+    model.lowMemoryGuard = answers.guardOver(memory)
+
+    await model.perform(.start)
+    #expect(answers.asked == [LowMemoryStart(name: "Dev", guestBytes: 8 << 30, availableBytes: 2 << 30)])
+    #expect(!channel.calls.contains("vm.start"), "Cancel leaves the VM off")
+
+    answers.startAnyway = true
+    await model.perform(.start)
+    #expect(channel.calls.last == "vm.start")
+
+    // With room for the VM it starts without a question.
+    memory.set(12 << 30)
+    await model.perform(.start)
+    #expect(answers.asked.count == 2 && channel.calls.last == "vm.start")
+}
+
+@Test @MainActor func theWindowWarnsWhileTheMacIsNearlyOutOfMemory() async {
+    let channel = FakeChannel()
+    channel.answer("vm.info", .success(["state": "running", "allowedRequests": ["stop"]]))
+    let model = HelperViewModel(channel: channel)
+    await model.start()
+    let memory = MemoryBox(available: 8 << 30)
+    model.lowMemoryGuard = LowMemoryAnswers().guardOver(memory)
+    let watch = Task { await model.watchMemory(every: .milliseconds(10)) }
+    defer { watch.cancel() }
+
+    try? await Task.sleep(for: .milliseconds(50))
+    #expect(!model.memoryLow)
+    memory.set(512 << 20)  // under 1 GB
+    #expect(await eventually { model.memoryLow })
+    memory.set(1536 << 20)  // above 1 GB but under 2: the warning stays (no flicker at the edge)
+    try? await Task.sleep(for: .milliseconds(50))
+    #expect(model.memoryLow)
+    memory.set(3 << 30)
+    #expect(await eventually { !model.memoryLow })
+
+    memory.set(512 << 20)
+    #expect(await eventually { model.memoryLow })
+    channel.answer("vm.info", .success(["state": "stopped", "allowedRequests": ["start"]]))
+    channel.push("vm.stateChanged", ["state": "stopped"])
+    #expect(await eventually { !model.memoryLow }, "a stopped VM shows no warning")
+}

@@ -46,6 +46,8 @@ extension HelperDelegate {
     @MainActor func connectWindowModel(socket: URL, bundle: VMBundle) async {
         guard let client = try? UDSClient.connect(to: socket) else { return }
         let model = HelperViewModel(channel: client)
+        // A start comes from the VM window (its toolbar or overlay): the alert is a sheet on it.
+        model.lowMemoryGuard = .alert { NSApp.keyWindow ?? NSApp.mainWindow }
         windowModel = model
         await model.start()
         let os = (try? ConfigStore.load(bundle))?.os

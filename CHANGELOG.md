@@ -5,6 +5,12 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- VMPane asks before starting a VM that can use more memory than the Mac has available (Cancel or Start Anyway),
+  and a running VM's window warns while the Mac is almost out of memory. `vmpane start` prints the same warning.
+  On a Mac out of memory, Linux VMs crashed or froze with memory that changed under them (e.g. a Debian install
+  stuck at "Scanning the mirror"); the same VMs ran cleanly once memory was free.
+
 ## [1.0.0-beta.8]
 The new-VM wizard starts with macOS chosen, and a VM closed during a Windows install stays as it was left.
 
