@@ -336,6 +336,9 @@ func thousandSnapshotCyclesStayFastAndFree() throws {
 
         let handle = try FileHandle(forWritingTo: disk)
         try handle.write(contentsOf: Data(repeating: 0xA5, count: 4 << 20))
+        // On disk before measuring: APFS counts a clone's diverged blocks once they are written (a busy CI Mac
+        // measured before that, under 4 MiB).
+        try handle.synchronize()
         try handle.close()
         let diverged = try #require(try store.list().first).sizeBytes
         #expect(diverged >= 4 << 20 && diverged < 6 << 20, "4 MiB rewritten in the VM: \(diverged) bytes")
