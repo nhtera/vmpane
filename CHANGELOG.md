@@ -5,6 +5,14 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.0-beta.8]
+A VM closed during a Windows install stays as it was left.
+
+### Fixed
+- A VM's process that shut down during an automatic Windows install could still write the install's progress or
+  the VM's settings after letting go of the VM, and start the VM again if the install had just finished. It now
+  finishes that work first and leaves the VM off; the next start continues from there.
+
 ## [1.0.0-beta.7]
 A Linux VM's text keeps its size when its resolution changes while it runs.
 
