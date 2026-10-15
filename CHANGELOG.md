@@ -5,6 +5,9 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.0-beta.9]
+VMPane warns when the Mac is low on memory for a VM.
+
 ### Added
 - VMPane asks before starting a VM that can use more memory than the Mac has available (Cancel or Start Anyway),
   and a running VM's window warns while the Mac is almost out of memory. `vmpane start` prints the same warning.
