@@ -1,5 +1,6 @@
 # QEMU and swtpm under their sandbox profiles (the helper's VMPaneQEMU resources, applied with sandbox-exec), from a
-# runtime copy laid out like runtime/<version>/qemu: swtpm keeps its TPM state in the VM bundle and listens
+# runtime copy laid out like runtime/<version>/qemu: QEMU's libraries read the Mac's name servers (slirp's DNS
+# proxy) and iconv tables like an unsandboxed process; swtpm keeps its TPM state in the VM bundle and listens
 # in the run directory; QEMU boots the shipped firmware to the UEFI shell with HVF, the TPM, CoreAudio sound,
 # a SPICE socket and a port forward, and reports no device it could not start; each is
 # denied a file outside its bundle and run directory. With VMPANE_SIGN_IDENTITY set to a real identity the
@@ -50,6 +51,17 @@ scenario_run() {
             -D BUNDLE="$bundle" -D RUNDIR="$run" -D RUNTIME="$runtime" "$@"
     }
 
+    # QEMU's libraries see the Mac's name servers (slirp's DNS proxy forwards to the first; denied, res_ninit
+    # returns 0.0.0.0 and no guest query is answered) and can convert character sets (glib's error messages).
+    local probe=$runtime/bin/sandbox-probe want got
+    /usr/bin/clang -O "$VMPANE_ROOT/itest/lib/sandbox_probe.c" -lresolv -liconv -o "$probe" ||
+        it_fail "could not build the sandbox probe" || return 1
+    want=$("$probe")
+    got=$(sb qemu "$probe")
+    [[ $got == "$want" && $got == *"ns "* && $got != *"ns 0.0.0.0"* && $got == *"iconv ok"* ]] ||
+        { printf 'unsandboxed:\n%s\nsandboxed:\n%s\n' "$want" "$got"; it_fail "sandboxed QEMU's libraries see a different Mac"; return 1; }
+    echo "qemu-sandbox: sandboxed QEMU reads the Mac's name servers ($(grep -m1 '^ns ' <<<"$got" | cut -c4-)) and iconv tables"
+
     # swtpm may not keep state outside the bundle.
     sb swtpm "$runtime/bin/swtpm" socket --tpm2 --tpmstate dir="$outside" --ctrl type=unixio,path="$run/deny.sock" \
         --flags startup-clear >/dev/null 2>"$run/swtpm-deny.err" &
@@ -83,6 +95,8 @@ scenario_run() {
     [[ -n $(ls "$aux/tpm") ]] || it_fail "swtpm wrote no state into the bundle" || return 1
     test -S "$run/spice.sock" || it_fail "no SPICE socket in the run directory" || return 1
     ! grep -qi "could not" "$run/qemu.err" || { cat "$run/qemu.err"; it_fail "QEMU reported a device it could not start"; return 1; }
+    ! grep -q "Conversion from character set" "$run/qemu.err" ||
+        { head -5 "$run/qemu.err"; it_fail "QEMU could not convert character sets"; return 1; }
     echo "qemu-sandbox: sandboxed QEMU at the UEFI shell under HVF with the sandboxed TPM"
     qmp "$run/qmp.sock" quit >/dev/null || true
     it_wait_exit "$qemu_pid" 10 || it_fail "QEMU did not quit" || return 1

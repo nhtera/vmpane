@@ -20,7 +20,10 @@
   (global-name "com.apple.system.notification_center")
   (global-name "com.apple.system.opendirectoryd.libinfo")
   (global-name "com.apple.logd")
-  (global-name "com.apple.diagnosticd"))
+  (global-name "com.apple.diagnosticd")
+  ;; slirp's DNS proxy (10.0.2.3): res_ninit asks configd for the Mac's name servers (with VPN and per-domain
+  ;; resolvers) before it reads resolv.conf; when both are denied it returns 0.0.0.0 and no guest query is answered
+  (global-name "com.apple.SystemConfiguration.DNSConfiguration"))
 (allow ipc-posix-shm-read-data ipc-posix-shm-read-metadata
   (ipc-posix-name-prefix "apple.shm.notification_center"))
 
@@ -47,8 +50,12 @@
 (allow file-read-metadata (path-ancestors (param "RUNTIME")))
 (allow file-read* (literal "/dev/null") (literal "/dev/urandom") (literal "/dev/random")
   (literal "/private/etc/localtime") (subpath "/usr/share/zoneinfo") (subpath "/private/var/db/timezone")
-  ;; slirp's DNS proxy (10.0.2.3) reads the host's name servers with libresolv
-  (literal "/private/var/run/resolv.conf") (literal "/private/etc/hosts"))
+  ;; slirp's DNS proxy (10.0.2.3) reads the host's name servers with libresolv (the fallback when configd
+  ;; does not answer); /private/etc/resolv.conf is a link to the file under /private/var/run
+  (literal "/private/etc/resolv.conf") (literal "/private/var/run/resolv.conf") (literal "/private/etc/hosts")
+  ;; libiconv's conversion tables: glib converts every error message with iconv, and a failed conversion
+  ;; floods qemu.log with "Conversion from character set …"
+  (subpath "/usr/share/i18n"))
 (allow file-read-metadata (literal "/etc") (literal "/var") (literal "/private/etc") (literal "/private/var/run"))
 (allow file-write-data (literal "/dev/null"))
 
