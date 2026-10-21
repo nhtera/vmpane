@@ -11,6 +11,8 @@ public actor VMAccess {
     /// The last screenshot's scale per VM: tools take coordinates in screenshot pixels.
     private var scales: [UUID: Double] = [:]
     private var sessions: [UUID: HelperDiscovery.Session] = [:]
+    /// The ids vm_read_screen gave out, per VM, for vm_click and vm_move by `element`.
+    private var elements: [UUID: ElementCache] = [:]
 
     public init(ops: LibraryOps, connector: HelperConnector) {
         self.ops = ops
@@ -97,9 +99,30 @@ public actor VMAccess {
 
     func scale(for selector: String) throws -> Double { scales[try item(selector).id] ?? 1 }
 
+    /// Whether a screenshot (or a screen read) has set the VM's scale yet.
+    func hasScale(for selector: String) throws -> Bool { scales[try item(selector).id] != nil }
+
+    /// Ids for `rects` (guest pixels) of a screen read.
+    func remember(_ rects: [CGRect], prefix: String, for selector: String) throws -> [String] {
+        try elements[item(selector).id, default: ElementCache()].add(rects, prefix: prefix)
+    }
+
+    /// An input changed the screen in `box` (guest pixels) by `ratio`: the ids there are stale.
+    func screenChanged(_ box: CGRect?, ratio: Double, for selector: String) throws {
+        try elements[item(selector).id]?.changed(box, ratio: ratio)
+    }
+
+    /// An element's box in guest pixels.
+    func element(_ id: String, for selector: String) throws -> CGRect {
+        try (elements[item(selector).id] ?? ElementCache()).rect(id).get()
+    }
+
     /// What the model reads when a call is refused or fails.
     static func explain(_ error: RPCError, vm: String) -> String {
         switch ControlErrorCode(rawValue: error.code) {
+        case .policyDenied? where error.message.hasSuffix("is not an allowed method"):
+            // A helper started by an older VMPane does not know the method yet.
+            "\(vm) runs an older VMPane helper that cannot do this yet: restart the VM (shut it down and start it again)."
         case .policyDenied?:
             "Refused by \(vm)'s agent access setting: \(error.message). Its owner can raise it in VMPane (Settings › AI agents)."
         case .agentUnavailable?:

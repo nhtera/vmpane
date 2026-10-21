@@ -60,6 +60,7 @@ public enum ControlMethodPolicy {
         "vm.input.scroll": .level(.control),
         // Each action is also decided (and audited) as the single request it stands for.
         "vm.input.batch": .level(.control),
+        "vm.screen.read": .level(.observe),
         "vm.display.show": .level(.control),
         "vm.install.cancel": .uiOnly,
         "vm.settings.get": .level(.observe),

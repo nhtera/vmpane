@@ -30,6 +30,8 @@ public enum AgentMethod {
     public static let portsListening = "ports.listening"
     public static let fsFreeze = "fs.freeze"
     public static let fsThaw = "fs.thaw"
+    /// The controls of the user's foreground window (`AgentCap.screen`), served by the session helper.
+    public static let screenElements = "screen.elements"
 
     /// Methods the guest may send. Anything else from the guest is a protocol violation.
     public static let fromGuest: Set<String> = [hello, agentHeartbeat, execExited, clipboardChanged]
@@ -49,6 +51,8 @@ public enum AgentCap {
     public static let reveal = "reveal"
     /// The agent wants `transport.ack` (macOS guests: their vsock stalls with about 240 KiB in flight).
     public static let ack = "ack"
+    /// The controls on screen (`screen.elements`): UI Automation on Windows, the accessibility tree on macOS.
+    public static let screen = "screen"
 }
 
 /// The agent protocol's own error codes (JSON-RPC's standard ones are in `ControlErrorCode`).

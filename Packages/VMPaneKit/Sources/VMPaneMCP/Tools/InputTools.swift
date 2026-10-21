@@ -25,8 +25,10 @@ enum InputTools {
             required: ["x", "y"])
     }
 
+    static let element = Schema.string("An id from vm_read_screen, instead of x and y: its center.")
+
     static let clickProperties: [String: JSONValue] = [
-        "x": Schema.number("x in screenshot pixels."), "y": Schema.number("y in screenshot pixels."),
+        "x": Schema.number("x in screenshot pixels."), "y": Schema.number("y in screenshot pixels."), "element": element,
         "button": Schema.string("Which button (default left).", enum: ["left", "right", "middle"]),
         "count": Schema.integer("Clicks (2 for a double click).", minimum: 1, maximum: 3),
         "modifiers": Schema.array("Keys held during the click: shift, ctrl, alt, cmd.", items: Schema.string("A modifier key.")),
@@ -42,7 +44,10 @@ enum InputTools {
     /// A tool's action (screenshot pixels, key names) as the helper takes it (guest pixels, HID usages).
     static func helperAction(_ kind: String, _ args: JSONValue, scale: Double) throws -> JSONValue {
         func number(_ value: JSONValue?, _ name: String) throws -> JSONValue {
-            guard let value = value?.doubleValue else { throw ToolFailure("\(kind): \(name) is required") }
+            guard let value = value?.doubleValue else {
+                throw ToolFailure(
+                    kind == "click" || kind == "move" ? "\(kind): x and y (or element) are required" : "\(kind): \(name) is required")
+            }
             return .double(value * scale)
         }
         func usages(_ combo: String) throws -> JSONValue {
@@ -86,6 +91,17 @@ enum InputTools {
         }
     }
 
+    /// `args` with an `element` (from vm_read_screen) turned into its center's x and y at `scale` (the one the
+    /// action is then made with).
+    static func resolvingElement(_ args: JSONValue, _ access: VMAccess, _ vm: String, scale: Double) async throws -> JSONValue {
+        guard let id = args["element"]?.stringValue, case .object(var fields) = args else { return args }
+        let rect = try await access.element(id, for: vm)
+        fields["x"] = .double(rect.midX / scale)
+        fields["y"] = .double(rect.midY / scale)
+        fields["element"] = nil
+        return .object(fields)
+    }
+
     /// How long a batch may take: its waits and settling, its typing at QEMU's pace (130 ms a character), and slack.
     static func timeout(_ actions: [JSONValue], settleMs: Int) -> Duration {
         let waits = actions.reduce(0) { $0 + ($1["ms"]?.intValue ?? 0) }
@@ -120,6 +136,15 @@ enum InputTools {
         let failures = results.filter { $0["ok"] == false }
         if single, let failure = failures.first { throw ToolFailure(failure["error"]?.stringValue ?? "the input failed") }
         let verified = screenshotSpace(reply["verified"] ?? ["status": "unknown"], scale: scale)
+        if verified["status"] == "changed" {
+            // Ids read where the screen changed are stale (the helper's box, still in guest pixels).
+            let box = reply["verified"]?["bbox"].map { box in
+                CGRect(
+                    x: box["x"]?.doubleValue ?? 0, y: box["y"]?.doubleValue ?? 0, width: box["width"]?.doubleValue ?? 0,
+                    height: box["height"]?.doubleValue ?? 0)
+            }
+            try await access.screenChanged(box, ratio: verified["changeRatio"]?.doubleValue ?? 1, for: vm)
+        }
         var structured: [String: JSONValue] = ["verified": verified]
         if !single { structured["results"] = .array(results) }
         if let width = reply["screen"]?["width"]?.doubleValue, let height = reply["screen"]?["height"]?.doubleValue {
@@ -210,7 +235,11 @@ enum InputTools {
             let items = args["actions"]?.arrayItems ?? []
             guard !items.isEmpty else { throw ToolFailure("actions is required") }
             let scale = try await access.scale(for: vm)
-            let actions = try items.map { try helperAction($0["type"]?.stringValue ?? "", $0, scale: scale) }
+            var actions: [JSONValue] = []
+            for item in items {
+                let resolved = try await resolvingElement(item, access, vm, scale: scale)
+                actions.append(try helperAction(item["type"]?.stringValue ?? "", resolved, scale: scale))
+            }
             return try await run(access, vm, actions, args, done: nil)
         }
     }
@@ -225,7 +254,8 @@ enum InputTools {
         let schema = Schema.object(properties, required: ["vm"] + required)
         return Tool("vm_\(kind)", description + " " + verifiedNote, schema: schema, annotations: writes) { args, _ in
             let vm = try args.string("vm")
-            let action = try helperAction(kind, args, scale: try await access.scale(for: vm))
+            let scale = try await access.scale(for: vm)
+            let action = try helperAction(kind, try await resolvingElement(args, access, vm, scale: scale), scale: scale)
             return try await run(access, vm, [action], args, done: done(kind, args))
         }
     }
@@ -242,12 +272,12 @@ enum InputTools {
     }
 
     static func click(_ access: VMAccess) -> Tool {
-        single(access, "click", "Click at a point of the screen.", clickProperties, required: ["x", "y"])
+        single(access, "click", "Click at a point of the screen, or on an element of vm_read_screen.", clickProperties, required: [])
     }
 
     static func move(_ access: VMAccess) -> Tool {
-        let properties = ["x": Schema.number("x in screenshot pixels."), "y": Schema.number("y in screenshot pixels.")]
-        return single(access, "move", "Move the pointer (hover).", properties, required: ["x", "y"])
+        let properties = ["x": Schema.number("x in screenshot pixels."), "y": Schema.number("y in screenshot pixels."), "element": element]
+        return single(access, "move", "Move the pointer (hover), to a point or an element of vm_read_screen.", properties, required: [])
     }
 
     static func drag(_ access: VMAccess) -> Tool {

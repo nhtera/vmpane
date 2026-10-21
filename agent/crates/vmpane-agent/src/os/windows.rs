@@ -15,7 +15,9 @@ mod net;
 pub mod serial;
 pub mod service;
 pub mod session;
+mod uia;
 pub use net::{interfaces, listening_ports};
+pub use uia::screen_elements;
 
 pub const HAS_NET_INFO: bool = true;
 

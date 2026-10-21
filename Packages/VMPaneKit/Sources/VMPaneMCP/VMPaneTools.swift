@@ -4,6 +4,6 @@ import Foundation
 public enum VMPaneTools {
     /// `exchange`: the Mac-side folder for file transfers (`~/VMPane Exchange`).
     public static func registry(_ access: VMAccess, exchange: URL) -> ToolRegistry {
-        ToolRegistry(VMTools.all(access) + InputTools.all(access) + GuestTools.all(access, exchange: exchange))
+        ToolRegistry(VMTools.all(access) + InputTools.all(access) + ScreenTools.all(access) + GuestTools.all(access, exchange: exchange))
     }
 }

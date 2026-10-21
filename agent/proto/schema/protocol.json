@@ -723,6 +723,80 @@
       ],
       "type": "string"
     },
+    "ScreenElement": {
+      "properties": {
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "focused": {
+          "default": false,
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "rect": {
+          "description": "`[x, y, width, height]` in the display's pixels (physical, not scaled points), origin top left.",
+          "items": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "type": "array"
+        },
+        "role": {
+          "description": "Lowercase control type: `button`, `edit`, `listitem`, `checkbox`, `menuitem`, `text`, …",
+          "type": "string"
+        },
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "role",
+        "name",
+        "rect"
+      ],
+      "type": "object"
+    },
+    "ScreenElements": {
+      "description": "The controls of the foreground window, in reading order, with names cut to\n[`crate::limits::SCREEN_MAX_NAME`] characters.",
+      "properties": {
+        "elements": {
+          "items": {
+            "$ref": "#/$defs/ScreenElement"
+          },
+          "type": "array"
+        },
+        "truncated": {
+          "default": false,
+          "description": "More were there than were returned.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "elements"
+      ],
+      "type": "object"
+    },
+    "ScreenElementsParams": {
+      "description": "`screen.elements` params.",
+      "properties": {
+        "maxElements": {
+          "default": 0,
+          "description": "At most this many elements (capped at [`crate::limits::SCREEN_MAX_ELEMENTS`]); 0 or absent: that cap.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
     "Signal": {
       "oneOf": [
         {
@@ -1002,6 +1076,17 @@
       },
       "result": {
         "$ref": "#/$defs/Empty"
+      }
+    },
+    "screen.elements": {
+      "cap": "screen",
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/ScreenElementsParams"
+      },
+      "result": {
+        "$ref": "#/$defs/ScreenElements"
       }
     },
     "session.reveal": {

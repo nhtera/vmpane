@@ -56,6 +56,11 @@ What it can reach then:
 - Every byte from QEMU reaching the helper is untrusted: QMP lines are capped at 1 MiB, decoded strictly
   (a violation closes the connection), and unread events are bounded; `screendump` files are read with
   `O_NOFOLLOW`, size-capped and parsed strictly (P6, 8-bit, at most 8192×8192).
+- Text read from a guest's screen (`vm.screen.read`: recognized by Vision on the Mac, or controls the guest tools
+  list) is untrusted content for agents: control and bidirectional formatting characters are dropped, names are
+  length-capped, the MCP result marks it `untrusted_guest_text`, and it never goes to logs or the audit record.
+  Controls are only those of the foreground window that are on screen, and a password field's value is never
+  read, so Look only shows no more than a screenshot would.
 - Nothing from the config reaches a QEMU option string unescaped: paths and values have `,` doubled,
   the VM's name never reaches QEMU, and port forwards (also changed live through HMP) are built only from
   validated parts (IPv4 literal, ports 1–65535, `tcp`/`udp`).

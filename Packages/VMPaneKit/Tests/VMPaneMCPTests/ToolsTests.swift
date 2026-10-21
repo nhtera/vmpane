@@ -69,3 +69,11 @@ import VMPaneCore
     let timeout = InputTools.timeout(actions, settleMs: 300)
     #expect(timeout >= .seconds(390 + 5))
 }
+
+@Test func screenItemsReadAsOneLineEach() {
+    #expect(
+        ScreenTools.describe("t3", ["text": "Network & internet", "rect": [120, 260, 300, 30]])
+            == #"t3 "Network & internet" at 120,260 300×30"#)
+    let button: [String: JSONValue] = ["role": "button", "name": "Save", "rect": [10, 20, 80, 24], "enabled": false, "focused": true]
+    #expect(ScreenTools.describe("e1", button) == #"e1 button "Save" at 10,20 80×24 (disabled, focused)"#)
+}

@@ -1,7 +1,7 @@
 {
   "core": [
     "smoke", "helper-lifecycle", "linux-boot", "linux-snapshot", "vz-suspend", "macos-boot", "qemu-smoke",
-    "win-boot", "win-snapshot", "win-crash", "agent-linux", "agent-windows", "cli-e2e", "mcp-e2e", "mcp-actions",
+    "win-boot", "win-snapshot", "win-crash", "agent-linux", "agent-windows", "cli-e2e", "mcp-e2e", "mcp-actions", "screen-read",
     "mcp-killswitch", "security", "update-under-load"
   ],
   "full": [

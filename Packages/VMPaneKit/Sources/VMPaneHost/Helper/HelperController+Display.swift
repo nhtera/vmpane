@@ -44,6 +44,8 @@ extension HelperController {
                     "dataB64": .string(shot.png.base64EncodedString()), "width": .int(Int64(shot.width)),
                     "height": .int(Int64(shot.height)), "format": "png", "scale": .double(shot.scale),
                 ])
+            case .vmScreenRead?:
+                return await screenRead(params)
             case .vmInputKey?:
                 let key = try RPCParams.decode(KeyParams.self, from: params).get()
                 try await backend.send(.key(usage: key.usage, down: key.down))

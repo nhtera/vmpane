@@ -24,6 +24,10 @@ pub const HEARTBEAT_SECONDS: u64 = 5;
 pub const FREEZE_DEFAULT_TIMEOUT_MS: u64 = 10_000;
 /// Longest `fs.freeze` timeout the agent accepts.
 pub const FREEZE_MAX_TIMEOUT_MS: u64 = 60_000;
+/// `screen.elements`: at most this many elements, names this many characters, this deep below the window.
+pub const SCREEN_MAX_ELEMENTS: u32 = 800;
+pub const SCREEN_MAX_NAME: usize = 120;
+pub const SCREEN_MAX_DEPTH: u32 = 12;
 
 /// The limits as a value, for the generated schema.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]

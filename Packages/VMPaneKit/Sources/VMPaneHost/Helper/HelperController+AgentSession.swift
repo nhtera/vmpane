@@ -9,7 +9,8 @@ import VMPaneCore
 extension HelperController {
     /// Methods that change nothing.
     static let readOnlyMethods: Set<String> = [
-        "helper.hello", "vm.info", "vm.screenshot", "vm.snapshot.list", "vm.settings.get", "vm.ports.list", "agent.status",
+        "helper.hello", "vm.info", "vm.screenshot", "vm.screen.read", "vm.snapshot.list", "vm.settings.get", "vm.ports.list",
+        "agent.status",
         "vm.clipboard.read", "events.subscribe", "mcp.disableAll",
     ]
 

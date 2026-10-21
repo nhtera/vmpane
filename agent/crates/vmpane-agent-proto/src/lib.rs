@@ -20,7 +20,7 @@ pub const MIN_PROTO: u32 = 1;
 
 /// Version of the daemon ⇄ session helper protocol (inside the guest). A mismatch makes the daemon restart the
 /// session helper from the installed binary.
-pub const IPC_VERSION: u32 = 1;
+pub const IPC_VERSION: u32 = 2;
 
 /// vsock port the host listens on (VZ guests dial CID 2).
 pub const VSOCK_PORT: u32 = 6271;

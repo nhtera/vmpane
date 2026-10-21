@@ -181,7 +181,7 @@ public actor HelperController {
             }
             return .success(.object([:]))
         case .vmInfo?: return info()
-        case .vmScreenshot?, .vmInputKey?, .vmInputText?, .vmInputPointer?, .vmInputScroll?:
+        case .vmScreenshot?, .vmScreenRead?, .vmInputKey?, .vmInputText?, .vmInputPointer?, .vmInputScroll?:
             return await displayRequest(request.method, request.params)
         case .vmInputBatch?: return await inputBatch(request.params, from: connection)
         case .vmDisplayShow?:

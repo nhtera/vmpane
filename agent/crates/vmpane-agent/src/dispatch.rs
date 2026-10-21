@@ -7,7 +7,7 @@ use tokio::sync::mpsc;
 use vmpane_agent_proto::error::ErrorCode;
 use vmpane_agent_proto::jsonrpc::{ErrorObject, Request};
 use vmpane_agent_proto::methods::{
-    ClipboardContents, Empty, FilePushParams, PathParams, cap, method,
+    ClipboardContents, Empty, FilePushParams, PathParams, ScreenElementsParams, cap, method,
 };
 
 use crate::agent::Role;
@@ -29,6 +29,7 @@ fn required_cap(name: &str) -> Option<&'static str> {
         method::NET_ADDRS => cap::NET,
         method::PORTS_LISTENING => cap::PORTS,
         method::FS_FREEZE | method::FS_THAW => cap::FREEZE,
+        method::SCREEN_ELEMENTS => cap::SCREEN,
         _ => return None,
     })
 }
@@ -123,6 +124,20 @@ pub async fn handle(
         method::CLIPBOARD_GET | method::CLIPBOARD_SET => {
             crate::clipboard::relay(conn, request, inbound).await
         }
+        method::SCREEN_ELEMENTS => {
+            // The controls are the logged-in user's: read by their session helper.
+            let link = conn.agent.session.current().ok_or_else(|| {
+                ErrorObject::new(ErrorCode::NoSession, "nobody is signed in to the guest")
+            })?;
+            let params: ScreenElementsParams = request.decode_params()?;
+            let (value, _) = link
+                .call(name, relay_params(&params), |_| Vec::new())
+                .await?;
+            Ok(Reply {
+                result: value,
+                then: None,
+            })
+        }
         method::DISPLAY_SET => Err(ErrorObject::new(
             ErrorCode::NoSession,
             "no user session helper is connected",
@@ -150,6 +165,9 @@ async fn handle_in_session(
         }
         method::CLIPBOARD_SET if crate::clipboard::SUPPORTED => {
             crate::clipboard::set(conn, request.decode_params()?, inbound).await
+        }
+        method::SCREEN_ELEMENTS if crate::screen::SUPPORTED => {
+            crate::screen::elements(request.decode_params()?).await
         }
         method::AGENT_PING => Reply::ok(&Empty {}),
         method::AGENT_INFO => Reply::ok(&conn.agent.info(conn.proto)),

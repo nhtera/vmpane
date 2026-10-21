@@ -24,6 +24,7 @@ mod netinfo;
 mod os;
 mod ports;
 mod power;
+mod screen;
 mod session_link;
 mod timesync;
 mod transport;
@@ -183,6 +184,12 @@ fn run(
             return ExitCode::FAILURE;
         }
     };
+    // UI Automation reports a DPI-unaware process's rectangles in scaled points: the session helper asks for the
+    // display's pixels. Only there: the same executable is also the LocalSystem service.
+    #[cfg(windows)]
+    if args.role == Role::Session {
+        os::session::use_physical_pixels();
+    }
     let code = runtime.block_on(async {
         let agent = Arc::new(Agent::new(args.role));
         #[cfg(unix)]

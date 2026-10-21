@@ -382,9 +382,14 @@ it_wait_install() {
 
 # Signs the Windows guest behind socket $1 in at every boot (its install's user, a fresh password) and restarts it,
 # through the guest agent; returns once the signed-in session's helper is up. The golden install signs nobody in,
-# so its screen is the lock screen. $2: a scratch folder.
+# so its screen is the lock screen. $2: a scratch folder. $3, when given: an agent .exe put in place of the
+# installed one for the restart (an agent not released yet: cargo xwin build in agent/).
 it_windows_autologon() {
-    local socket=$1 script="$2/autologon.ps1"
+    local socket=$1 script="$2/autologon.ps1" agent=${3:-}
+    if [[ -n $agent ]]; then
+        it_rpc "$socket" agent.file.push \
+            "$(jq -n --arg h "$agent" '{hostPath: $h, guestPath: "C:\\Windows\\Temp\\vmpane-agent.new.exe"}')" >/dev/null || return 1
+    fi
     cat >"$script" <<'PS1'
 $ErrorActionPreference = 'Stop'
 $user = Get-LocalUser | Where-Object { $_.Enabled -and $_.Name -notin 'Administrator', 'DefaultAccount', 'Guest', 'WDAGUtilityAccount' } | Select-Object -First 1
@@ -394,6 +399,13 @@ $key = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
 Set-ItemProperty $key AutoAdminLogon '1'
 Set-ItemProperty $key DefaultUserName $user.Name
 Set-ItemProperty $key DefaultPassword $password
+$new = 'C:\Windows\Temp\vmpane-agent.new.exe'
+if (Test-Path $new) {
+    # A running program can be renamed, not overwritten; the service starts the new one after the restart.
+    $exe = 'C:\Program Files\VMPane\Agent\vmpane-agent.exe'
+    Move-Item $exe 'C:\Windows\Temp\vmpane-agent.old.exe' -Force
+    Move-Item $new $exe
+}
 shutdown.exe /r /t 3
 PS1
     it_rpc "$socket" agent.file.push "$(jq -n --arg h "$script" '{hostPath: $h, guestPath: "C:\\Windows\\Temp\\autologon.ps1"}')" >/dev/null || return 1

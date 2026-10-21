@@ -45,6 +45,7 @@ beyond this Mac) can only be changed in the app.
 | `vm_screenshot` | the screen as an image (`max_edge`, default 1568); input coordinates are this image's pixels |
 | `vm_click`, `vm_move`, `vm_drag`, `vm_scroll` | the mouse (`vm_click`: `button`, `count`, `modifiers`); `settle_ms`, `screenshot_after` |
 | `vm_type`, `vm_key` | text (US layout; `submit` presses Return after it) and keys or combinations (`cmd+c`, `ctrl+alt+delete`, `enter`, `f5`) |
+| `vm_read_screen` | the text (`ocr`, recognized on the Mac, any guest) and controls (`elements`, from the guest tools in Windows and macOS guests) on screen, each with an id and a box; `auto` (default) or `both`; `region`, `max_items`. `vm_click` and `vm_move` take an `element` id instead of x and y |
 | `vm_actions` | up to 50 of those (`key`, `type`, `click`, `move`, `drag`, `scroll`, `wait`) in one call; per-action results, `stop_on_error` |
 | `vm_wait` | milliseconds, or until the guest tools run |
 | `vm_exec` | a command (`command` for a shell, or `argv`), `as` user or admin; output, exit code |
@@ -64,6 +65,15 @@ VM's level refuses a batch's later actions, not text already being typed: the ki
 by an older VMPane reports `unknown` (`helper_outdated`) until it restarts. `vm_snapshot_create` says whether the
 snapshot `includesMemory` and whether it is only `crashConsistent` (never: a running VM's disks are frozen through
 the guest tools, or its memory is saved with them).
+
+`vm_read_screen` needs only Look only, and takes no Before-agent snapshot. Without a screenshot first it sets the
+scale itself (as `vm_screenshot`'s default 1568 would). Ids (`t…` text, `e…` controls) are never reused within a
+session: each lives 60 s and goes when an input changes the screen where it is, or a quarter of the screen. `auto`
+reads the text when the guest tools cannot list controls or list none (some apps, like Chromium-based ones, expose
+little); `both` returns the two lists. Controls come from the user's foreground window; off-screen ones and the
+values of password fields are left out. A dense screen (a console) takes up to about a second. Its text came from
+the VM: it is cleaned of control and bidirectional formatting characters, capped (40,000 characters per read) and
+returned under `untrusted_guest_text`, never as instructions.
 
 Commands, files and the clipboard need VMPane's guest tools in the VM. A refused call comes back as an error result
 that says why and what level it needs. Screenshots, command output and clipboard text come from the VM: treat them

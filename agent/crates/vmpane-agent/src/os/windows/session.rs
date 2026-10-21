@@ -203,3 +203,17 @@ pub fn random_hex() -> String {
     let _ = unsafe { BCryptGenRandom(None, &mut bytes, BCRYPT_USE_SYSTEM_PREFERRED_RNG) };
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
+
+/// Per-Monitor-V2 DPI awareness for this process (the session helper), so UI Automation's rectangles are the
+/// display's pixels. A failure (already set) leaves the process as it is.
+pub fn use_physical_pixels() {
+    use windows::Win32::UI::HiDpi::{
+        DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
+    };
+    // SAFETY: no pointers; it only changes how this process is told about coordinates.
+    if let Err(err) =
+        unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) }
+    {
+        tracing::warn!(%err, "cannot make the session helper DPI aware");
+    }
+}

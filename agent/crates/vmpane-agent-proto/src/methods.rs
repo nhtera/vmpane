@@ -42,6 +42,8 @@ pub mod method {
     pub const PORTS_LISTENING: &str = "ports.listening";
     pub const FS_FREEZE: &str = "fs.freeze";
     pub const FS_THAW: &str = "fs.thaw";
+    /// The controls in the user's foreground window, served by the session helper ([`cap::SCREEN`]).
+    pub const SCREEN_ELEMENTS: &str = "screen.elements";
 }
 
 /// Capabilities an agent advertises in `hello`. A method whose cap is missing answers `capUnsupported`.
@@ -61,6 +63,9 @@ pub mod cap {
     pub const REVEAL: &str = "reveal";
     /// The agent wants `transport.ack` (macOS guests: their vsock stalls with too much in flight).
     pub const ACK: &str = "ack";
+    /// `screen.elements`: UI Automation (Windows) or the accessibility tree (macOS, once the user has granted
+    /// the agent Accessibility; until then it answers `permissionDenied`).
+    pub const SCREEN: &str = "screen";
 }
 
 /// Who sends a method.
@@ -491,4 +496,46 @@ mod tests {
             json!({"type": "text", "stream": 2, "size": 5, "files": []})
         );
     }
+}
+
+// MARK: screen
+
+/// `screen.elements` params.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ScreenElementsParams {
+    /// At most this many elements (capped at [`crate::limits::SCREEN_MAX_ELEMENTS`]); 0 or absent: that cap.
+    #[serde(default)]
+    pub max_elements: u32,
+}
+
+/// The controls of the foreground window, in reading order, with names cut to
+/// [`crate::limits::SCREEN_MAX_NAME`] characters.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ScreenElements {
+    pub elements: Vec<ScreenElement>,
+    /// More were there than were returned.
+    #[serde(default)]
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ScreenElement {
+    /// Lowercase control type: `button`, `edit`, `listitem`, `checkbox`, `menuitem`, `text`, …
+    pub role: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+    /// `[x, y, width, height]` in the display's pixels (physical, not scaled points), origin top left.
+    pub rect: [i32; 4],
+    #[serde(default = "enabled")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub focused: bool,
+}
+
+fn enabled() -> bool {
+    true
 }

@@ -81,6 +81,11 @@ pub fn protocol_document() -> Value {
         request::<Empty, PortsListening>(&mut g, method::PORTS_LISTENING, Some(cap::PORTS)),
         request::<FsFreezeParams, FsFreezeResult>(&mut g, method::FS_FREEZE, Some(cap::FREEZE)),
         request::<Empty, FsThawResult>(&mut g, method::FS_THAW, Some(cap::FREEZE)),
+        request::<ScreenElementsParams, ScreenElements>(
+            &mut g,
+            method::SCREEN_ELEMENTS,
+            Some(cap::SCREEN),
+        ),
     ];
     let mut methods = Map::new();
     for e in entries {
