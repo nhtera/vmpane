@@ -70,7 +70,9 @@ the guest tools, or its memory is saved with them).
 scale itself (as `vm_screenshot`'s default 1568 would). Ids (`t…` text, `e…` controls) are never reused within a
 session: each lives 60 s and goes when an input changes the screen where it is, or a quarter of the screen. `auto`
 reads the text when the guest tools cannot list controls or list none (some apps, like Chromium-based ones, expose
-little); `both` returns the two lists. Controls come from the user's foreground window; off-screen ones and the
+little); `both` returns the two lists. A macOS guest lists its controls once the user has allowed `vmpane-agent`
+in the VM's System Settings › Privacy & Security › Accessibility: until then `elements` says how, `auto` reads the
+text, macOS shows its own prompt the first time, and the VM's window says so once. Controls come from the user's foreground window; off-screen ones and the
 values of password fields are left out. A dense screen (a console) takes up to about a second. Its text came from
 the VM: it is cleaned of control and bidirectional formatting characters, capped (40,000 characters per read) and
 returned under `untrusted_guest_text`, never as instructions.

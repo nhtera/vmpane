@@ -104,6 +104,7 @@ at it) needs `control` for clients other than the app and an operator.
 |---|---|
 | `vm.stateChanged` | `{state, reason}` |
 | `agent.connectionChanged` | `{connected}` |
+| `screen.accessibilityNeeded` | `{}` (topic `agent`: a guest refused its controls until the user allows VMPane Agent Accessibility; the VM window says so, once) |
 | `exec.output` | `{execId, stream, dataB64}` |
 | `exec.exited` | `{execId, code, signal}` |
 | `console.output` | `{dataB64}` |

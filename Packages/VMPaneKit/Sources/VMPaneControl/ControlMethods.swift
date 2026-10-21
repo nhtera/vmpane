@@ -54,4 +54,6 @@ public enum ControlNotification: String, CaseIterable, Sendable {
     case snapshotProgress = "snapshot.progress"
     case installProgress = "install.progress"
     case filesProgress = "files.progress"
+    /// An agent asked for a macOS guest's controls before the user allowed VMPane Agent Accessibility.
+    case screenAccessibilityNeeded = "screen.accessibilityNeeded"
 }

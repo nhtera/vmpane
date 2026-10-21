@@ -105,7 +105,7 @@ unsafe fn read(max: usize) -> windows::core::Result<ScreenElements> {
                 skipped[1] += 1;
                 continue;
             }
-            if name.trim().is_empty() && !interactive(role) {
+            if name.trim().is_empty() && !crate::screen::interactive(role) {
                 skipped[2] += 1;
                 continue;
             }
@@ -174,14 +174,6 @@ unsafe fn is_password(element: &IUIAutomationElement) -> bool {
         let _ = VariantClear(&mut variant);
         password
     }
-}
-
-/// Controls worth listing even without a name (an unnamed edit box is still where text goes).
-fn interactive(role: &str) -> bool {
-    matches!(
-        role,
-        "button" | "edit" | "checkbox" | "radiobutton" | "combobox" | "slider" | "spinner"
-    )
 }
 
 #[allow(non_upper_case_globals)] // the SDK's constant names

@@ -131,6 +131,15 @@ fn parse_args() -> Result<Option<Args>, String> {
 }
 
 fn main() -> ExitCode {
+    // The session helper's child that reads the controls (`screen::read` on macOS).
+    #[cfg(target_os = "macos")]
+    if std::env::args().nth(1).as_deref() == Some("screen-elements") {
+        let max = std::env::args()
+            .nth(2)
+            .and_then(|n| n.parse().ok())
+            .unwrap_or(0);
+        return screen::print_elements(max);
+    }
     let args = match parse_args() {
         Ok(Some(args)) => args,
         Ok(None) => return ExitCode::SUCCESS,

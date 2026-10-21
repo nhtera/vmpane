@@ -73,7 +73,7 @@ public struct VMWindowView: View {
                     CaptureHUD(capturing: capturing)
                         .transition(.opacity)
                 } else if let notice = model.notice {
-                    Label(notice, systemImage: "checkmark.circle.fill")
+                    Label(notice, systemImage: notice == HelperViewModel.accessibilityHint ? "hand.raised.fill" : "checkmark.circle.fill")
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
                         .background(.regularMaterial, in: Capsule())
@@ -89,8 +89,9 @@ public struct VMWindowView: View {
         .task { await model.watchInput() }
         .task { await model.watchMemory() }
         .task(id: model.notice) {
-            guard model.notice != nil else { return }
-            try? await Task.sleep(for: .seconds(3))
+            guard let notice = model.notice else { return }
+            // Long enough to read: an instruction stays longer than a confirmation.
+            try? await Task.sleep(for: .seconds(notice == HelperViewModel.accessibilityHint ? 15 : 3))
             withAnimation { model.notice = nil }
         }
         .toolbar {

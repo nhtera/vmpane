@@ -103,7 +103,7 @@ Host → guest requests unless noted. A method whose cap the agent did not adver
 | `power.shutdown` | power | `{reboot, force}` → `{}` (answered first) |
 | `net.addrs`, `ports.listening` | net, ports | → interfaces / listening sockets (hints only) |
 | `fs.freeze`, `fs.thaw` | freeze | `{timeoutMs ≤ 60000}` → `{frozen}` / → `{thawed}` |
-| `screen.elements` | screen | `{maxElements ≤ 800}` → `{elements: [{role, name, value?, rect: [x, y, w, h], enabled, focused}], truncated}`: the controls of the user's foreground window in display pixels, names ≤ 120 characters (user-session helper: UI Automation on Windows; macOS: the accessibility tree once Accessibility is granted, else `permissionDenied`) |
+| `screen.elements` | screen | `{maxElements ≤ 800}` → `{elements: [{role, name, value?, rect: [x, y, w, h], enabled, focused}], truncated}`: the controls of the user's foreground window in display pixels, names ≤ 120 characters (user-session helper: UI Automation on Windows; macOS: the accessibility tree once Accessibility is granted, else `permissionDenied` and, the first time, macOS's prompt; read in a short-lived `vmpane-agent screen-elements` child, since a running process keeps its first answer about the grant) |
 | `agent.heartbeat` (guest → host) | — | `{}` every 5 s |
 | `transport.ack` (host → guest) | ack | `{bytes}`: bytes the host has read on this connection (see Streams) |
 

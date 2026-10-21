@@ -42,6 +42,10 @@ public final class HelperViewModel {
     public private(set) var lastScreenshot: URL?
     /// A short confirmation the window shows for a moment ("Snapshot taken"); nil when there is none.
     public var notice: String?
+    /// For the one-time hints (`accessibilityHintShown.<id>`).
+    private var vmID: String?
+    public static let accessibilityHint =
+        "An AI agent asked for this VM's controls: in the VM, allow vmpane-agent in System Settings › Privacy & Security › Accessibility"
     /// A snapshot is being taken (its button waits).
     public private(set) var takingSnapshot = false
     /// The VM's sound settings, for the toolbar's indicators.
@@ -99,6 +103,7 @@ public final class HelperViewModel {
         if let state = info["state"]?.stringValue.flatMap(VMRunState.init(rawValue:)) { self.state = state }
         if let os = info["os"]?.stringValue.flatMap(GuestOS.init(rawValue:)) { self.os = os }
         if let name = info["name"]?.stringValue { self.name = name }
+        if let id = info["id"]?.stringValue { vmID = id }
         suspended = info["suspended"] == true
         if case .array(let names)? = info["allowedRequests"] { allowed = Set(names.compactMap(\.stringValue)) }
     }
@@ -153,6 +158,12 @@ public final class HelperViewModel {
                 message: note.params?["message"]?.stringValue ?? "")
         case ControlNotification.agentConnectionChanged.rawValue:
             agentConnected = note.params?["connected"] == true
+        case ControlNotification.screenAccessibilityNeeded.rawValue:
+            // Once per VM: macOS shows its own prompt in the guest too.
+            let key = "accessibilityHintShown.\(vmID ?? "?")"
+            guard !UserDefaults.standard.bool(forKey: key) else { break }
+            UserDefaults.standard.set(true, forKey: key)
+            notice = Self.accessibilityHint
         case ControlNotification.filesProgress.rawValue where transfer != nil:
             transfer = Transfer(
                 bytesDone: note.params?["bytesDone"]?.intValue ?? 0, bytesTotal: note.params?["bytesTotal"]?.intValue ?? 0,

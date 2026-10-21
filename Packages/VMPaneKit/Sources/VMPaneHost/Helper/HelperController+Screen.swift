@@ -110,7 +110,13 @@ extension HelperController {
             let capped = Self.capped(items, maxItems: maxItems)
             return .success(reply.result["truncated"] == true ? capped.setting("truncated", true) : capped)
         } catch let error as AgentConnection.ConnectionError {
-            if case .rpc(let agentError) = error { return .failure(agentError) }
+            if case .rpc(let agentError) = error {
+                if agentError.code == AgentErrorCode.permissionDenied.rawValue {
+                    // The person at the VM window can give the grant: tell it (it shows that once).
+                    server?.broadcast(topic: "agent", method: ControlNotification.screenAccessibilityNeeded.rawValue, params: [:])
+                }
+                return .failure(agentError)
+            }
             return .failure(RPCError(.agentUnavailable, error.description))
         } catch {
             return .failure(RPCError(.internalError, ErrorText.readable(error)))

@@ -24,8 +24,10 @@ nix = { version = "0.31.3", features = ["fs", "ioctl", "net", "process", "signal
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.5"
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSPasteboard", "NSPasteboardItem"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSPasteboard", "NSPasteboardItem", "NSWorkspace", "NSRunningApplication", "libc"] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSArray", "NSData", "NSURL", "NSEnumerator"] }
+objc2-application-services = { version = "0.3.2", default-features = false, features = ["std", "HIServices", "AXUIElement", "AXValue", "AXError", "libc"] }
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFArray", "CFString", "CFDictionary", "CFNumber", "CFCGTypes"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 tokio-vsock = "0.7.2"

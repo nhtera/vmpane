@@ -150,3 +150,15 @@ private func recall(_ lines: [ScreenText.Line], _ expected: String) -> (Double, 
     #expect(joined.map(\.text) == ["NE OCR CHECK 4271", "far", "below"], "a wide gap keeps them apart; another row too")
     #expect(joined.first?.rect == CGRect(x: -2, y: 1330, width: 138, height: 14))
 }
+
+@Test func macOSFinderWordsAreFound() throws {
+    // macOS 15 Finder at 2048×1280 with the agent's Accessibility prompt (the screen-read-macos itest's capture).
+    let visible = """
+        Finder File Edit View Go Window Help Wed 21 Oct 12:07 vmpane Favorites Recents Applications Desktop Documents
+        Downloads Locations iCloud Drive My Shared Files Network Tags Red Orange Yellow Accessibility Access
+        vmpane-agent would like to control this computer using accessibility features. Grant access to this application
+        in Privacy & Security settings, located in System Settings. Open System Settings Deny Public Pictures
+        """
+    let (share, missing) = recall(try ScreenText.recognize(try fixture("macos-finder.png")), visible)
+    #expect(share >= 0.95, "\(Int(share * 100)) %; missing \(missing)")
+}

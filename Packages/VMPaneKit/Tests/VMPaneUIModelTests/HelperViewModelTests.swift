@@ -313,3 +313,19 @@ final class MemoryBox: @unchecked Sendable {
     channel.push("vm.stateChanged", ["state": "stopped"])
     #expect(await eventually { !model.memoryLow }, "a stopped VM shows no warning")
 }
+
+@Test @MainActor func theAccessibilityHintShowsOncePerVM() async {
+    let id = UUID().uuidString
+    defer { UserDefaults.standard.removeObject(forKey: "accessibilityHintShown.\(id)") }
+    let channel = FakeChannel()
+    channel.answer("vm.info", .success(["id": .string(id), "state": "running", "os": "macos"]))
+    let model = HelperViewModel(channel: channel)
+    await model.start()
+    channel.push("screen.accessibilityNeeded", [:])
+    #expect(await eventually { model.notice == HelperViewModel.accessibilityHint })
+    model.notice = nil
+    channel.push("screen.accessibilityNeeded", [:])
+    channel.push("agent.connectionChanged", ["connected": true])
+    #expect(await eventually { model.agentConnected })
+    #expect(model.notice == nil, "not twice for one VM")
+}

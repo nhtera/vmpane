@@ -1,6 +1,9 @@
 //! macOS guests.
 
+mod ax;
 pub mod clipboard;
+
+pub use ax::{AxError, screen_elements};
 
 use std::os::fd::{FromRawFd, OwnedFd};
 use std::process::Command;
