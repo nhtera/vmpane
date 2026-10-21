@@ -50,3 +50,18 @@ private func temporaryLog(maxBytes: Int = AuditLog.maxBytes) -> AuditLog {
     let input = AuditLog.recorded(method: "agent.exec.input", params: ["execId": 1, "dataB64": "eA=="], typedText: false)
     #expect(input?["dataB64"] == nil && input?["bytes"] == 1 && input?["sha256"]?.stringValue?.count == 64)
 }
+
+@Test func batchesRecordTheirActionTypesOnly() throws {
+    let params: JSONValue = [
+        "actions": [
+            ["type": "click", "x": 10, "y": 20], ["type": "text", "text": "hunter2", "submit": true], ["type": "key", "usages": [40]],
+        ],
+        "settleMs": 300,
+    ]
+    for typedText in [false, true] {
+        let batch = try #require(AuditLog.recorded(method: "vm.input.batch", params: params, typedText: typedText))
+        #expect(batch["actions"] == ["click", "text", "key"] && batch["count"] == 3 && batch["settleMs"] == 300)
+        let encoded = String(bytes: try JSONEncoder().encode(batch), encoding: .utf8)
+        #expect(encoded?.contains("hunter2") == false, "the text is on the action's own line")
+    }
+}

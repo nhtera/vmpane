@@ -114,7 +114,8 @@ public final class AuditLog: @unchecked Sendable {
     }
 
     /// A request's params as they are recorded: typed text and clipboard contents as SHA-256 unless the VM records
-    /// typed text, exec environments by name only, file contents never (they travel on streams anyway).
+    /// typed text, exec environments by name only, file contents never (they travel on streams anyway). A batch of
+    /// input records its action types only: each action has a line of its own, recorded like the single request.
     public static func recorded(method: String, params: JSONValue?, typedText: Bool) -> JSONValue? {
         guard case .object(var fields)? = params else { return params }
         func hashed(_ value: JSONValue?) -> JSONValue? {
@@ -123,6 +124,13 @@ public final class AuditLog: @unchecked Sendable {
         switch method {
         case "vm.input.text" where !typedText:
             fields["text"] = hashed(fields["text"])
+        case "vm.input.batch":
+            let actions = fields["actions"].flatMap { value -> [JSONValue]? in
+                if case .array(let items) = value { return items }
+                return nil
+            }
+            fields["actions"] = actions.map { .array($0.map { $0["type"] ?? "?" }) }
+            fields["count"] = actions.map { .int(Int64($0.count)) }
         case "vm.clipboard.write":
             if case .array(let items)? = fields["items"] {
                 fields["items"] = .array(

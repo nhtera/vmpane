@@ -379,3 +379,26 @@ it_wait_install() {
     done
     it_fail "the install did not finish within $2 min (at $phase)"
 }
+
+# Signs the Windows guest behind socket $1 in at every boot (its install's user, a fresh password) and restarts it,
+# through the guest agent; returns once the signed-in session's helper is up. The golden install signs nobody in,
+# so its screen is the lock screen. $2: a scratch folder.
+it_windows_autologon() {
+    local socket=$1 script="$2/autologon.ps1"
+    cat >"$script" <<'PS1'
+$ErrorActionPreference = 'Stop'
+$user = Get-LocalUser | Where-Object { $_.Enabled -and $_.Name -notin 'Administrator', 'DefaultAccount', 'Guest', 'WDAGUtilityAccount' } | Select-Object -First 1
+$password = 'Vp-' + [guid]::NewGuid().ToString('N')
+$user | Set-LocalUser -Password (ConvertTo-SecureString $password -AsPlainText -Force)
+$key = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+Set-ItemProperty $key AutoAdminLogon '1'
+Set-ItemProperty $key DefaultUserName $user.Name
+Set-ItemProperty $key DefaultPassword $password
+shutdown.exe /r /t 3
+PS1
+    it_rpc "$socket" agent.file.push "$(jq -n --arg h "$script" '{hostPath: $h, guestPath: "C:\\Windows\\Temp\\autologon.ps1"}')" >/dev/null || return 1
+    /usr/bin/python3 "$VMPANE_ROOT/itest/lib/agent_exec.py" "$socket" \
+        'powershell -NoProfile -ExecutionPolicy Bypass -File C:\Windows\Temp\autologon.ps1' >/dev/null || return 1
+    it_wait_for 60 bash -c "! /usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' '$socket' agent.status | jq -e .connected >/dev/null" || return 1
+    it_wait_for 240 bash -c "/usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' '$socket' agent.status 2>/dev/null | jq -e '.connected and .session' >/dev/null"
+}

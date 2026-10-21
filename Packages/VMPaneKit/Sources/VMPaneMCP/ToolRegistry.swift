@@ -28,8 +28,13 @@ public struct ToolResult: Sendable {
 /// A failure the model should read (a refused policy, a VM that is not running): returned with `isError`.
 public struct ToolFailure: Error, Sendable {
     public let message: String
+    /// The helper's error code, when the failure is its answer.
+    public let code: Int?
 
-    public init(_ message: String) { self.message = message }
+    public init(_ message: String, code: Int? = nil) {
+        self.message = message
+        self.code = code
+    }
 }
 
 /// What a tool's handler gets besides its arguments.
@@ -107,6 +112,12 @@ enum Schema {
     }
 
     static func boolean(_ description: String) -> JSONValue { ["type": "boolean", "description": .string(description)] }
+
+    static func array(_ description: String, items: JSONValue, maxItems: Int? = nil) -> JSONValue {
+        var schema: [String: JSONValue] = ["type": "array", "description": .string(description), "items": items]
+        if let maxItems { schema["maxItems"] = .int(Int64(maxItems)) }
+        return .object(schema)
+    }
 
     static let vm: JSONValue = string("The VM: its name, id or short id (vm_list shows them).")
 }

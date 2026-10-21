@@ -109,6 +109,13 @@ public protocol VMBackend: AnyObject, Sendable {
     /// PNG of the guest display, longest edge at most `maxEdge`.
     func screenshot(maxEdge: Int) async throws -> Screenshot
     func send(_ input: InputEvent) async throws
+    /// How long typing one character takes, pauses included: long text is sent in pieces short enough that a stop
+    /// (the kill switch) takes effect between them.
+    var typingPace: Duration { get }
+    /// The first character of `text` this backend cannot type, if any (text is checked whole before it is typed).
+    func untypable(in text: String) -> Character?
+    /// The guest display reduced for input verification (`ScreenDiff`), read off the main thread; nil without one.
+    func grayFrame() async -> GrayFrame?
     /// Applies the settings at `paths` (`SettingKind.live`) of the saved `config` to the running VM.
     /// Returns the paths now in effect; the others take effect at the next start.
     func applyLive(_ config: VMConfigV1, paths: [String]) async -> Set<String>
@@ -121,6 +128,11 @@ public protocol VMBackend: AnyObject, Sendable {
 }
 
 extension VMBackend {
+    public var typingPace: Duration { .milliseconds(8) }
+    public func untypable(in text: String) -> Character? {
+        text.first { character in KeyNames.stroke(for: character).flatMap { KeyNames.name(forHIDUsage: $0.usage) } == nil }
+    }
+    public func grayFrame() async -> GrayFrame? { nil }
     public var agentSockets: AsyncStream<Int32> { AsyncStream { $0.finish() } }
     public func applyLive(_ config: VMConfigV1, paths: [String]) async -> Set<String> { [] }
     public func ejectMedia(_ id: String) async throws { throw BackendUnsupported(feature: "ejecting media") }

@@ -71,6 +71,10 @@ public final class ControlConnection: @unchecked Sendable, Hashable {
         inFlight += 1
     }
 
+    /// Whether the peer has stopped sending or the connection is closed: a client that went away stays referenced
+    /// by its requests in flight, so this is what tells a long request it no longer has anyone to answer.
+    public var isFinished: Bool { queue.sync { closed || peerFinished } }
+
     func finishRequest() {
         queue.async {
             self.inFlight -= 1

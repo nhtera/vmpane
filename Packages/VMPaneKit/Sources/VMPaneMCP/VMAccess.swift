@@ -52,7 +52,7 @@ public actor VMAccess {
         do {
             return try await session.client.call(method.rawValue, params: params, timeout: timeout)
         } catch let error as RPCError {
-            throw ToolFailure(Self.explain(error, vm: item.config?.name ?? selector))
+            throw ToolFailure(Self.explain(error, vm: item.config?.name ?? selector), code: error.code)
         } catch let error as ControlClientError {
             throw ToolFailure(Self.explain(error, vm: item.config?.name ?? selector))
         }

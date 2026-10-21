@@ -57,6 +57,7 @@ with end-of-file after it starts; when the VM asks before agents run commands, t
 | `vm.input.text` | `{text}` | `{}` | control |
 | `vm.input.pointer` | `{x, y, buttons}` | `{}` | control |
 | `vm.input.scroll` | `{dx, dy}` | `{}` | control |
+| `vm.input.batch` | `{actions: [{type: key, usages} \| {type: text, text, submit?} \| {type: click, x, y, button?, count?, modifiers?} \| {type: move, x, y} \| {type: drag, from, to} \| {type: scroll, dx, dy} \| {type: wait, ms}], stopOnError?, settleMs?, verify?}` (≤ 50 actions, waits ≤ 30 s together; each action is also decided and audited as the `vm.input.*` request it stands for; a stop ends it between actions, pieces of text and captures) | `{results: [{i, ok, error?}], verified: {status: changed\|unchanged\|unknown, changeRatio, bbox?, settled, waitedMs, reason?}, screen?: {width, height}}` (guest pixels) | control |
 | `vm.display.show` | — | `{}` | control |
 | `vm.install.cancel` | — (ends a Windows install; a running VM is ejected from its install discs and stopped) | `{state}` | uiOnly |
 | `vm.settings.get` | — | `config` | observe |

@@ -113,7 +113,29 @@ final class ScriptedBackend: VMBackend, @unchecked Sendable {
     func screenshot(maxEdge: Int) async throws -> Screenshot {
         Screenshot(png: Data([0x89, 0x50, 0x4E, 0x47]), width: 4, height: 3)
     }
-    func send(_ input: InputEvent) async throws { lock.withLock { calls.append("input.\(input)") } }
+    /// How long each typed character takes (`typingPace`); text is recorded once typed.
+    var typingDelay = Duration.milliseconds(1)
+    /// When each input arrived.
+    private(set) var inputTimes: [ContinuousClock.Instant] = []
+    /// What `grayFrame` returns, one per call (the last one stays); none: no display.
+    var frames: [GrayFrame] = []
+    /// The next input fails (once).
+    var failNextInput = false
+    func send(_ input: InputEvent) async throws {
+        if case .text(let text) = input { try await Task.sleep(for: typingDelay * text.count) }
+        try lock.withLock {
+            if failNextInput {
+                failNextInput = false
+                throw POSIXError(.EIO)
+            }
+            calls.append("input.\(input)")
+            inputTimes.append(.now)
+        }
+    }
+    var typingPace: Duration { typingDelay }
+    func grayFrame() async -> GrayFrame? {
+        lock.withLock { frames.count > 1 ? frames.removeFirst() : frames.first }
+    }
     func ejectMedia(_ id: String) async throws { try record("eject.\(id)") }
     func applyLive(_ config: VMConfigV1, paths: [String]) async -> Set<String> {
         lock.withLock {

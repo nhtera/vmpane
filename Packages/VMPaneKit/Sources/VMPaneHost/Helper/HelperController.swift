@@ -64,6 +64,8 @@ public actor HelperController {
     var agentSnapshotTasks: [String: Task<SnapshotMeta?, Never>] = [:]
     /// A snapshot is being taken: the next one waits for it (VZ cannot save a VM's state twice at once).
     var snapshotting = false
+    /// An input batch is running (`HelperController+InputBatch`): the next one waits for it.
+    var batching = false
     /// Agent sessions' undo snapshots (`HelperController+AgentSession`).
     var agentSessions: [String: AgentSession] = [:]
     /// The file drop in progress (`vm.files.cancel` stops it).
@@ -72,6 +74,9 @@ public actor HelperController {
     var dropOwner: ObjectIdentifier?
     /// A running VZ VM's port forwards (`HelperController+Ports`).
     var portForwarder: PortForwarder?
+    /// Frames for input verification from the helper app (a QEMU VM's SPICE display), when it has them
+    /// (`HelperController+InputBatch`).
+    var frameSource: (@Sendable () async -> GrayFrame?)?
     /// Refreshes `thumbnail.png` while the VM runs (`HelperController+Thumbnail`).
     var thumbnailTask: Task<Void, Never>?
     /// The config the running VM was started with, plus settings applied live since (nil before a start).
@@ -93,14 +98,6 @@ public actor HelperController {
     /// Asked to show the VM's window (`vm.display.show`).
     public nonisolated let displayRequests: AsyncStream<Void>
     let displayContinuation: AsyncStream<Void>.Continuation
-
-    public func setGracefulStopTimeout(_ timeout: Duration) { gracefulStopTimeout = timeout }
-    func setSessionLockCheck(_ check: @escaping @Sendable () -> Bool) { isSessionLocked = check }
-    func setClassifier(_ classifier: PeerClassifier) {
-        self.classifier = classifier
-        identities = [:]  // decided again with it
-    }
-    func setSpaceCheck(_ check: @escaping @Sendable (UInt64, URL) throws -> Void) { checkSpace = check }
 
     public init(
         prepared: PreparedBundle, runtimeVersion: String, backend: VMBackend?, config: VMConfigV1? = nil,
@@ -186,6 +183,7 @@ public actor HelperController {
         case .vmInfo?: return info()
         case .vmScreenshot?, .vmInputKey?, .vmInputText?, .vmInputPointer?, .vmInputScroll?:
             return await displayRequest(request.method, request.params)
+        case .vmInputBatch?: return await inputBatch(request.params, from: connection)
         case .vmDisplayShow?:
             displayContinuation.yield()
             return .success(.object([:]))
@@ -314,4 +312,15 @@ public actor HelperController {
         sysctlbyname("kern.osversion", &buffer, &size, nil, 0)
         return String(bytes: buffer.prefix { $0 != 0 }, encoding: .utf8) ?? ""
     }()
+}
+
+/// What tests and the helper app replace.
+extension HelperController {
+    public func setGracefulStopTimeout(_ timeout: Duration) { gracefulStopTimeout = timeout }
+    func setSessionLockCheck(_ check: @escaping @Sendable () -> Bool) { isSessionLocked = check }
+    func setClassifier(_ classifier: PeerClassifier) {
+        self.classifier = classifier
+        identities = [:]  // decided again with it
+    }
+    func setSpaceCheck(_ check: @escaping @Sendable (UInt64, URL) throws -> Void) { checkSpace = check }
 }

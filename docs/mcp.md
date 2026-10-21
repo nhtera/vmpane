@@ -41,15 +41,27 @@ beyond this Mac) can only be changed in the app.
 |---|---|
 | `vm_list` | VMs open to agents, with their state |
 | `vm_status` | a VM's state, and whether VMPane's guest tools run in it |
-| `vm_power` | `start`, `stop` (the power button), `force_stop`, `pause`, `resume` |
+| `vm_power` | `start`, `stop` (the power button), `force_stop`, `pause`, `resume`; a start can wait for the guest tools (`wait_for: guest_tools`, `timeout_s`) and then names the guest OS |
 | `vm_screenshot` | the screen as an image (`max_edge`, default 1568); input coordinates are this image's pixels |
-| `vm_click`, `vm_move`, `vm_drag`, `vm_scroll` | the mouse; `settle_ms`, `screenshot_after` |
-| `vm_type`, `vm_key` | text (US layout) and keys or combinations (`cmd+c`, `ctrl+alt+delete`, `enter`, `f5`) |
+| `vm_click`, `vm_move`, `vm_drag`, `vm_scroll` | the mouse (`vm_click`: `button`, `count`, `modifiers`); `settle_ms`, `screenshot_after` |
+| `vm_type`, `vm_key` | text (US layout; `submit` presses Return after it) and keys or combinations (`cmd+c`, `ctrl+alt+delete`, `enter`, `f5`) |
+| `vm_actions` | up to 50 of those (`key`, `type`, `click`, `move`, `drag`, `scroll`, `wait`) in one call; per-action results, `stop_on_error` |
 | `vm_wait` | milliseconds, or until the guest tools run |
 | `vm_exec` | a command (`command` for a shell, or `argv`), `as` user or admin; output, exit code |
 | `vm_file_push`, `vm_file_pull` | files between the VM and `~/VMPane Exchange/<vm>/` on the Mac (only there) |
 | `vm_snapshot_list`, `_create`, `_restore`, `_delete` | snapshots |
 | `vm_clipboard_get`, `vm_clipboard_set` | the clipboard's text (macOS and Windows guests with the guest tools) |
+
+Every input tool says afterwards whether the screen changed: `verified` with `status` (`changed`, `unchanged` or
+`unknown`), `changeRatio`, `bbox` (screenshot pixels), `settled` and `waitedMs`, and `screen` (`w`, `h`, `scale`)
+whenever the screen could be read. The helper compares small grayscale copies of the screen in 16×16 tiles, so a
+thin blinking caret or a clock ticking over does not count; a blinking block cursor (as in a terminal) is the size of
+a typed character and can read as `changed`, and a change smaller than a character can read as `unchanged`, so look
+before repeating an action. It waits up to `settle_ms` and returns as soon as a change holds still. Batches on one VM
+run one at a time; text that cannot be typed (outside the US layout) fails before any of it is typed. A VM started
+by an older VMPane reports `unknown` (`helper_outdated`) until it restarts. `vm_snapshot_create` says whether the
+snapshot `includesMemory` and whether it is only `crashConsistent` (never: a running VM's disks are frozen through
+the guest tools, or its memory is saved with them).
 
 Commands, files and the clipboard need VMPane's guest tools in the VM. A refused call comes back as an error result
 that says why and what level it needs. Screenshots, command output and clipboard text come from the VM: treat them

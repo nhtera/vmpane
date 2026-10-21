@@ -12,6 +12,13 @@ extension QEMUSession {
         return Screenshot(png: shot.png, width: shot.width, height: shot.height, scale: scale)
     }
 
+    /// The display reduced for input verification. `screendump` writes a full-size file per call, so it is the
+    /// fallback: the helper app's SPICE client has the frames in memory.
+    func grayFrame() async -> GrayFrame? {
+        guard let pixels = try? await capture(), let image = QEMUScreenshot.image(pixels) else { return nil }
+        return GrayFrame(image)
+    }
+
     /// `screendump` into the run directory, read back (no symlinks, size capped) and deleted.
     func capture() async throws -> QEMUScreenshot.Pixels {
         guard let current = running else { throw QEMUBackendError.notRunning }

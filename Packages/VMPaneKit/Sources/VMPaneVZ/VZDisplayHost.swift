@@ -306,3 +306,32 @@ public final class VZDisplayHost {
         }
     }
 }
+
+// MARK: - Frames for input verification
+
+extension VZDisplayHost {
+    /// The guest framebuffer, for a reduced copy made off the main thread (`grayFrame(of:)`).
+    public struct Surface: @unchecked Sendable {
+        let surface: IOSurfaceRef
+    }
+
+    public func surface() -> Surface? { guestSurface().map(Surface.init) }
+
+    /// `surface` reduced for input verification, read under its lock without copying it first.
+    public nonisolated static func grayFrame(of surface: Surface) -> GrayFrame? {
+        let surface = surface.surface
+        IOSurfaceLock(surface, .readOnly, nil)
+        defer { IOSurfaceUnlock(surface, .readOnly, nil) }
+        let width = IOSurfaceGetWidth(surface), height = IOSurfaceGetHeight(surface), rowBytes = IOSurfaceGetBytesPerRow(surface)
+        guard width > 0, height > 0,
+            let provider = CGDataProvider(
+                dataInfo: nil, data: IOSurfaceGetBaseAddress(surface), size: rowBytes * height, releaseData: { _, _, _ in }),
+            let image = CGImage(
+                width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: rowBytes,
+                space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue),
+                provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
+        else { return nil }
+        return GrayFrame(image)  // drawn here, while the surface is locked
+    }
+}

@@ -52,9 +52,15 @@ enum VMTools {
 
     static func power(_ access: VMAccess) -> Tool {
         Tool(
-            "vm_power", "Start, shut down (the power button), turn off at once, pause or resume a VM.",
+            "vm_power",
+            "Start, shut down (the power button), turn off at once, pause or resume a VM. A start can wait until VMPane's "
+                + "guest tools run in it (wait_for).",
             schema: Schema.object(
-                ["vm": Schema.vm, "action": Schema.string("What to do.", enum: ["start", "stop", "force_stop", "pause", "resume"])],
+                [
+                    "vm": Schema.vm, "action": Schema.string("What to do.", enum: ["start", "stop", "force_stop", "pause", "resume"]),
+                    "wait_for": Schema.string("start: return once this is ready (default none).", enum: ["none", "guest_tools"]),
+                    "timeout_s": Schema.integer("wait_for: give up after this many seconds (default 120).", minimum: 1, maximum: 600),
+                ],
                 required: ["vm", "action"]),
             annotations: ["destructiveHint": true, "openWorldHint": false]
         ) { args, _ in
@@ -63,7 +69,13 @@ enum VMTools {
                 throw ToolFailure("action is start, stop, force_stop, pause or resume")
             }
             let result = try await access.call(vm, action.method, action.params, launching: action.launching, timeout: .seconds(180))
-            return ToolResult(text: "\(vm): \(result["state"]?.stringValue ?? "?")", structured: result)
+            let state = "\(vm): \(result["state"]?.stringValue ?? "?")"
+            guard action.method == .vmStart, args["wait_for"] == "guest_tools" else { return ToolResult(text: state, structured: result) }
+            let agent = try await waitForGuestTools(access, vm, timeout: .seconds(args["timeout_s"]?.intValue ?? 120))
+            var structured = result.objectValue ?? [:]
+            structured["guest"] = ["os": agent["os"] ?? "", "osVersion": agent["osVersion"] ?? "", "toolsVersion": agent["version"] ?? ""]
+            let os = [agent["os"]?.stringValue, agent["osVersion"]?.stringValue].compactMap { $0 }.filter { !$0.isEmpty }
+            return ToolResult(text: "\(state), guest tools running (\(os.joined(separator: " ")))", structured: .object(structured))
         }
     }
 
@@ -114,7 +126,11 @@ enum VMTools {
                 let kind = state == "running" || state == "paused" ? "live" : "disk"
                 let meta = try await access.call(
                     vm, .vmSnapshotCreate, ["name": .string(try args.string("name")), "kind": .string(kind)], timeout: .seconds(600))
-                return ToolResult(text: "snapshot \(meta["id"]?.stringValue ?? "") taken", structured: meta)
+                // A live snapshot keeps the memory; a disk one of a stopped VM is a clean shutdown's disk, never a crash's.
+                var structured = meta.objectValue ?? [:]
+                structured["includesMemory"] = .bool(meta["kind"]?.stringValue ?? kind == "live")
+                structured["crashConsistent"] = false
+                return ToolResult(text: "snapshot \(meta["id"]?.stringValue ?? "") taken", structured: .object(structured))
             },
             Tool(
                 "vm_snapshot_restore", "Go back to a snapshot. What changed since it was taken is lost.",
@@ -173,18 +189,25 @@ enum VMTools {
         ) { args, _ in
             let vm = try args.string("vm")
             if args["until"] == "agent" {
-                let deadline = ContinuousClock.now + .seconds(args["timeout_s"]?.intValue ?? 120)
-                while ContinuousClock.now < deadline {
-                    if (try? await access.call(vm, .agentStatus))?["connected"] == true {
-                        return ToolResult(text: "the guest tools are running")
-                    }
-                    try await Task.sleep(for: .milliseconds(500))
-                }
-                throw ToolFailure("the guest tools did not start in time")
+                _ = try await waitForGuestTools(access, vm, timeout: .seconds(args["timeout_s"]?.intValue ?? 120))
+                return ToolResult(text: "the guest tools are running")
             }
             try await Task.sleep(for: .milliseconds(min(max(args["ms"]?.intValue ?? 1000, 0), 60000)))
             return ToolResult(text: "waited")
         }
+    }
+}
+
+extension VMTools {
+    /// Waits until VMPane's guest tools are connected in the VM (`vm_wait until agent`, `vm_power start wait_for`);
+    /// their `agent.status`.
+    static func waitForGuestTools(_ access: VMAccess, _ vm: String, timeout: Duration) async throws -> JSONValue {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if let status = try? await access.call(vm, .agentStatus), status["connected"] == true { return status }
+            try await Task.sleep(for: .milliseconds(500))
+        }
+        throw ToolFailure("the guest tools did not start in time")
     }
 }
 

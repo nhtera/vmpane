@@ -192,6 +192,18 @@ public final class SpiceDisplay: NSObject {
         return rep.representation(using: .png, properties: [:])
     }
 
+    /// The display reduced for input verification, from the frame the SPICE client has in memory (QMP `screendump`
+    /// writes a full-size file per frame). Reduced in the client's callback, while its frame is still valid.
+    public func grayFrame() async -> GrayFrame? {
+        guard let display else { return nil }
+        return await withCheckedContinuation { continuation in
+            display.screenshot { shot in
+                let image = shot?.image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+                continuation.resume(returning: image.flatMap { GrayFrame($0) })
+            }
+        }
+    }
+
     fileprivate func connected(_ display: CSDisplay, on source: CSConnection) {
         guard source === connection, display.isPrimaryDisplay else { return }
         self.display = display

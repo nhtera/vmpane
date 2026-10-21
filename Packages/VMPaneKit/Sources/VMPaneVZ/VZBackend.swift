@@ -213,12 +213,21 @@ public final class VZBackend: VMBackend {
     /// once, 93 arrived and a held Shift could stay down); a fast typist's pace arrives intact.
     static let keyInterval = Duration.milliseconds(8)
 
+    /// Text is paced after every character, so pieces sent one after another keep the pace too.
     public func send(_ input: InputEvent) async throws {
-        guard case .text(let text) = input, text.count > 1 else { return try await sendNow(input) }
-        for (index, character) in text.enumerated() {
-            if index > 0 { try await Task.sleep(for: Self.keyInterval) }
+        guard case .text(let text) = input else { return try await sendNow(input) }
+        for character in text {
             try await sendNow(.text(String(character)))
+            try await Task.sleep(for: Self.keyInterval)
         }
+    }
+
+    public var typingPace: Duration { Self.keyInterval }
+    public func untypable(in text: String) -> Character? { text.first { VZKeyMap.stroke(for: $0) == nil } }
+
+    public func grayFrame() async -> GrayFrame? {
+        guard let surface = await MainActor.run(body: { display?.surface() }) else { return nil }
+        return await Blocking.run { VZDisplayHost.grayFrame(of: surface) }
     }
 
     private func sendNow(_ input: InputEvent) async throws {

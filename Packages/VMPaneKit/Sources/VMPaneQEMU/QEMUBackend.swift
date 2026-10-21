@@ -87,6 +87,8 @@ public final class QEMUBackend: VMBackend {
 
     public func ejectMedia(_ id: String) async throws { try await session.ejectMedia(id) }
     public func send(_ input: InputEvent) async throws { try await session.send(input) }
+    public var typingPace: Duration { .milliseconds(QEMUInput.keyHold) + QEMUInput.keyGap }
+    public func grayFrame() async -> GrayFrame? { await session.grayFrame() }
 
     /// QMP for integration hooks and later features (snapshots, live settings).
     var qmp: QMPClient? { get async { await session.qmp } }
