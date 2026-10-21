@@ -41,7 +41,7 @@ public protocol HostPasteboard: Sendable {
     func write(_ content: ClipboardContent) async -> Int
 }
 
-/// The guest agent's clipboard (`clipboard.get` / `clipboard.set`; macOS guests).
+/// The guest agent's clipboard (`clipboard.get` / `clipboard.set`; macOS and Windows guests).
 enum AgentClipboard {
     static func get(_ connection: AgentConnection, types: [AgentClipboardType]) async throws -> ClipboardContent {
         let names = AgentConnection.StreamNames(inbound: { result in
@@ -91,7 +91,7 @@ enum AgentClipboard {
     }
 }
 
-/// A VM's clipboard sharing through the guest agent (macOS guests; Linux and Windows guests share theirs through
+/// A VM's clipboard sharing through the guest agent (macOS and Windows guests; Linux guests share theirs through
 /// SPICE). Both directions follow the VM's `clipboard.mode` and only while its window is the key window: the
 /// guest neither reads the Mac's clipboard nor replaces it while the user works elsewhere. A guest change seen
 /// while unfocused is fetched when the window gets focus. Files copied in the guest are pulled into

@@ -1,6 +1,6 @@
 # Guest agent in a Windows 11 ARM guest on QEMU, over virtio-serial: the golden install put the agent MSI in
 # (guest-tools/fetch-agent-msi.sh before building the golden). Checks: the service connects after boot, exec as
-# LocalSystem with exit codes, 256 MiB push and pull with matching SHA-256 (target ≥ 30 MB/s on virtio-serial),
+# LocalSystem with exit codes, the NAT's DNS proxy answering, 256 MiB push and pull with matching SHA-256 (target ≥ 30 MB/s on virtio-serial),
 # the guest clock within 1 s after a 20 s pause, and the agent back after a suspend and a live restore.
 # Sourced by scripts/itest.sh with $APP set. Exit 77 without a Windows ISO, the MSI, or 15 GiB free.
 
@@ -41,6 +41,16 @@ scenario_run() {
     it_agent_exec 'exit /b 7' || rc=$?
     [[ $rc == 7 ]] || it_fail "exit 7 came back as $rc" || return 1
     echo "agent-windows: exec as LocalSystem and exit codes OK"
+
+    # The NAT's DNS proxy (10.0.2.3) answers: sandboxed QEMU reads the Mac's name servers (needs a Mac online).
+    if host -W 3 github.com >/dev/null 2>&1; then
+        out=$(it_agent_exec 'nslookup github.com 10.0.2.3' 2>&1 | tr -d '\r') || true
+        [[ $out == *"Name:"*"github.com"* && $out != *"timed out"* ]] ||
+            { echo "$out"; it_fail "the NAT's DNS (10.0.2.3) did not answer"; return 1; }
+        echo "agent-windows: the NAT's DNS (10.0.2.3) answers"
+    else
+        echo "agent-windows: the Mac resolves no names; the NAT's DNS is not checked"
+    fi
 
     # 3. 256 MiB both ways over virtio-serial.
     big="$work/big.bin"

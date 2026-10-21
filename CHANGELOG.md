@@ -5,6 +5,15 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Windows VMs share the clipboard through VMPane's guest agent: text and images both ways, and files copied in
+  the VM arrive in `~/Downloads/VMPane/<VM>`. Existing VMs get it by updating the guest tools (#5).
+
+### Fixed
+- A Windows VM on the shared (NAT) network could not resolve names: QEMU's sandbox kept it from reading the Mac's
+  DNS servers, so the network's DNS (10.0.2.3) never answered. The same sandbox rule filled `qemu.log` with
+  thousands of "Conversion from character set" lines (#5).
+
 ## [1.0.0-beta.9]
 VMPane warns when the Mac is low on memory for a VM.
 

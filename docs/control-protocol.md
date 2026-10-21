@@ -62,7 +62,7 @@ with end-of-file after it starts; when the VM asks before agents run commands, t
 | `vm.settings.get` | — | `config` | observe |
 | `vm.settings.apply` | `{patch}` (JSON merge patch over the config) | `{fields: {path: applied\|nextBoot\|rejected}, reasons?}` | admin; sensitive patch: uiOnly |
 | `vm.ports.list` | — | `{rules: [{…rule, status: listening\|blocked\|failed\|inactive, reason?}], listening: [{proto, port, process?}]}` (`blocked`: macOS Local Network privacy; `listening`: the guest agent's open ports, as suggestions) | observe |
-| `vm.clipboard.read` | `{types?}` (text, png, files) | `{items: [{type: text, text} \| {type: png, dataB64} \| {type: files, files}]}` (guest agent's clipboard: macOS guests; `files` are guest paths, for `agent.file.pull`; follows `clipboard.mode`'s direction) | control + clipboard.allowWithAgents |
+| `vm.clipboard.read` | `{types?}` (text, png, files) | `{items: [{type: text, text} \| {type: png, dataB64} \| {type: files, files}]}` (guest agent's clipboard: macOS and Windows guests; `files` are guest paths, for `agent.file.pull`; follows `clipboard.mode`'s direction) | control + clipboard.allowWithAgents |
 | `vm.clipboard.write` | `{items: [{type: text, text} \| {type: png, dataB64}]}` | `{}` (follows `clipboard.mode`'s direction) | control + clipboard.allowWithAgents |
 | `agent.status` | — | `{connected, version, os, osVersion, proto, caps, session}` | observe |
 | `agent.exec` | `{argv, as, cwd, env, timeoutMs, stdin, input}` | `{execId}` | exec (as:user), admin (as:admin) |

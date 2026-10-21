@@ -1,6 +1,7 @@
-//! `clipboard.get` / `clipboard.set` / `clipboard.changed` (macOS guests: text, PNG, file lists). The
-//! user-session helper owns the pasteboard; the daemon relays the requests and their streams to it, and its
-//! `clipboard.changed` to the host. Other guests have no agent clipboard (spice-vdagent does text and images).
+//! `clipboard.get` / `clipboard.set` / `clipboard.changed` (macOS and Windows guests: text, PNG, file lists).
+//! The user-session helper owns the pasteboard (`os::clipboard`); the daemon relays the requests and their
+//! streams to it, and its `clipboard.changed` to the host. Linux guests have no agent clipboard (spice-vdagent
+//! does text and images).
 
 use std::sync::Arc;
 
@@ -12,7 +13,7 @@ use crate::connection::{Conn, Reply};
 use crate::dispatch::Inbound;
 
 /// Whether this OS's agent serves the clipboard.
-pub const SUPPORTED: bool = cfg!(target_os = "macos");
+pub const SUPPORTED: bool = cfg!(any(target_os = "macos", windows));
 
 fn unsupported() -> ErrorObject {
     ErrorObject::new(
@@ -21,7 +22,7 @@ fn unsupported() -> ErrorObject {
     )
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", windows))]
 mod imp {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicIsize, Ordering};
@@ -281,11 +282,11 @@ mod imp {
 
 /// Session helper: `clipboard.get`.
 pub async fn get(conn: &Arc<Conn>, params: ClipboardGetParams) -> Result<Reply, ErrorObject> {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     {
         imp::get(conn, params).await
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = (conn, params);
         Err(unsupported())
@@ -298,24 +299,24 @@ pub async fn set(
     params: ClipboardContents,
     inbound: Inbound,
 ) -> Result<Reply, ErrorObject> {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     {
         imp::set(conn, params, inbound).await
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = (conn, params, inbound);
         Err(unsupported())
     }
 }
 
-/// Session helper: reports pasteboard changes for the connection's lifetime (macOS); None elsewhere.
+/// Session helper: reports pasteboard changes for the connection's lifetime (macOS, Windows); None elsewhere.
 pub fn watch(conn: &Arc<Conn>) -> Option<tokio::task::JoinHandle<()>> {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     {
         Some(imp::watch(Arc::clone(conn)))
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = conn;
         None
@@ -334,7 +335,7 @@ pub async fn relay(
     let link = conn.agent.session.current().ok_or_else(|| {
         ErrorObject::new(ErrorCode::NoSession, "no user session helper is connected")
     })?;
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     {
         if request.method == vmpane_agent_proto::methods::method::CLIPBOARD_GET {
             imp::relay_get(conn, &link, request.decode_params()?).await
@@ -342,7 +343,7 @@ pub async fn relay(
             imp::relay_set(conn, &link, request.decode_params()?, inbound).await
         }
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = (link, request, inbound);
         Err(unsupported())

@@ -96,7 +96,7 @@ Host → guest requests unless noted. A method whose cap the agent did not adver
 | `file.pull` | file | `{path, maxBytes}` → `{size, stream}` (guest stream of exactly `size` bytes) |
 | `file.stat` / `file.mkdirTemp` | file | `{path}` → `{kind, size, mode, mtimeUnixNanos}` / `{prefix}` → `{path}` |
 | `session.reveal` | reveal | `{path}` → `{}`: selects it in Finder / Explorer / the file manager (user-session helper) |
-| `clipboard.get` / `clipboard.set` | clipboard | `{types}` → `{items}` / `{items}` → `{}`: text and PNG on streams (≤ 32 MiB), file lists inline; macOS guests (user-session helper) |
+| `clipboard.get` / `clipboard.set` | clipboard | `{types}` → `{items}` / `{items}` → `{}`: text and PNG on streams (≤ 32 MiB), file lists inline; macOS and Windows guests (user-session helper) |
 | `display.set` | display | not implemented yet (Windows display path C) |
 | `clipboard.changed` (guest → host) | — | `{types, seq}`, at most 10/s |
 | `time.set` | time | `{unixNanos}` → `{}` |

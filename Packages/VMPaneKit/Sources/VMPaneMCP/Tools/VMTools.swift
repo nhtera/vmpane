@@ -141,7 +141,7 @@ enum VMTools {
     static func clipboard(_ access: VMAccess) -> [Tool] {
         [
             Tool(
-                "vm_clipboard_get", "The VM's clipboard text (macOS guests with VMPane's guest tools).",
+                "vm_clipboard_get", "The VM's clipboard text (macOS and Windows guests with VMPane's guest tools).",
                 schema: Schema.object(["vm": Schema.vm], required: ["vm"]), annotations: readOnly
             ) { args, _ in
                 let read = try await access.call(try args.string("vm"), .vmClipboardRead, ["types": ["text"]])
@@ -149,7 +149,7 @@ enum VMTools {
                 return ToolResult(text: text, structured: read)
             },
             Tool(
-                "vm_clipboard_set", "Put text on the VM's clipboard (macOS guests with VMPane's guest tools).",
+                "vm_clipboard_set", "Put text on the VM's clipboard (macOS and Windows guests with VMPane's guest tools).",
                 schema: Schema.object(["vm": Schema.vm, "text": Schema.string("The text.")], required: ["vm", "text"]),
                 annotations: ["destructiveHint": false, "openWorldHint": false]
             ) { args, _ in

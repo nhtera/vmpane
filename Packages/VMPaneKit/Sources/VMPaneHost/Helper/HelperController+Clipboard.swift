@@ -2,9 +2,9 @@ import Foundation
 import VMPaneControl
 import VMPaneCore
 
-/// The clipboard through the guest agent (macOS guests): the window's sharing (`ClipboardBridge`) and the
-/// `vm.clipboard.read` / `vm.clipboard.write` methods. Linux and Windows guests share text through SPICE
-/// (spice-vdagent), which these methods do not reach.
+/// The clipboard through the guest agent (macOS and Windows guests): the window's sharing (`ClipboardBridge`) and
+/// the `vm.clipboard.read` / `vm.clipboard.write` methods. Linux guests share text through SPICE (spice-vdagent),
+/// which these methods do not reach.
 extension HelperController {
     /// Gives the helper the Mac's pasteboard (the helper app's `NSPasteboard`); without it nothing is shared.
     public func setHostPasteboard(_ pasteboard: HostPasteboard) { hostPasteboard = pasteboard }
@@ -103,7 +103,8 @@ extension HelperController {
         guard let connection = await agentHub.waitForConnection(timeout: Self.agentWait),
             await agentHub.status.peer?.hello.caps?.contains(AgentCap.clipboard) == true
         else {
-            return .failure(RPCError(.agentUnavailable, "the guest has no VMPane agent with clipboard support (macOS guests have one)"))
+            return .failure(
+                RPCError(.agentUnavailable, "the guest has no VMPane agent with clipboard support (macOS and Windows guests have one)"))
         }
         do {
             return .success(try await body(connection))

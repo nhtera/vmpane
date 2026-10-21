@@ -2,8 +2,8 @@
 # user and the agent; its session helper owns the guest pasteboard): text and PNG both ways, files copied in the
 # guest (vm.clipboard.read names them by their guest paths; agent.file.pull fetches them), and the VM's direction
 # setting honoured. Files into the guest go by vm.files.drop (scenario dnd), not the clipboard.
-# Linux and Windows guests share text with the person's pasteboard over SPICE while the window is in front;
-# vm.clipboard.* do not reach them (documented): checked here on Linux, refused with a clear error.
+# Linux guests share text with the person's pasteboard over SPICE while the window is in front; vm.clipboard.* do
+# not reach them (documented): refused with a clear error. Windows guests: scenario clipboard-windows.
 # Sourced by scripts/itest.sh with $APP set.
 
 source "$VMPANE_ROOT/itest/lib/common.sh"
@@ -106,8 +106,8 @@ scenario_run() {
     it_start_with_clipboard "$VMPANE_SUPPORT_DIR/VMs/L.vmpane" both || return 1
     it_wait_for 60 grep -q VMPANE-ITEST-READY "$VMPANE_SUPPORT_DIR/VMs/L.vmpane/logs/serial.log" || it_fail "Linux did not boot" || return 1
     out=$(it_rpc "$socket" vm.clipboard.read '{"types": ["text"]}') && { it_fail "vm.clipboard.read answered on Linux: $out"; return 1; }
-    [[ $out == *"macOS guests have one"* ]] || it_fail "Linux refusal is unclear: $out" || return 1
-    echo "clipboard-matrix: Linux (SPICE text only) refuses vm.clipboard.* clearly; Windows likewise (documented)"
+    [[ $out == *"macOS and Windows guests have one"* ]] || it_fail "Linux refusal is unclear: $out" || return 1
+    echo "clipboard-matrix: Linux (SPICE text only) refuses vm.clipboard.* clearly"
     it_stop_helper
     return 0
 }

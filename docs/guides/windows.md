@@ -52,7 +52,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File D:\install.ps1   # D: = the 
 
 It logs to `C:\ProgramData\VMPane\tools-install.log`.
 
-The disc also holds the VMPane guest agent (`vmpane-agent.msi`). Unlike the drivers it is not code-signed for
+The disc also holds the VMPane guest agent (`vmpane-agent.msi`). It shares the clipboard while the VM's window
+is in front, with someone signed in to Windows: text and images both ways, and files copied in the VM arrive on
+your Mac in `~/Downloads/VMPane/<VM>`. Unlike the drivers it is not code-signed for
 Windows (VMPane has no Windows signing certificate), so if you install it by hand Windows names its publisher
 as unknown. Each release's agent is built on GitHub and carries a build attestation:
 `gh attestation verify vmpane-agent.msi --repo nhtera/vmpane` checks yours.
@@ -72,6 +74,6 @@ window and:
 
 - No 3D acceleration (the display is a 2D virtio GPU).
 - No nested virtualization: Hyper-V, WSL 2, Windows Sandbox and Virtualization-based Security do not run.
-- Clipboard sharing and automatic resolution changes need the SPICE guest agent for Arm64 Windows, which the
-  guest tools do not include yet.
+- Automatic resolution changes need the SPICE guest agent for Arm64 Windows, which the guest tools do not
+  include yet.
 - Windows activation is between you and Microsoft; VMPane neither provides nor checks keys.

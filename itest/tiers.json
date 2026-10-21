@@ -7,7 +7,7 @@
   "full": [
     "vz-capture", "vz-devices", "win-display", "win-install", "win-install-resume", "disk-full", "ports-linux",
     "shares-linux", "dnd", "ui-smoke", "perf", "qemu-sandbox", "macos-install",
-    "import-parallels", "agent-macos", "clipboard-matrix"
+    "import-parallels", "agent-macos", "clipboard-matrix", "clipboard-windows"
   ],
   "tiers": {
     "beta": {"scenarios": ["core"], "hosts": 1},

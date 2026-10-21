@@ -4,7 +4,7 @@
 #   1. drivers: every INF under drivers\ (virtio-win ARM64 w11, the set that passed Gate 00 S2), with pnputil;
 #      viogpudo is installed while ramfb is the only display (VMPane adds virtio-gpu afterwards);
 #   2. reports "VMPANE-INSTALL firstLogon" on the VMPane agent port (it exists once vioserial is installed);
-#   3. spice-vdagent (clipboard, display resize) and the VMPane agent, when the disc has them; the WebClient
+#   3. the VMPane agent (clipboard, commands, files) and spice-vdagent (display resize), when the disc has them; the WebClient
 #      service for shared folders;
 #   4. unattended: checks the install's password is gone from Windows (Setup's answer copies, the auto-logon
 #      password; the unattend removed them before running this script) and, only then,

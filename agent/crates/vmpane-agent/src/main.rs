@@ -12,6 +12,8 @@
 
 mod agent;
 mod clipboard;
+#[cfg(any(windows, test))]
+mod clipformat;
 mod connection;
 mod dispatch;
 mod exec;

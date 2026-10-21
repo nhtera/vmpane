@@ -10,6 +10,7 @@ use windows::Win32::Foundation::{FILETIME, SYSTEMTIME};
 use windows::Win32::System::SystemInformation::SetSystemTime;
 use windows::Win32::System::Time::FileTimeToSystemTime;
 
+pub mod clipboard;
 mod net;
 pub mod serial;
 pub mod service;

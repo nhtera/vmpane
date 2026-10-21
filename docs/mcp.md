@@ -49,7 +49,7 @@ beyond this Mac) can only be changed in the app.
 | `vm_exec` | a command (`command` for a shell, or `argv`), `as` user or admin; output, exit code |
 | `vm_file_push`, `vm_file_pull` | files between the VM and `~/VMPane Exchange/<vm>/` on the Mac (only there) |
 | `vm_snapshot_list`, `_create`, `_restore`, `_delete` | snapshots |
-| `vm_clipboard_get`, `vm_clipboard_set` | the clipboard's text (macOS guests with the guest tools) |
+| `vm_clipboard_get`, `vm_clipboard_set` | the clipboard's text (macOS and Windows guests with the guest tools) |
 
 Commands, files and the clipboard need VMPane's guest tools in the VM. A refused call comes back as an error result
 that says why and what level it needs. Screenshots, command output and clipboard text come from the VM: treat them
