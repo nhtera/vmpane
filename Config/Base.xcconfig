@@ -5,8 +5,8 @@ ARCHS = arm64
 SWIFT_VERSION = 6.0
 SWIFT_STRICT_CONCURRENCY = complete
 ENABLE_HARDENED_RUNTIME = YES
-CURRENT_PROJECT_VERSION = 9
-MARKETING_VERSION = 1.0.0-beta.9
+CURRENT_PROJECT_VERSION = 10
+MARKETING_VERSION = 1.0.0-beta.10
 DEAD_CODE_STRIPPING = YES
 // Sparkle updates (App/Updates/UpdaterController.swift): the appcast and its EdDSA public key, set for Release
 // builds (Release.xcconfig). Either empty keeps the updater off: a development build never replaces itself.

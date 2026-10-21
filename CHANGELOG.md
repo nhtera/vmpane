@@ -5,6 +5,9 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.0-beta.10]
+Windows VMs on the shared network resolve names, and Windows VMs share the clipboard.
+
 ### Added
 - Windows VMs share the clipboard through VMPane's guest agent: text and images both ways, and files copied in
   the VM arrive in `~/Downloads/VMPane/<VM>`. Existing VMs get it by updating the guest tools (#5).
