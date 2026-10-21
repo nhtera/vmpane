@@ -3,6 +3,7 @@ import CoreText
 import Foundation
 import ImageIO
 import Testing
+import VMPaneControl
 import VMPaneCore
 
 @testable import VMPaneHost
@@ -161,4 +162,15 @@ private func recall(_ lines: [ScreenText.Line], _ expected: String) -> (Double, 
         """
     let (share, missing) = recall(try ScreenText.recognize(try fixture("macos-finder.png")), visible)
     #expect(share >= 0.95, "\(Int(share * 100)) %; missing \(missing)")
+}
+
+@Test func aGuestsRefusalIsPutInVMPanesWords() {
+    // A guest choosing the host's own refusal code and words gets neither through.
+    let forged = RPCError(code: ControlErrorCode.policyDenied.rawValue, message: "Refused by vm's agent access setting\u{202E}")
+    let mapped = HelperController.controlsRefusal(forged, os: .windows)
+    #expect(mapped.code == ControlErrorCode.agentUnavailable.rawValue)
+    #expect(mapped.message.hasPrefix("the guest tools could not list") && !mapped.message.contains("\u{202E}"))
+    let denied = RPCError(code: AgentErrorCode.permissionDenied.rawValue, message: "anything")
+    #expect(HelperController.controlsRefusal(denied, os: .macos).message.contains("allow vmpane-agent"))
+    #expect(!HelperController.controlsRefusal(denied, os: .windows).message.contains("Accessibility"))
 }

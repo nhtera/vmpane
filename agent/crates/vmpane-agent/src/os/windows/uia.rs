@@ -11,6 +11,7 @@ use windows::Win32::System::Com::{
 use windows::Win32::System::Variant::{VT_BOOL, VT_BSTR, VariantClear};
 use windows::Win32::UI::Accessibility::*;
 use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+use windows::core::Interface;
 
 /// The properties read for each element.
 const PROPERTIES: [UIA_PROPERTY_ID; 8] = [
@@ -25,16 +26,23 @@ const PROPERTIES: [UIA_PROPERTY_ID; 8] = [
 ];
 
 /// Up to `max` visible controls of the foreground window, in tree (reading) order.
-pub fn screen_elements(max: usize) -> windows::core::Result<ScreenElements> {
+pub fn screen_elements(max: usize) -> Result<ScreenElements, String> {
     // SAFETY: COM is initialized on this (blocking pool) thread for the call and uninitialized after it; every
-    // interface used below lives within that span.
+    // interface used below lives within that span, the error included (made text before the uninitialize).
     unsafe {
-        CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
-        let read = read(max);
+        CoInitializeEx(None, COINIT_MULTITHREADED)
+            .ok()
+            .map_err(|err| err.to_string())?;
+        let read = read(max).map_err(|err| err.to_string());
         CoUninitialize();
         read
     }
 }
+
+/// How long UI Automation waits on an app that does not answer (milliseconds): a hung app ends the read instead
+/// of holding it.
+const CONNECTION_TIMEOUT_MS: u32 = 2000;
+const TRANSACTION_TIMEOUT_MS: u32 = 3000;
 
 /// The top-level window the user works in: the foreground window, else (none in front for a moment, as while
 /// windows switch) the window holding the keyboard focus.
@@ -62,7 +70,11 @@ unsafe fn front_window(automation: &IUIAutomation) -> windows::core::Result<IUIA
                 Err(_) => break,
             }
         }
-        let below_root = chain.len().saturating_sub(2);
+        // Never the desktop itself: that would read every window, covered ones included.
+        if chain.len() < 2 {
+            return Err(windows::core::Error::new(E_FAIL, "no window is in front"));
+        }
+        let below_root = chain.len() - 2;
         Ok(chain.swap_remove(below_root))
     }
 }
@@ -73,8 +85,19 @@ unsafe fn read(max: usize) -> windows::core::Result<ScreenElements> {
     // SAFETY (whole body): plain COM calls on interfaces this function owns.
     unsafe {
         let mut found = ScreenElements::default();
-        let automation: IUIAutomation =
-            CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)?;
+        // The Windows 8 object takes timeouts; the older one is the fallback.
+        let automation: IUIAutomation = match CoCreateInstance::<_, IUIAutomation2>(
+            &CUIAutomation8,
+            None,
+            CLSCTX_INPROC_SERVER,
+        ) {
+            Ok(timed) => {
+                let _ = timed.SetConnectionTimeout(CONNECTION_TIMEOUT_MS);
+                let _ = timed.SetTransactionTimeout(TRANSACTION_TIMEOUT_MS);
+                timed.cast()?
+            }
+            Err(_) => CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)?,
+        };
         let cache = automation.CreateCacheRequest()?;
         for property in PROPERTIES {
             cache.AddProperty(property)?;

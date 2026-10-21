@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 #[cfg(unix)]
-mod unix;
+pub(crate) mod unix;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod vsock;
 

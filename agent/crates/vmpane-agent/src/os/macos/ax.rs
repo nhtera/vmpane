@@ -40,8 +40,18 @@ const ATTRIBUTES: [&str; 10] = [
 ];
 
 /// Up to `max` controls of the focused window of the frontmost app, top to bottom, boxes in display pixels.
+/// The most elements one read visits, and how long it may take: a huge tree (a long web page) gives a partial,
+/// truncated answer rather than none.
+const MAX_VISITS: usize = 4000;
+const READ_DEADLINE: std::time::Duration = std::time::Duration::from_secs(2);
+/// How long one call into the app may take before it counts as not answering (seconds).
+const APP_TIMEOUT: f32 = 1.0;
+
+/// Up to `max` controls of the focused window of the frontmost app, top to bottom, in display points (the answer
+/// says so in `space`: the helper scales them to the display's pixels). Only what is on screen: each element is
+/// clipped to its window and to every scroll area above it, and dropped when nothing of it is left; text areas
+/// give no value (their whole text, scrolled-away lines included).
 pub fn screen_elements(max: usize) -> Result<ScreenElements, AxError> {
-    let scale = backing_scale();
     // SAFETY: creating the system-wide element has no preconditions.
     let system = unsafe { AXUIElement::new_system_wide() };
     // Trusted or not as of now: this runs in a process of its own each time (`screen::read`), so the check is not
@@ -55,34 +65,59 @@ pub fn screen_elements(max: usize) -> Result<ScreenElements, AxError> {
         .ok()
         .or_else(front_app)
         .ok_or_else(|| AxError::Other("no app is in front".into()))?;
+    // SAFETY: a positive timeout on an element this function holds.
+    unsafe { app.set_messaging_timeout(APP_TIMEOUT) };
     let window = element(&app, "AXFocusedWindow")
         .or_else(|_| element(&app, "AXMainWindow"))
         .map_err(|_| AxError::Other("the app in front has no window".into()))?;
     let names: Vec<CFRetained<CFString>> =
         ATTRIBUTES.iter().map(|a| CFString::from_str(a)).collect();
     let names = CFArray::from_retained_objects(&names);
-    let mut found = ScreenElements::default();
-    let mut queue = VecDeque::from([(window, 0u32)]);
-    while let Some((element, depth)) = queue.pop_front() {
+    let started = std::time::Instant::now();
+    let mut found = ScreenElements {
+        space: Some(display_points()),
+        ..ScreenElements::default()
+    };
+    // Each element with the area it can show in (its window's, narrowed by scroll areas above it).
+    let mut queue = VecDeque::from([(window, 0u32, None::<Rect>)]);
+    let mut visits = 0;
+    while let Some((element, depth, clip)) = queue.pop_front() {
+        visits += 1;
+        if visits > MAX_VISITS || started.elapsed() > READ_DEADLINE {
+            found.truncated = true;
+            break;
+        }
         let Some(values) = attributes(&element, &names) else {
             continue;
         };
+        let ax_role = string(&values[0]).unwrap_or_default();
+        let frame = match (point(&values[5]), size(&values[6])) {
+            (Some(origin), Some(size)) => Some(Rect::new(origin, size)),
+            _ => None,
+        };
+        // What of it shows: the window clips everything in it; a scroll area clips what is inside it.
+        let visible = match (frame, clip) {
+            (Some(frame), Some(clip)) => frame.intersection(&clip),
+            (frame, None) => frame,
+            (None, clip) => clip,
+        };
+        let inner_clip = if clip.is_none() || ax_role == "AXScrollArea" {
+            visible
+        } else {
+            clip
+        };
         let children = values[9].as_ref().and_then(|v| v.downcast_ref::<CFArray>());
-        if let Some(children) = children.filter(|_| depth < SCREEN_MAX_DEPTH) {
+        if let Some(children) = children.filter(|_| depth < SCREEN_MAX_DEPTH && visible.is_some()) {
             // SAFETY: an array of CF objects.
             for child in unsafe { children.cast_unchecked::<CFType>() }.iter() {
                 if let Some(child) = child.downcast_ref::<AXUIElement>() {
-                    queue.push_back((child.retain(), depth + 1));
+                    queue.push_back((child.retain(), depth + 1, inner_clip));
                 }
             }
         }
-        let ax_role = string(&values[0]).unwrap_or_default();
-        let (Some(origin), Some(size)) = (point(&values[5]), size(&values[6])) else {
+        let Some(shown) = visible.filter(|_| frame.is_some()) else {
             continue;
         };
-        if size.width <= 0.0 || size.height <= 0.0 {
-            continue;
-        }
         let role = role(&ax_role);
         let text = string(&values[4]);
         // Static text's words are its value; other controls are named by a title or a description.
@@ -101,21 +136,18 @@ pub fn screen_elements(max: usize) -> Result<ScreenElements, AxError> {
             found.truncated = true;
             break;
         }
+        // No value for static text (it is the name), password fields, and text areas (all their text).
         let secure = string(&values[1]).as_deref() == Some("AXSecureTextField");
+        let hidden_value = role == "text" || secure || ax_role == "AXTextArea";
         found.elements.push(ScreenElement {
-            value: if role == "text" || secure {
+            value: if hidden_value {
                 None
             } else {
                 text.filter(|t| !t.is_empty())
             },
             role,
             name,
-            rect: [
-                (origin.x * scale).round() as i32,
-                (origin.y * scale).round() as i32,
-                (size.width * scale).round() as i32,
-                (size.height * scale).round() as i32,
-            ],
+            rect: shown.rounded(),
             enabled: boolean(&values[7]).unwrap_or(true),
             focused: boolean(&values[8]).unwrap_or(false),
         });
@@ -123,13 +155,54 @@ pub fn screen_elements(max: usize) -> Result<ScreenElements, AxError> {
     Ok(found)
 }
 
+/// A rectangle in display points.
+#[derive(Clone, Copy)]
+struct Rect {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+}
+
+impl Rect {
+    fn new(origin: CGPoint, size: CGSize) -> Rect {
+        Rect {
+            x: origin.x,
+            y: origin.y,
+            width: size.width,
+            height: size.height,
+        }
+    }
+
+    /// The common part, if any.
+    fn intersection(&self, other: &Rect) -> Option<Rect> {
+        let (left, top) = (self.x.max(other.x), self.y.max(other.y));
+        let right = (self.x + self.width).min(other.x + other.width);
+        let bottom = (self.y + self.height).min(other.y + other.height);
+        (right > left && bottom > top).then_some(Rect {
+            x: left,
+            y: top,
+            width: right - left,
+            height: bottom - top,
+        })
+    }
+
+    fn rounded(&self) -> [i32; 4] {
+        [self.x, self.y, self.width, self.height].map(|v| v.round() as i32)
+    }
+}
+
 /// The first time controls are asked for without the grant: macOS shows its "allow Accessibility" prompt, which
 /// also lists the agent in System Settings. Once per user (a marker file), so nobody is asked again and again.
 fn ask_for_accessibility_once() {
-    let marker = std::env::var_os("HOME")
+    // In the agent's own folder of the user's Library; without a home there is nowhere to remember it: no prompt.
+    let Some(home) = std::env::var_os("HOME")
         .map(PathBuf::from)
-        .unwrap_or_default()
-        .join("Library/Application Support/VMPane/accessibility-asked");
+        .filter(|h| h.is_absolute())
+    else {
+        return;
+    };
+    let marker = home.join("Library/Application Support/VMPane Agent/accessibility-asked");
     if marker.exists() {
         return;
     }
@@ -268,31 +341,21 @@ fn role(ax: &str) -> String {
     .to_owned()
 }
 
-/// Display pixels per point of the main display (2 on a Retina-like guest display).
-fn backing_scale() -> f64 {
+/// The main display's size in points: the space the rectangles are in.
+fn display_points() -> [u32; 2] {
+    #[repr(C)]
+    struct CGRectRaw {
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+    }
     #[link(name = "CoreGraphics", kind = "framework")]
     unsafe extern "C" {
         fn CGMainDisplayID() -> u32;
-        fn CGDisplayCopyDisplayMode(display: u32) -> *mut c_void;
-        fn CGDisplayModeGetPixelWidth(mode: *mut c_void) -> usize;
-        fn CGDisplayModeGetWidth(mode: *mut c_void) -> usize;
-        fn CGDisplayModeRelease(mode: *mut c_void);
+        fn CGDisplayBounds(display: u32) -> CGRectRaw;
     }
-    // SAFETY: the mode is released once; null is checked.
-    unsafe {
-        let mode = CGDisplayCopyDisplayMode(CGMainDisplayID());
-        if mode.is_null() {
-            return 1.0;
-        }
-        let (pixels, points) = (
-            CGDisplayModeGetPixelWidth(mode),
-            CGDisplayModeGetWidth(mode),
-        );
-        CGDisplayModeRelease(mode);
-        if points == 0 {
-            1.0
-        } else {
-            pixels as f64 / points as f64
-        }
-    }
+    // SAFETY: plain queries with no pointers.
+    let bounds = unsafe { CGDisplayBounds(CGMainDisplayID()) };
+    [bounds.width.round() as u32, bounds.height.round() as u32]
 }

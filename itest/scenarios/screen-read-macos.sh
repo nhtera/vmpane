@@ -63,10 +63,10 @@ def find(source, wanted, timeout=20):
 
 # 1. No grant yet.
 refused = client.call("vm_read_screen", vm=vm, source="elements")
-assert refused.get("isError") and "Grant Accessibility" in refused["content"][0]["text"], refused
+assert refused.get("isError") and "allow vmpane-agent" in refused["content"][0]["text"], refused
 auto = read("auto")
 header = auto["content"][0]["text"].splitlines()[0]
-assert auto["structuredContent"]["source"] == "ocr" and "Grant Accessibility" in header, header
+assert auto["structuredContent"]["source"] == "ocr" and "allow vmpane-agent" in header, header
 texts = [label(item) for item in items(auto, "ocr")]
 assert any("Downloads" in t for t in texts) and any("Applications" in t for t in texts), texts
 save("finder")
@@ -116,12 +116,21 @@ downloads, result = find("elements", "Downloads")
 if not downloads:
     save("failure")
     raise AssertionError(f"Finder's controls have no Downloads: {result['content'][0]['text'][:1500]}")
-print(f"screen-read macos: {len(items(result, 'elements'))} controls; {downloads[0]['id']} {downloads[0]['role']} at {downloads[0]['rect']}")
-clicked = client.call("vm_click", vm=vm, element=downloads[0]["id"], settle_ms=2000)
+# The sidebar's (the home folder shows a Downloads folder too): the leftmost.
+sidebar = min(downloads, key=lambda item: item["rect"][0])
+windows = [label(item) for item in items(result, "elements") if item.get("role") == "window"]
+assert windows and "Downloads" not in windows, windows
+print(f"screen-read macos: {len(items(result, 'elements'))} controls; {sidebar['id']} {sidebar['role']} at {sidebar['rect']}")
+clicked = client.call("vm_click", vm=vm, element=sidebar["id"], settle_ms=2000)
 assert clicked["structuredContent"]["verified"]["status"] == "changed", clicked
-titles, result = find("elements", "Downloads", timeout=5)
-window = [item for item in items(result, "elements") if item.get("role") == "window"]
-assert any(label(item) == "Downloads" for item in window) or len(titles) >= 2, [label(i) for i in items(result, "elements")][:40]
+deadline = time.time() + 10
+while True:
+    windows = [label(item) for item in items(read("elements"), "elements") if item.get("role") == "window"]
+    if "Downloads" in windows or time.time() > deadline:
+        break
+    time.sleep(1)
+assert "Downloads" in windows, f"the Finder window is still {windows}"
+downloads = [sidebar]
 save("downloads")
 print(f"screen-read macos: vm_click on {downloads[0]['id']} opened Downloads")
 client.close()

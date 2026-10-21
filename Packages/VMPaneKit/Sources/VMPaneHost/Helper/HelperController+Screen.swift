@@ -37,10 +37,15 @@ extension HelperController {
         let maxItems = min(max(request.maxItems ?? 300, 1), Self.screenReadMaxItems)
         let region = request.region.map { CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height) }
         let canListControls = await agentHub.status.peer?.hello.caps?.contains(AgentCap.screen) == true
+        guard let image = await captureImage() else {
+            return .failure(RPCError(.backendUnavailable, "the VM's display cannot be read now"))
+        }
+        let screen = CGRect(x: 0, y: 0, width: image.width, height: image.height)
         var reply: [String: JSONValue] = [:]
         var controls: Result<JSONValue, RPCError>?
         if source == "elements" || source == "both" || (source == "auto" && canListControls) {
-            controls = canListControls ? await self.controls(maxItems: maxItems, region: region) : .failure(Self.noControls)
+            controls =
+                canListControls ? await self.controls(maxItems: maxItems, region: region, screen: screen) : .failure(Self.noControls)
         }
         if source == "elements", case .failure(let error)? = controls { return .failure(error) }
         switch controls {
@@ -51,9 +56,6 @@ extension HelperController {
         }
         // auto reads the text when the controls cannot be had or there are none (an app that exposes nothing).
         let useOCR = source == "ocr" || source == "both" || (source == "auto" && (reply["elements"]?["items"]?.isEmptyArray ?? true))
-        guard let image = await captureImage() else {
-            return .failure(RPCError(.backendUnavailable, "the VM's display cannot be read now"))
-        }
         reply["source"] = .string(source == "auto" ? (useOCR ? "ocr" : "elements") : source)
         reply["screen"] = ["width": .int(Int64(image.width)), "height": .int(Int64(image.height))]
         if useOCR {
@@ -65,6 +67,25 @@ extension HelperController {
         }
         if source == "auto", useOCR { reply["elements"] = nil }
         return .success(.object(reply))
+    }
+
+    /// The guest tools' refusal in VMPane's words: a code from a known set and a text that is the host's, the guest's
+    /// own message only quoted and cleaned (it is the guest's, and must not pass for VMPane's).
+    static func controlsRefusal(_ error: RPCError, os: GuestOS) -> RPCError {
+        switch AgentErrorCode(rawValue: error.code) {
+        case .permissionDenied? where os == .macos:
+            RPCError(
+                .agentUnavailable,
+                "Accessibility is not allowed for VMPane Agent in the VM yet: in the VM, allow vmpane-agent in System Settings "
+                    + "› Privacy & Security › Accessibility (the screen's text can be read with ocr meanwhile)")
+        case .noSession?: RPCError(.agentUnavailable, "nobody is signed in to the VM: its controls are read in the user's session")
+        case .busy?: RPCError(.busy, "the VM's controls are being read already")
+        case .timeout?: RPCError(.agentUnavailable, "the app in front of the VM did not answer in time")
+        default:
+            RPCError(
+                .agentUnavailable,
+                "the guest tools could not list the VM's controls: \(GuestText.clean(error.message).debugDescription)")
+        }
     }
 
     static let noControls = RPCError(
@@ -87,20 +108,28 @@ extension HelperController {
     }
 
     /// The guest tools' controls of the foreground window (`screen.elements`), within `region`, cleaned and capped.
-    private func controls(maxItems: Int, region: CGRect?) async -> Result<JSONValue, RPCError> {
+    private func controls(maxItems: Int, region: CGRect?, screen: CGRect) async -> Result<JSONValue, RPCError> {
         guard let connection = await agentHub.connection else { return .failure(Self.noControls) }
         do {
             let reply = try await connection.call(AgentMethod.screenElements, ["maxElements": .int(Int64(Self.screenReadMaxItems))])
+            // Boxes in another space (macOS: the display's points) are scaled to the display's pixels.
+            let space = (reply.result["space"]?.arrayItems ?? []).compactMap(\.intValue).map(Double.init)
+            let (scaleX, scaleY) =
+                space.count == 2 && space[0] > 0 && space[1] > 0 ? (screen.width / space[0], screen.height / space[1]) : (1, 1)
             var items: [JSONValue] = []
             for element in reply.result["elements"]?.arrayItems ?? [] {
                 let box = (element["rect"]?.arrayItems ?? []).compactMap(\.intValue).map(Double.init)
                 guard box.count == 4, box[2] > 0, box[3] > 0 else { continue }
-                let rect = CGRect(x: box[0], y: box[1], width: box[2], height: box[3])
+                // Only what is on the screen (what a screenshot shows), whatever the guest tools said.
+                let rect = CGRect(x: box[0] * scaleX, y: box[1] * scaleY, width: box[2] * scaleX, height: box[3] * scaleY)
+                    .intersection(screen)
+                guard !rect.isEmpty else { continue }
                 if let region, !rect.intersects(region) { continue }
                 // The role is a word from a list the agent knows; anything else is not passed on as it came.
                 let role = element["role"]?.stringValue ?? ""
+                let known = !role.isEmpty && role.count <= 20 && role.unicodeScalars.allSatisfy { ("a"..."z").contains($0) }
                 var item: [String: JSONValue] = [
-                    "role": .string(role.count <= 20 && role.allSatisfy(\.isLowercase) && !role.isEmpty ? role : "other"),
+                    "role": .string(known ? role : "other"),
                     "name": .string(GuestText.clean(element["name"]?.stringValue ?? "")), "rect": Self.rect(rect),
                     "enabled": .bool(element["enabled"] != false), "focused": .bool(element["focused"] == true),
                 ]
@@ -111,11 +140,11 @@ extension HelperController {
             return .success(reply.result["truncated"] == true ? capped.setting("truncated", true) : capped)
         } catch let error as AgentConnection.ConnectionError {
             if case .rpc(let agentError) = error {
-                if agentError.code == AgentErrorCode.permissionDenied.rawValue {
+                if agentError.code == AgentErrorCode.permissionDenied.rawValue, config.os == .macos {
                     // The person at the VM window can give the grant: tell it (it shows that once).
                     server?.broadcast(topic: "agent", method: ControlNotification.screenAccessibilityNeeded.rawValue, params: [:])
                 }
-                return .failure(agentError)
+                return .failure(Self.controlsRefusal(agentError, os: config.os))
             }
             return .failure(RPCError(.agentUnavailable, error.description))
         } catch {

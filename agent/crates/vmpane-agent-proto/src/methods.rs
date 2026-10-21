@@ -518,6 +518,10 @@ pub struct ScreenElements {
     /// More were there than were returned.
     #[serde(default)]
     pub truncated: bool,
+    /// The size of the space `rect`s are in when it is not the display's pixels (macOS: the main display in
+    /// points); the reader scales them to its image.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub space: Option<[u32; 2]>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -528,7 +532,7 @@ pub struct ScreenElement {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<String>,
-    /// `[x, y, width, height]` in the display's pixels (physical, not scaled points), origin top left.
+    /// `[x, y, width, height]`, origin top left: the display's pixels, or the `space` of the answer.
     pub rect: [i32; 4],
     #[serde(default = "enabled")]
     pub enabled: bool,

@@ -166,6 +166,25 @@ pub fn thaw(_frozen: &[String]) -> Vec<String> {
     Vec::new()
 }
 
+/// Whether this process's parent runs the same executable (the session helper starting its screen reader).
+pub fn parent_is_this_program() -> bool {
+    let mut path = [0u8; libc::PROC_PIDPATHINFO_MAXSIZE as usize];
+    // SAFETY: the buffer is as large as the call may fill.
+    let length =
+        unsafe { libc::proc_pidpath(libc::getppid(), path.as_mut_ptr().cast(), path.len() as u32) };
+    let Ok(length) = usize::try_from(length) else {
+        return false;
+    };
+    let parent = std::path::PathBuf::from(String::from_utf8_lossy(&path[..length]).into_owned());
+    match (
+        std::env::current_exe().and_then(|p| p.canonicalize()),
+        parent.canonicalize(),
+    ) {
+        (Ok(this), Ok(parent)) => this == parent,
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

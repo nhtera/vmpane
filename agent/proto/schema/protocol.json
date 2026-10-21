@@ -737,7 +737,7 @@
           "type": "string"
         },
         "rect": {
-          "description": "`[x, y, width, height]` in the display's pixels (physical, not scaled points), origin top left.",
+          "description": "`[x, y, width, height]`, origin top left: the display's pixels, or the `space` of the answer.",
           "items": {
             "format": "int32",
             "type": "integer"
@@ -772,6 +772,20 @@
             "$ref": "#/$defs/ScreenElement"
           },
           "type": "array"
+        },
+        "space": {
+          "description": "The size of the space `rect`s are in when it is not the display's pixels (macOS: the main display in\npoints); the reader scales them to its image.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "truncated": {
           "default": false,
