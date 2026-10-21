@@ -107,6 +107,9 @@ enum InputTools {
             reply = try await access.call(vm, .vmInputBatch, .object(params), timeout: timeout(actions, settleMs: settleMs))
         } catch let failure as ToolFailure where isOutdatedHelper(failure) {
             reply = try await Legacy.run(access, vm, actions, settleMs: settleMs)
+        } catch let failure as ToolFailure where done == nil && failure.data?["results"] != nil {
+            // Stopped part way (the kill switch): what ran, and where it stopped.
+            reply = ["results": failure.data?["results"] ?? [], "verified": ["status": "unknown", "reason": "stopped"]]
         }
         // The screenshot first: it sets the scale the box and the screen are given in.
         let shot =
@@ -170,7 +173,9 @@ enum InputTools {
                 let field = { (key: String) in box[key]?.intValue ?? 0 }
                 return " around \(field("x")),\(field("y")) \(field("width"))×\(field("height"))"
             }
-            return "the screen changed (\(percent)%\(box ?? ""))" + (verified["settled"] == false ? ", still changing" : "")
+            // One tile is the size of a typed character, or of a blinking block cursor: say so.
+            let what = verified["tiles"] == 1 ? "a cursor-sized change" : "the screen changed"
+            return "\(what) (\(percent)%\(box ?? ""))" + (verified["settled"] == false ? ", still changing" : "")
         case "unchanged": return "no visible change"
         default: return "whether the screen changed is unknown (\(verified["reason"]?.stringValue ?? "no display"))"
         }

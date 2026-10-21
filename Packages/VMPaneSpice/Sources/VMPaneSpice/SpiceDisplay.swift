@@ -13,7 +13,7 @@ import os
 /// the window is key).
 /// Only create one when `SpiceLibraries.available`.
 @MainActor
-public final class SpiceDisplay: NSObject {
+public final class SpiceDisplay: NSObject, GuestDisplaySource {
     private static let log = Logger(subsystem: "app.vmpane.mac.vm", category: "spice")
 
     public let window: NSWindow
@@ -192,14 +192,20 @@ public final class SpiceDisplay: NSObject {
         return rep.representation(using: .png, properties: [:])
     }
 
-    /// The display reduced for input verification, from the frame the SPICE client has in memory (QMP `screendump`
-    /// writes a full-size file per frame). Reduced in the client's callback, while its frame is still valid.
-    public func grayFrame() async -> GrayFrame? {
+    /// The display reduced for input verification (`GuestDisplaySource`), from the frame the SPICE client has in
+    /// memory (QMP `screendump` writes a full-size file per frame).
+    public func grayFrame() async -> GrayFrame? { await frame { GrayFrame($0) } }
+
+    /// The display at full resolution: a copy, since the client's frame buffer changes under it.
+    public func displayImage() async -> CGImage? { await frame { ScreenshotEncoder.copy($0) } }
+
+    /// `make` applied to the client's current frame, inside its callback, while that frame is still valid.
+    private func frame<T: Sendable>(_ make: @escaping @Sendable (CGImage) -> T?) async -> T? {
         guard let display else { return nil }
         return await withCheckedContinuation { continuation in
             display.screenshot { shot in
                 let image = shot?.image.cgImage(forProposedRect: nil, context: nil, hints: nil)
-                continuation.resume(returning: image.flatMap { GrayFrame($0) })
+                continuation.resume(returning: image.flatMap(make))
             }
         }
     }

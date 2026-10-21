@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import VMPaneControl
 import VMPaneCore
@@ -42,7 +43,7 @@ struct BatchParams: Decodable, Sendable {
 /// it settles, and the reply says whether it changed (`ScreenDiff`). A stop (the kill switch, the client gone) takes
 /// effect between actions, between pieces of long text, inside waits and between captures.
 extension HelperController {
-    public func setFrameSource(_ source: @escaping @Sendable () async -> GrayFrame?) { frameSource = source }
+    public func setDisplaySource(_ source: GuestDisplaySource) { displaySource = source }
 
     static let batchMaxActions = 50
     /// All `wait` actions of a batch together, in milliseconds.
@@ -145,8 +146,14 @@ extension HelperController {
 
     /// A frame for verification: the helper app's (SPICE, in memory) when it has one, else the backend's; and which.
     func captureFrame() async -> (frame: GrayFrame, source: String)? {
-        if let frameSource, let frame = await frameSource() { return (frame, "helper app") }
+        if let frame = await displaySource?.grayFrame() { return (frame, "helper app") }
         return await backend?.grayFrame().map { ($0, "backend") }
+    }
+
+    /// The display at full resolution, from the same sources in the same order.
+    func captureImage() async -> CGImage? {
+        if let image = await displaySource?.displayImage() { return image }
+        return await backend?.displayImage()
     }
 
     /// Runs one action as the request it stands for: policy, the agent checks, the input, its audit line.
@@ -312,6 +319,7 @@ extension HelperController {
         let settled = still && (persisted || !change.changed)
         var verified: [String: JSONValue] = [
             "status": change.changed ? "changed" : "unchanged", "changeRatio": .double((change.ratio * 10000).rounded() / 10000),
+            "tiles": .int(Int64(change.tiles)),
             "settled": .bool(settled), "waitedMs": waited(),
         ]
         if let box = change.box {

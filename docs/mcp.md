@@ -53,12 +53,14 @@ beyond this Mac) can only be changed in the app.
 | `vm_clipboard_get`, `vm_clipboard_set` | the clipboard's text (macOS and Windows guests with the guest tools) |
 
 Every input tool says afterwards whether the screen changed: `verified` with `status` (`changed`, `unchanged` or
-`unknown`), `changeRatio`, `bbox` (screenshot pixels), `settled` and `waitedMs`, and `screen` (`w`, `h`, `scale`)
-whenever the screen could be read. The helper compares small grayscale copies of the screen in 16×16 tiles, so a
-thin blinking caret or a clock ticking over does not count; a blinking block cursor (as in a terminal) is the size of
-a typed character and can read as `changed`, and a change smaller than a character can read as `unchanged`, so look
-before repeating an action. It waits up to `settle_ms` and returns as soon as a change holds still. Batches on one VM
-run one at a time; text that cannot be typed (outside the US layout) fails before any of it is typed. A VM started
+`unknown`), `changeRatio`, `tiles`, `bbox` (screenshot pixels), `settled` and `waitedMs`, and `screen` (`w`, `h`,
+`scale`) whenever the screen could be read. The helper compares small grayscale copies of the screen in 16×16 tiles,
+so a thin blinking caret or a clock ticking over does not count; a blinking block cursor (as in a terminal) is the
+size of a typed character and can read as `changed` (one tile is reported as a cursor-sized change), and a change
+smaller than a character can read as `unchanged`, so look before repeating an action. It waits up to `settle_ms` and
+returns as soon as a change holds still. Batches on one VM run one at a time; text that cannot be typed (outside the
+US layout) fails before any of it is typed; after a kill-switch stop `vm_actions` lists which actions ran. Lowering a
+VM's level refuses a batch's later actions, not text already being typed: the kill switch is the stop. A VM started
 by an older VMPane reports `unknown` (`helper_outdated`) until it restarts. `vm_snapshot_create` says whether the
 snapshot `includesMemory` and whether it is only `crashConsistent` (never: a running VM's disks are frozen through
 the guest tools, or its memory is saved with them).

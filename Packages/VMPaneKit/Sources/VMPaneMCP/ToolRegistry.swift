@@ -28,12 +28,14 @@ public struct ToolResult: Sendable {
 /// A failure the model should read (a refused policy, a VM that is not running): returned with `isError`.
 public struct ToolFailure: Error, Sendable {
     public let message: String
-    /// The helper's error code, when the failure is its answer.
+    /// The helper's error code and data, when the failure is its answer.
     public let code: Int?
+    public let data: JSONValue?
 
-    public init(_ message: String, code: Int? = nil) {
+    public init(_ message: String, code: Int? = nil, data: JSONValue? = nil) {
         self.message = message
         self.code = code
+        self.data = data
     }
 }
 

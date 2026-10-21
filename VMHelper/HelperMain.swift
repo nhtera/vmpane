@@ -307,7 +307,7 @@ extension HelperDelegate {
         let size = CGSize(width: max(config.display.widthPx / 2, 640), height: max(config.display.heightPx / 2, 400))
         let display = SpiceDisplay(socket: backend.displaySocket, title: config.name, size: size)
         showWindow = { display.show() }
-        Task { await controller.setFrameSource { await display.grayFrame() } }
+        Task { await controller.setDisplaySource(display) }
         Task { @MainActor in
             // The model connects right after the control socket is up; the SPICE window exists from launch.
             for _ in 0..<50 where windowModel == nil { try? await Task.sleep(for: .milliseconds(100)) }

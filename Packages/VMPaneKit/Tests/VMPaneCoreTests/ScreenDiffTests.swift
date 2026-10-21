@@ -100,6 +100,7 @@ private struct Desktop {
     #expect(found.insetBy(dx: -slack, dy: -slack).contains(dialog), "covers the dialog")
     #expect(dialog.insetBy(dx: -slack, dy: -slack).contains(found), "and little else")
     #expect(change.ratio > 0.05 && change.ratio < 0.1)
+    #expect(change.tiles == Int((change.ratio * 640 * 360 / 256).rounded()))
 }
 
 @Test func theFramesEdgeIsNoMoreSensitiveThanItsMiddle() {
@@ -121,7 +122,9 @@ private struct Desktop {
     // The fastest of 20: other tests running alongside slow single runs, not the fastest.
     let fastest = (0..<20).map { _ in clock.measure { _ = ScreenDiff.compare(before, after) } }.min() ?? .seconds(1)
     #if DEBUG
-        let budget = Duration.milliseconds(30)  // unoptimized: bounds checks on every pixel
+        // Unoptimized and often beside other builds: only a gross slowdown shows here. The gate runs this test in a
+        // release build too (`swift test -c release --filter diffingIsFast`), against the real target.
+        let budget = Duration.milliseconds(250)
     #else
         let budget = Duration.milliseconds(5)  // Phase 01's target
     #endif

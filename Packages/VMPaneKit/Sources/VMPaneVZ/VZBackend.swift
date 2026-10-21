@@ -225,6 +225,11 @@ public final class VZBackend: VMBackend {
     public var typingPace: Duration { Self.keyInterval }
     public func untypable(in text: String) -> Character? { text.first { VZKeyMap.stroke(for: $0) == nil } }
 
+    public func displayImage() async -> CGImage? {
+        guard let surface = await MainActor.run(body: { display?.surface() }) else { return nil }
+        return await Blocking.run { VZDisplayHost.image(of: surface) }
+    }
+
     public func grayFrame() async -> GrayFrame? {
         guard let surface = await MainActor.run(body: { display?.surface() }) else { return nil }
         return await Blocking.run { VZDisplayHost.grayFrame(of: surface) }

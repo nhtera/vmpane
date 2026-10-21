@@ -159,8 +159,11 @@ public final class VZDisplayHost {
         return lit > 0
     }
 
-    private func framebuffer() -> CGImage? {
-        guard let surface = guestSurface() else { return nil }
+    private func framebuffer() -> CGImage? { surface().flatMap(Self.image(of:)) }
+
+    /// A copy of `surface`'s pixels, read under its lock.
+    public nonisolated static func image(of surface: Surface) -> CGImage? {
+        let surface = surface.surface
         IOSurfaceLock(surface, .readOnly, nil)
         defer { IOSurfaceUnlock(surface, .readOnly, nil) }
         let width = IOSurfaceGetWidth(surface), height = IOSurfaceGetHeight(surface), rowBytes = IOSurfaceGetBytesPerRow(surface)

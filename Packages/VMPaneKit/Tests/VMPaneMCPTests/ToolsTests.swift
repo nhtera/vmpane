@@ -54,6 +54,7 @@ import VMPaneCore
     #expect(verified["bbox"] == ["x": 100, "y": 50, "width": 200, "height": 10])
     #expect(InputTools.describe(verified) == "the screen changed (12.5% around 100,50 200×10)")
     #expect(InputTools.describe(["status": "unchanged"]) == "no visible change")
+    #expect(InputTools.describe(["status": "changed", "changeRatio": 0.001, "tiles": 1]).hasPrefix("a cursor-sized change"))
     #expect(InputTools.describe(["status": "unknown", "reason": "helper_outdated"]).contains("helper_outdated"))
 }
 

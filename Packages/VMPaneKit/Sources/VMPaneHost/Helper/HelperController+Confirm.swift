@@ -75,7 +75,7 @@ extension HelperController {
             return RPCError(.policyDenied, "the person at this Mac did not allow it (\(question.title))")
         }
         if let refusal = await snapshotBeforeAgentChange(request, caller) { return refusal }
-        if killSwitchEngaged || agentGeneration != admitted || caller.connection == nil {
+        if agentsStopped(since: admitted, caller) {
             return RPCError(.policyDenied, "AI agents are stopped (VMPane's kill switch)")
         }
         return nil

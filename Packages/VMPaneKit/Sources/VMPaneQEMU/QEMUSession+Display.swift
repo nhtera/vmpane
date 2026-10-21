@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import VMPaneCore
 
@@ -12,11 +13,11 @@ extension QEMUSession {
         return Screenshot(png: shot.png, width: shot.width, height: shot.height, scale: scale)
     }
 
-    /// The display reduced for input verification. `screendump` writes a full-size file per call, so it is the
-    /// fallback: the helper app's SPICE client has the frames in memory.
-    func grayFrame() async -> GrayFrame? {
-        guard let pixels = try? await capture(), let image = QEMUScreenshot.image(pixels) else { return nil }
-        return GrayFrame(image)
+    /// The display at full resolution. `screendump` writes a full-size file per call, so it is the fallback: the
+    /// helper app's SPICE client has the frames in memory.
+    func displayImage() async -> CGImage? {
+        guard let pixels = try? await capture() else { return nil }
+        return QEMUScreenshot.image(pixels)
     }
 
     /// `screendump` into the run directory, read back (no symlinks, size capped) and deleted.

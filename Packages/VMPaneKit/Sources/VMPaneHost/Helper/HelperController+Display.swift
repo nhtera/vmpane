@@ -35,7 +35,11 @@ extension HelperController {
             switch ControlMethod(rawValue: method) {
             case .vmScreenshot?:
                 let maxEdge = try RPCParams.decode(ScreenshotParams.self, from: params).get().maxEdge ?? 1600
-                let shot = try await backend.screenshot(maxEdge: maxEdge)
+                // From the display source (encoded off the actor), else the backend's own capture.
+                let image = await captureImage()
+                let encoded = await Blocking.run { image.flatMap { ScreenshotEncoder.screenshot($0, maxEdge: maxEdge) } }
+                let shot: Screenshot
+                if let encoded { shot = encoded } else { shot = try await backend.screenshot(maxEdge: maxEdge) }
                 return .success([
                     "dataB64": .string(shot.png.base64EncodedString()), "width": .int(Int64(shot.width)),
                     "height": .int(Int64(shot.height)), "format": "png", "scale": .double(shot.scale),

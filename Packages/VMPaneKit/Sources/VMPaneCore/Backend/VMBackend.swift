@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Run state of a VM as reported by its helper.
@@ -92,7 +93,7 @@ public enum BackendEvent: Sendable, Equatable {
 }
 
 /// A hypervisor backend driving one VM (Virtualization.framework or QEMU).
-public protocol VMBackend: AnyObject, Sendable {
+public protocol VMBackend: AnyObject, GuestDisplaySource {
     var kind: BackendKind { get }
     var capabilities: LiveCapabilities { get }
     var events: AsyncStream<BackendEvent> { get }
@@ -114,8 +115,6 @@ public protocol VMBackend: AnyObject, Sendable {
     var typingPace: Duration { get }
     /// The first character of `text` this backend cannot type, if any (text is checked whole before it is typed).
     func untypable(in text: String) -> Character?
-    /// The guest display reduced for input verification (`ScreenDiff`), read off the main thread; nil without one.
-    func grayFrame() async -> GrayFrame?
     /// Applies the settings at `paths` (`SettingKind.live`) of the saved `config` to the running VM.
     /// Returns the paths now in effect; the others take effect at the next start.
     func applyLive(_ config: VMConfigV1, paths: [String]) async -> Set<String>
@@ -132,7 +131,8 @@ extension VMBackend {
     public func untypable(in text: String) -> Character? {
         text.first { character in KeyNames.stroke(for: character).flatMap { KeyNames.name(forHIDUsage: $0.usage) } == nil }
     }
-    public func grayFrame() async -> GrayFrame? { nil }
+    public func displayImage() async -> CGImage? { nil }
+    public func grayFrame() async -> GrayFrame? { await displayImage().flatMap { GrayFrame($0) } }
     public var agentSockets: AsyncStream<Int32> { AsyncStream { $0.finish() } }
     public func applyLive(_ config: VMConfigV1, paths: [String]) async -> Set<String> { [] }
     public func ejectMedia(_ id: String) async throws { throw BackendUnsupported(feature: "ejecting media") }

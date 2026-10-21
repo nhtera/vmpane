@@ -74,9 +74,9 @@ public actor HelperController {
     var dropOwner: ObjectIdentifier?
     /// A running VZ VM's port forwards (`HelperController+Ports`).
     var portForwarder: PortForwarder?
-    /// Frames for input verification from the helper app (a QEMU VM's SPICE display), when it has them
-    /// (`HelperController+InputBatch`).
-    var frameSource: (@Sendable () async -> GrayFrame?)?
+    /// The display as the helper app has it (a QEMU VM's SPICE session, in memory), read before the backend's
+    /// (`HelperController+InputBatch`, screenshots).
+    var displaySource: GuestDisplaySource?
     /// Refreshes `thumbnail.png` while the VM runs (`HelperController+Thumbnail`).
     var thumbnailTask: Task<Void, Never>?
     /// The config the running VM was started with, plus settings applied live since (nil before a start).

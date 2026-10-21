@@ -1,6 +1,15 @@
 import CoreGraphics
 import Foundation
 
+/// Where a VM's display can be read: the helper app's display client (a QEMU VM's SPICE session, in memory) or
+/// the backend.
+public protocol GuestDisplaySource: Sendable {
+    /// The display reduced for input verification (`ScreenDiff`); nil without one.
+    func grayFrame() async -> GrayFrame?
+    /// The display at full resolution, a copy the caller owns (screenshots, text recognition); nil without one.
+    func displayImage() async -> CGImage?
+}
+
 /// A small grayscale copy of a guest display: what input verification compares (`ScreenDiff`).
 public struct GrayFrame: Sendable, Equatable {
     public let width: Int
@@ -60,14 +69,16 @@ public struct ScreenChange: Sendable, Equatable {
     }
 
     public let changed: Bool
-    /// The share of the screen in changed tiles (0…1).
+    /// The share of the screen in changed tiles (0…1), and how many tiles that is.
     public let ratio: Double
+    public let tiles: Int
     /// Around every changed tile, in guest pixels; nil when unchanged.
     public let box: Box?
 
-    public init(changed: Bool, ratio: Double, box: Box?) {
+    public init(changed: Bool, ratio: Double, tiles: Int = 0, box: Box?) {
         self.changed = changed
         self.ratio = ratio
+        self.tiles = tiles
         self.box = box
     }
 }
@@ -88,7 +99,8 @@ public enum ScreenDiff {
             let box = ScreenChange.Box(
                 x: 0, y: 0, width: Int((Double(after.width) * after.scale).rounded()),
                 height: Int((Double(after.height) * after.scale).rounded()))
-            return ScreenChange(changed: true, ratio: 1, box: box)
+            return ScreenChange(
+                changed: true, ratio: 1, tiles: ((after.width + tile - 1) / tile) * ((after.height + tile - 1) / tile), box: box)
         }
         let width = after.width, height = after.height
         guard width > 0, height > 0 else { return ScreenChange(changed: false, ratio: 0, box: nil) }
@@ -121,11 +133,11 @@ public enum ScreenDiff {
             }
         }
         let ratio = Double(markedArea) / Double(width * height)
-        guard marked >= minTiles else { return ScreenChange(changed: false, ratio: ratio, box: nil) }
+        guard marked >= minTiles else { return ScreenChange(changed: false, ratio: ratio, tiles: marked, box: nil) }
         let scale = after.scale
         let box = ScreenChange.Box(
             x: Int((Double(minX) * scale).rounded()), y: Int((Double(minY) * scale).rounded()),
             width: Int((Double(maxX - minX) * scale).rounded()), height: Int((Double(maxY - minY) * scale).rounded()))
-        return ScreenChange(changed: true, ratio: ratio, box: box)
+        return ScreenChange(changed: true, ratio: ratio, tiles: marked, box: box)
     }
 }

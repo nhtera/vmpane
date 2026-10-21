@@ -87,7 +87,8 @@ assert second == "", f"typing went on after the kill switch: {second[:80]!r}"
 assert not any("AFTER" in line for line in typed_lines())
 try:
     answer = client.wait(long, timeout=10)
-    assert answer.get("result", {}).get("isError") or "error" in answer, answer
+    said = "\n".join(block.get("text", "") for block in answer.get("result", {}).get("content", []))
+    assert answer.get("result", {}).get("isError") and "action 0 failed" in said and "kill switch" in said, answer
 except Exception as error:
     assert "Empty" not in type(error).__name__, "the stopped call was never answered"
 print(f"mcp-actions linux: the kill switch stopped typing after {first.count('x')} of 3000 characters; the next action did not run")
