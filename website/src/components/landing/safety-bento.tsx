@@ -14,7 +14,10 @@ const Badge = ({ icon, c }: { icon: IconName; c: string }) => (
   </span>
 );
 
-/** Five cells, exactly: the kill switch (menu capture), undo (snapshots capture), ask first, off by default, the record. */
+/**
+ * Seven cells: the kill switch (menu capture), undo (snapshots capture), ask first, off by default, the record, take
+ * over (the VM window's agent pill) and sign-in.
+ */
 export function SafetyBento() {
   return (
     <section className="band gray" aria-labelledby="safety-title">
@@ -79,6 +82,7 @@ export function SafetyBento() {
           <div className="cell e">
             <Badge icon="list" c="teal" />
             <h3>{t.record.title}</h3>
+            <p>{t.record.body}</p>
             <pre className="json">
               {t.record.json[0]}
               {"\n"}
@@ -88,6 +92,21 @@ export function SafetyBento() {
               <b>{t.record.json[3]}</b>
               {t.record.json[4]}
             </pre>
+          </div>
+          <div className="cell f">
+            <Badge icon="hand" c="orange" />
+            <h3>{t.takeOver.title}</h3>
+            <p>{t.takeOver.body}</p>
+            <div className="mini-pill" aria-hidden="true">
+              <span>{t.takeOver.pill[0]}</span>
+              <span className="btn-like">{t.takeOver.pill[1]}</span>
+              <span className="btn-like">{t.takeOver.pill[2]}</span>
+            </div>
+          </div>
+          <div className="cell g">
+            <Badge icon="shield" c="green" />
+            <h3>{t.signIn.title}</h3>
+            <p>{t.signIn.body}</p>
           </div>
         </div>
       </div>

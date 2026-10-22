@@ -12,7 +12,7 @@ export interface Faq {
 export const FAQ: readonly Faq[] = [
   {
     q: "Is VMPane free?",
-    a: "Yes. It is open source under Apache-2.0. Windows needs your own licence; VMPane installs it from your ISO.",
+    a: "Yes, for any use, work included. It is open source under Apache-2.0. Windows needs your own licence; VMPane installs it from your ISO.",
   },
   {
     q: "Which Macs does it run on?",
@@ -21,6 +21,10 @@ export const FAQ: readonly Faq[] = [
   {
     q: "Can I run x86 Windows or Linux?",
     a: "No. VMPane runs Arm guests only, with no emulation. Windows 11 on Arm runs x64 apps through its own built-in emulation.",
+  },
+  {
+    q: "Does it use QEMU?",
+    a: "For Windows only. macOS and Linux run on Apple's Virtualization framework. Windows 11 needs a TPM, Secure Boot and its own drivers, which QEMU with Hypervisor.framework provides; each Windows VM's QEMU runs in its own macOS sandbox.",
   },
   {
     q: "Do I need a Microsoft account?",

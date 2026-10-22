@@ -4,6 +4,36 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+AI agents act faster and see more, with you able to take over at any moment; Linux VMs are ready in minutes; and
+the library and the new-VM sheet are rebuilt.
+
+### Added
+- `vm_actions`: up to 50 keys, typing, clicks, drags, scrolls and waits in one call, each decided and audited as
+  its own request, and every input tool says whether the screen changed (`verified`, with where). `vm_power start`
+  can wait for the guest tools.
+- `vm_read_screen`: the text on any guest's screen (recognised on the Mac), and its controls on Windows (UI
+  Automation) and macOS (Accessibility), to click by id; marked as the guest's text, never instructions.
+- `vm_exec` with `desktop` opens an app on the signed-in user's desktop (all three guests); `vm_sign_in` signs a
+  locked guest in with a password VMPane keeps and types itself, never shown to the agent (off per VM; at Run
+  commands and Full control you are asked first).
+- Linux VMs from Ubuntu 26.04, Debian 13 and Fedora 44 cloud images: nothing to click through, guest tools and SSH
+  (on 127.0.0.1) ready on the first boot, with an optional GNOME desktop.
+- The VM's window shows an AI agent at work: who, at what level, what it just did, with **Take Over** and **Stop**.
+  Typing or clicking in the VM while an agent acts takes over too; agents wait (`takenOver`) until you resume. Agents' questions appear
+  in the VM's window.
+- A new library: thumbnails, a list or a grid, filters, an inspector (system, resources, snapshots, activity), and
+  a stopped VM's processors, memory, display, disk and snapshots changed without starting it.
+- New VM is one sheet of system cards sized for your Mac (⌘N, then Return makes another of the last one), made in
+  the background with each stage in the library. Drop an .iso or .ipsw on the library or the Dock icon to start
+  from it. A Linux VM made from a card gets a password VMPane keeps for you (**Copy Password** in the inspector).
+
+### Changed
+- Downloads can be cancelled and resume later; a VM appears in the library only once its downloads are done, so a
+  quit midway leaves none behind.
+- Keys or mouse buttons an agent left held down are let go when you take over or the agent leaves.
+
+### Fixed
+- Cancelling a Parallels import or a cloud-image create just before its conversion started could crash VMPane.
 
 ## [1.0.0-beta.10]
 Windows VMs on the shared network resolve names, and Windows VMs share the clipboard.

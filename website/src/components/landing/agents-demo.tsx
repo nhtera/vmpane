@@ -55,6 +55,16 @@ export function AgentsDemo() {
             {t.hand}
           </span>
         </div>
+        <ol className="agent-steps" aria-label={t.stepsLabel}>
+          {t.steps.map((s) => (
+            <li key={s.title}>
+              <b>{s.title}</b>
+              <span>
+                <RichText text={s.body} />
+              </span>
+            </li>
+          ))}
+        </ol>
       </div>
     </section>
   );

@@ -9,6 +9,7 @@ import { Guests } from "@/components/landing/guests";
 import { Hero } from "@/components/landing/hero";
 import { Limits } from "@/components/landing/limits";
 import { MacStory } from "@/components/landing/mac-story";
+import { Requirements } from "@/components/landing/requirements";
 import { SafetyBento } from "@/components/landing/safety-bento";
 import { WindowsSetup } from "@/components/landing/windows-setup";
 import { FAQ, plainAnswer } from "@/content/faq";
@@ -45,6 +46,7 @@ function Landing() {
       <SafetyBento />
       <FeatureCarousel />
       <Limits />
+      <Requirements />
       <FaqSection />
       <EndBand />
     </main>

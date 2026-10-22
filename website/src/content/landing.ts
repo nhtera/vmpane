@@ -47,12 +47,12 @@ export const landing = {
         id: "lin",
         tab: "Linux",
         icon: "terminal",
-        title: "Linux, checked before it boots.",
+        title: "Linux, ready in minutes.",
         facts: [
-          { text: "Ubuntu Server, Debian and Fedora Server from the catalog" },
-          { text: "Downloads checked against a pinned SHA-256" },
+          { text: "Ubuntu, Debian and Fedora from their own cloud images: nothing to click through" },
+          { text: "Or an installer ISO, the catalog's or yours, checked before it boots" },
+          { text: "Made in the background: the library shows each stage" },
           { text: "Shared folders over virtiofs" },
-          { text: "Any arm64 ISO of your own" },
         ],
       },
       {
@@ -94,6 +94,16 @@ export const landing = {
     ],
     defaultLevel: 3,
     hand: "Try a level, watch the log",
+    // One agent session, as the MCP tools VMPane ships do it (docs/mcp.md).
+    stepsLabel: "An agent session, step by step",
+    steps: [
+      { title: "You ask.", body: "Fix the failing test in the Ubuntu VM, say, in Claude Code." },
+      { title: "It starts the VM and waits.", body: "`vm_power` starts it and, asked to, returns once the guest tools answer." },
+      { title: "It acts, and knows it worked.", body: "`vm_actions` clicks and types in one call, then says whether the screen changed." },
+      { title: "It reads the screen.", body: "`vm_read_screen` gives the text everywhere, and the controls on Windows and macOS, to click by id." },
+      { title: "Its changes can be undone.", body: "VMPane snapshots the VM before the session's first change: Undo This Agent Session." },
+      { title: "You can take over.", body: "Type or click in the VM, or press Take Over: the agent waits until you hand it back." },
+    ],
   },
   safety: {
     title: ["Off by default.", "Stoppable any time."],
@@ -106,7 +116,16 @@ export const landing = {
     undo: { title: "Undo the whole session.", body: "VMPane snapshots the VM before an agent's first change." },
     ask: { title: "It asks first.", body: "A command waits for you. Deny is the default, and no answer in a minute is a no.", buttons: ["Allow Once", "Deny"] },
     off: { title: "Every VM starts at Off.", body: "Agents cannot even see a VM until you open it to them. Files move only through `~/VMPane Exchange`.", popup: ["Agent access", "Off"] },
-    record: { title: "Every call on record.", json: ['{"method":"vm_exec",', ' "level":"exec",', ' "result":', '"denied"', "}"] },
+    record: { title: "Every call on record.", body: "Each action of a batch too, with typed text kept as a hash.", json: ['{"method":"vm_exec",', ' "level":"exec",', ' "result":', '"denied"', "}"] },
+    takeOver: {
+      title: "Take over any time.",
+      body: "While an agent works, its window says who and what. Type or click in it, and the agent waits.",
+      pill: ["claude-code · Run commands", "Take Over", "Stop"],
+    },
+    signIn: {
+      title: "Sign-in without showing the password.",
+      body: "VMPane types it at the lock screen itself; agents never see it. If they can run commands, it asks you first.",
+    },
   },
   features: {
     title: ["Snapshots, ports, folders.", "And a command line."],
@@ -141,8 +160,23 @@ export const landing = {
       { icon: "cpu", title: "Arm guests only", body: "No x86 or x86-64 systems. There is no emulation." },
       { icon: "pc", title: "2D graphics for Windows", body: "No DirectX or GPU acceleration, and no Hyper-V or WSL2 inside it." },
       { icon: "minus-circle", title: "No USB passthrough", body: "Not in 1.0." },
-      { icon: "info", title: "Pre-alpha", body: "Public betas come first. Expect rough edges until 1.0." },
+      { icon: "info", title: "Public beta", body: "Betas come first. Expect rough edges until 1.0." },
     ],
+  },
+  // What the new-VM sheet gives each system on a Mac with room (WizardModel.Recommended); on a smaller Mac it gives
+  // at most half its processors and memory, never less than the minimum.
+  requirements: {
+    eyebrow: "Sizing",
+    title: ["What a VM gets.", "And what it needs."],
+    caption: "What VMPane gives a new VM, and the least memory it needs",
+    columns: ["System", "Processors", "Memory", "Disk", "Memory at least"],
+    rows: [
+      ["macOS", "4", "8 GB", "80 GB", "4 GB"],
+      ["Linux", "4", "4 GB", "64 GB", "2 GB"],
+      ["Linux with a desktop", "4", "8 GB", "64 GB", "4 GB"],
+      ["Windows 11", "4", "8 GB", "64 GB", "4 GB"],
+    ],
+    note: "On a smaller Mac, a new VM gets about half its processors and memory, never less than the minimum, and the Mac keeps 4 GB for itself. You can change all of it. Disks take only the space the system uses.",
   },
   faq: {
     title: ["Common questions.", "Short answers."],

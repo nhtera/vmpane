@@ -109,8 +109,8 @@ five are kept, and a session's own is never removed while it runs.
 
 While an agent works in a VM, its window shows who it is, at what level and what it just did, with **Take Over** and
 **Stop**. Take Over (also any key or click of the person's in the VM's screen while an agent acts) makes every tool
-that changes the VM, and reading its clipboard, answer "The person at the Mac took over": wait, and retry once they
-resume. Typing or a batch under way stops at its next piece; commands and transfers already running go on. Reading
+that changes the VM, and reading its clipboard, answer "The person at the Mac took over" (control error `takenOver`,
+-32019): wait, and retry once they resume. Typing or a batch under way stops at its next piece; commands and transfers already running go on. Reading
 the screen keeps working. Stop also ends what agents are doing in that VM (commands, apps, transfers) and closes
 their connections, and holds them like Take Over until the person resumes. The person's own `vmpane` commands (an
 operator) are not held. Questions for the person (a command, a snapshot restore or delete, a shutdown) appear in the
