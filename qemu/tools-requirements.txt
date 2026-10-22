@@ -1,7 +1,7 @@
 # Build-time Python tools for the QEMU pipeline (not shipped). Installed by scripts/build-deps.sh with
 # pip --require-hashes --only-binary=:all: into build/tools/venv, using the pinned Python from deps.lock.
 # Regenerate: pip download --only-binary=:all: meson ninja cmake virt-firmware pyparsing six setuptools wheel, then hash every wheel.
-certifi==2026.7.22 --hash=sha256:62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775
+certifi==2026.10.19 --hash=sha256:42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b
 cffi==2.1.1 --hash=sha256:f81b3b8f3d4e343550fa4baa0e479bba9f2d29ce9c2e9b51d1ce1718d7442fcf
 charset-normalizer==3.5.2 --hash=sha256:ed2a239c0ea213acc1908150a3037257083c7c083128f1a4cec2ec4b97dca491
 cmake==4.4.4 --hash=sha256:883962a72b1b3a16ff445427f24c8caca9797dd9e563bbe208cbcd89e877f9d3
