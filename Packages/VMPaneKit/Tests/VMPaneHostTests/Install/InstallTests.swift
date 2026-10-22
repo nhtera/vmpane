@@ -41,12 +41,16 @@ final class StubServer: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var cutAfter: Int?
     nonisolated(unsafe) static var ignoreRange = false
     nonisolated(unsafe) static var rangesSeen: [String] = []
+    /// Sends this many bytes, then nothing more until the client goes away (a stalled transfer).
+    nonisolated(unsafe) static var stallAfter: Int?
+    nonisolated(unsafe) static var requests = 0
 
     override static func canInit(with request: URLRequest) -> Bool { request.url?.host == "stub.test" }
     override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
         guard let url = request.url, let client else { return }
+        Self.requests += 1
         var start = 0
         var status = 200
         if let range = request.value(forHTTPHeaderField: "Range"), !Self.ignoreRange {
@@ -61,6 +65,10 @@ final class StubServer: URLProtocol, @unchecked Sendable {
                 headerFields: ["Content-Length": "\(slice.count)"])
         else { return }
         client.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        if let stall = Self.stallAfter {
+            client.urlProtocol(self, didLoad: Data(slice.prefix(stall)))
+            return
+        }
         if let cut = Self.cutAfter {
             // The connection ends early: fewer bytes than Content-Length announced.
             Self.cutAfter = nil
@@ -105,6 +113,71 @@ private func sha(_ data: Data) -> String { SHA256.hash(data: data).map { String(
         #expect(StubServer.rangesSeen == ["bytes=100000-"])
         #expect(try Data(contentsOf: done) == StubServer.body)
         #expect(!FileManager.default.fileExists(atPath: partial.path))
+    }
+
+    /// Cancel (the new-VM row's ×) ends a stalled transfer at once and keeps what came, for the next try.
+    @Test func aCancelledDownloadStopsAndKeepsItsPartialFile() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("vp-dl-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        StubServer.body = Data((0..<100_000).map { UInt8($0 % 13) })
+        StubServer.cutAfter = nil
+        StubServer.ignoreRange = false
+        StubServer.stallAfter = 20_000
+        defer { StubServer.stallAfter = nil }
+        let target = dir.appendingPathComponent("image.iso")
+        let partial = target.appendingPathExtension("partial")
+        let url = url
+        let download = Task { try await Downloader.download(url, to: target, sha256: sha(StubServer.body), session: stubSession()) }
+        for _ in 0..<50 where (try? FileManager.default.attributesOfItem(atPath: partial.path)[.size] as? Int) != 20_000 {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        let cancelled = ContinuousClock.now
+        download.cancel()
+        await #expect(throws: CancellationError.self) { try await download.value }
+        #expect(ContinuousClock.now - cancelled < .seconds(2))
+        #expect((try FileManager.default.attributesOfItem(atPath: partial.path)[.size] as? Int) == 20_000)
+    }
+
+    /// Two creates of one image at once: one download; the second waits, then finds the file.
+    @Test func oneDownloadPerImageAtATime() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("vp-dl-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        StubServer.body = Data((0..<400_000).map { UInt8($0 % 17) })
+        StubServer.cutAfter = nil
+        StubServer.ignoreRange = false
+        StubServer.requests = 0
+        let image = ImageCatalog.Image(
+            id: "stub", name: "Stub", version: "1", url: url, sha256: sha(StubServer.body), sizeBytes: Int64(StubServer.body.count))
+        let cache = ImageCache(directory: dir)
+        async let first = cache.ensure(image, session: stubSession())
+        async let second = cache.ensure(image, session: stubSession())
+        let (a, b) = try await (first, second)
+        #expect(try a == b && Data(contentsOf: a) == StubServer.body)
+        #expect(StubServer.requests == 1)
+    }
+
+    /// A create waiting for another's download of the same image can be cancelled (it does not wait for the other).
+    @Test func aWaitingDownloadCanBeCancelled() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("vp-dl-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        StubServer.body = Data((0..<100_000).map { UInt8($0 % 11) })
+        StubServer.cutAfter = nil
+        StubServer.ignoreRange = false
+        StubServer.stallAfter = 1000
+        defer { StubServer.stallAfter = nil }
+        let image = ImageCatalog.Image(
+            id: "stub2", name: "Stub", version: "1", url: url, sha256: sha(StubServer.body), sizeBytes: Int64(StubServer.body.count))
+        let cache = ImageCache(directory: dir)
+        let first = Task { try await cache.ensure(image, session: stubSession()) }
+        try await Task.sleep(for: .milliseconds(300))
+        let second = Task { try await cache.ensure(image, session: stubSession()) }
+        try await Task.sleep(for: .milliseconds(300))
+        let cancelled = ContinuousClock.now
+        second.cancel()
+        await #expect(throws: CancellationError.self) { try await second.value }
+        #expect(ContinuousClock.now - cancelled < .seconds(2))
+        first.cancel()
+        await #expect(throws: CancellationError.self) { try await first.value }
     }
 
     @Test func serverIgnoringRangeRestartsCleanly() async throws {
@@ -254,4 +327,16 @@ private func utf16(_ text: String, at offset: Int) -> Data {
     #expect(ErrorText.readable(LinuxInstallError.notArm64).contains("arm64"))
     #expect(ErrorText.readable(DownloadError.httpStatus(404)).contains("404"))
     #expect(ErrorText.readable(InsufficientSpace(requiredBytes: 30 << 30, availableBytes: 2 << 30)).contains("not enough free disk space"))
+}
+
+/// A dropped ISO is read as it is (mounted read-only, nothing copied): an arm64 Linux ISO opens New VM, an x86 one
+/// is refused with the message the library shows.
+@Test func droppedISOsAreReadInPlace() throws {
+    let dir = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let arm = try makeISO(in: dir, "arm", loader: "BOOTAA64.EFI")
+    let before = try FileManager.default.contentsOfDirectory(atPath: dir.path).count
+    #expect(try InstallMediaKind.detect(arm) == .linuxISO)
+    #expect(throws: InstallMediaKind.Refusal.x64Linux) { try InstallMediaKind.detect(try makeISO(in: dir, "x86", loader: "BOOTX64.EFI")) }
+    #expect(try FileManager.default.contentsOfDirectory(atPath: dir.path).count == before + 2, "only the test's own x86 ISO and its tree")
 }

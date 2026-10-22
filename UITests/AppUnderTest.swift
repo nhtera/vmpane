@@ -37,11 +37,18 @@ enum AppUnderTest {
                 // the sheet's pixels instead of the text's.
                 let titles = Set(([window] + app.windows.allElementsBoundByIndex).map(\.title))
                 if element.elementType == .staticText, let value = element.value as? String, titles.contains(value) { return true }
+                // Or text of a window behind this one (the library behind Settings) that it partly covers: the audit
+                // samples this window's pixels. That text is audited when its own window is in front.
+                if element.elementType == .staticText, let value = element.value as? String,
+                    !window.staticTexts.matching(NSPredicate(format: "value == %@", value)).firstMatch.exists
+                {
+                    return true
+                }
                 // Or a sheet's text scrolled out of its visible area: the audit samples what covers it (the buttons' bar).
                 return app.sheets.allElementsBoundByIndex.contains { sheet in
                     let sameText = NSPredicate(format: "value == %@", element.value as? String ?? "")
                     let inSheet = sheet.staticTexts.matching(sameText).firstMatch.exists
-                    if sheet.frame.contains(element.frame) && !inSheet { return true }
+                    if sheet.frame.intersects(element.frame) && !inSheet { return true }  // under it, even in part
                     let scroll = sheet.scrollViews.firstMatch
                     return inSheet && scroll.exists && !scroll.frame.contains(element.frame)
                 }

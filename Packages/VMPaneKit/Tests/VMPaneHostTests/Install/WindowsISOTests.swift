@@ -90,7 +90,7 @@ private func makeMedia(at root: URL, loader: Bool = true, wim: Data?) throws {
         #expect(
             try verdict("win10", wim: makeWIM([FakeImage(name: "Windows 10 Pro", arch: 12, build: 19045)])) == .notWindows11(build: 19045))
         #expect(try verdict("linux", wim: nil) == .notWindows)
-        #expect(try verdict("empty", loader: false, wim: nil) == .notArm64)
+        #expect(try verdict("empty", loader: false, wim: nil) == .notWindows)
     }
 }
 

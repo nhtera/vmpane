@@ -59,11 +59,19 @@ public final class WizardModel {
     // Windows account (the password is held in memory only, cleared after create).
     public var userName = ""
     public var password = ""
-    /// Keep the password so agents may sign the VM in (VM Settings › AI agents can change it later).
+    /// Let agents sign the VM in with the kept password (VM Settings › AI agents can change it later). Off unless the
+    /// person turns it on; a password VMPane made up is kept for them either way.
     public var keepSignInPassword = false
     /// Linux cloud images: an optional SSH public key, and whether to install a desktop.
     public var sshKey = ""
-    public var desktop = false
+    /// A desktop needs more memory: the size follows while it is still the one VMPane suggested.
+    public var desktop = false {
+        didSet {
+            guard desktop != oldValue, os == .linux else { return }
+            let before = sized(Recommended.for(.linux, desktop: oldValue)).memoryGiB
+            if memoryGiB == before { memoryGiB = sized(Recommended.for(.linux, desktop: desktop)).memoryGiB }
+        }
+    }
     public var edition = "Windows 11 Pro"
     public var eulaAccepted = false
     // Resources
@@ -79,6 +87,10 @@ public final class WizardModel {
     public var rosetta = false
     /// What MCP clients may do with this VM; off until the user raises it (Phase 10 adds the warning flow).
     public var mcpPolicy: PolicyLevel = .off
+    /// The card chosen on the sheet's front (nil for a dropped Linux ISO).
+    public internal(set) var card: Card?
+    /// The password VMPane made up for a cloud image's account (`choose`), while it is the one in use.
+    @ObservationIgnored var generatedPassword: String?
 
     public let host: Host
     let existingNames: Set<String>
@@ -112,16 +124,22 @@ public final class WizardModel {
     public var maxCPUs: Int { max(1, host.cores) }
     public var minDiskGiB: Int { os == .windows ? Self.windowsMinimumDiskGiB : 16 }
 
-    private func applyDefaults() {
+    /// The system's defaults, sized for this Mac (`Recommended`).
+    func applyDefaults() {
         guard let os else { return }
         source = nil
-        cpuCount = min(4, maxCPUs)
-        memoryGiB = min(os == .linux ? 4 : 8, maxMemoryGiB)
-        diskGiB = os == .macos ? 80 : 64
+        desktop = false
+        let recommended = Recommended.for(os)
+        (cpuCount, memoryGiB) = sized(recommended)
+        diskGiB = recommended.diskGiB
         rosetta = false
-        // A name the user typed stays; one the wizard suggested follows the system.
+        rename(Self.defaultName(os))
+    }
+
+    /// Suggests `base` (made unique) as the name, unless the person typed one.
+    func rename(_ base: String) {
         if name.isEmpty || name == suggestedName {
-            name = uniqueName(Self.defaultName(os))
+            name = uniqueName(base)
             suggestedName = name
         }
     }

@@ -99,6 +99,7 @@ extension HelperController {
         case .vmAgentTakeOver?:
             activity.takenOver = true  // a batch or typing under way stops at its next piece (`agentInputStopped`)
             if confirming { await confirmationDismiss?() }  // an open question is a no
+            await releaseHeldInput()  // the person types next: no Shift or button an agent left down
             Self.log.notice("the person took over from AI agents")
         case .vmAgentResume?:
             activity.takenOver = false

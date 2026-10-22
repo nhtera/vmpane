@@ -97,6 +97,16 @@ extension LibraryStore {
         return SnapshotsModel(stopped: bundle, ops: LibraryOps(library: library, identity: .ui))
     }
 
+    /// Whether VMPane keeps the guest account's password (agent sign-in, or one it made up for a cloud image).
+    public func hasGuestPassword(_ id: UUID) -> Bool {
+        GuestCredentials.store(paths: library.paths).has(id)
+    }
+
+    /// The kept password, for Copy Password (the person's own; agents never see it).
+    public func guestPassword(_ id: UUID) -> String? {
+        try? GuestCredentials.store(paths: library.paths).password(for: id)
+    }
+
     /// What the guest tools say about the running guest: its OS version and theirs.
     public func guestInfo(_ id: UUID) async -> (osVersion: String?, toolsVersion: String?) {
         guard row(id)?.isRunning == true, let status = try? await links.call(id, ControlMethod.agentStatus.rawValue, params: nil),

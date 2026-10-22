@@ -2,10 +2,12 @@ import Foundation
 import VMPaneControl
 import VMPaneCore
 
-/// What a VM's helper tells the library: its state, and what AI agents are doing on it (`vm.agent.activity`).
+/// What a VM's helper tells the library: its state, what AI agents are doing on it (`vm.agent.activity`), and its
+/// install's stage (`install.progress`; a new subscriber gets the current one at once).
 public enum LiveVMEvent: Sendable {
     case state(VMRunState)
     case activity(JSONValue)
+    case install(JSONValue)
 }
 
 /// How the library reaches running VMs: each one's helper, over its control socket.
@@ -33,7 +35,7 @@ public struct HelperLinks: LiveVMLink {
         let client = session.client
         guard let info = try? await client.call(ControlMethod.vmInfo.rawValue),
             let first = info["state"]?.stringValue.flatMap(VMRunState.init(rawValue:)),
-            (try? await client.call(ControlMethod.eventsSubscribe.rawValue, params: ["topics": ["vm"]])) != nil
+            (try? await client.call(ControlMethod.eventsSubscribe.rawValue, params: ["topics": ["vm", "install"]])) != nil
         else {
             client.close()
             return nil
@@ -52,6 +54,8 @@ public struct HelperLinks: LiveVMLink {
                         }
                     case ControlNotification.agentActivity.rawValue:
                         if let params = note.params { continuation.yield(.activity(params)) }
+                    case ControlNotification.installProgress.rawValue:
+                        if let params = note.params { continuation.yield(.install(params)) }
                     default:
                         break
                     }

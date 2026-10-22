@@ -62,10 +62,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// A .vmpane bundle opened from Finder (double-click, Open With, or dropped on the Dock icon) joins the library;
-    /// a Parallels .pvm opens the import sheet.
+    /// a Parallels .pvm opens the import sheet; an installer (.iso, .ipsw) opens the new-VM sheet with it.
     func application(_ application: NSApplication, open urls: [URL]) {
+        let installers = urls.filter { ["iso", "ipsw"].contains($0.pathExtension.lowercased()) }
+        if let installer = installers.first { library.installerToUse = installer }
         if let pvm = urls.first(where: { $0.pathExtension.lowercased() == "pvm" }) { library.parallelsToImport = pvm }
-        Task { await library.importBundles(urls) }
+        let rest = urls.filter { !installers.contains($0) }
+        if !rest.isEmpty { Task { await library.importBundles(rest) } }
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {

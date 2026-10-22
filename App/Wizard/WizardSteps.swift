@@ -4,64 +4,6 @@ import VMPaneCore
 import VMPaneHost
 import VMPaneUI
 
-/// Step 1: which system.
-struct OSChoiceStep: View {
-    @Bindable var wizard: WizardModel
-    /// The card with keyboard focus (Full Keyboard Access). It follows the choice: the step opens with focus on the
-    /// chosen card (AppKit's own pick, the first card, could differ from it), and a click moves it along.
-    /// Its ring shows only on a card that is not chosen: the chosen card's own border marks it, and two looked busy.
-    @FocusState private var focused: GuestOS?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Which system do you want to run?").font(.title3)
-            HStack(spacing: 12) {
-                choice(.macos, "macOS", "Runs on Apple's virtualization. Needs a restore image.")
-                choice(.linux, "Linux", "Ubuntu, Debian, Fedora and other arm64 distributions.")
-                choice(.windows, "Windows 11", "Windows 11 for Arm, installed for you from Microsoft's ISO.")
-            }
-        }
-        // After AppKit gives the sheet's first control focus, which happens after onAppear.
-        .task { focused = wizard.os }
-    }
-
-    private func choice(_ os: GuestOS, _ title: String, _ detail: String) -> some View {
-        Button {
-            wizard.os = os
-            focused = os
-        } label: {
-            VStack(spacing: 8) {
-                Image(systemName: OSBadge.symbol(os)).font(.system(size: 34))
-                Text(title).font(.headline)
-                Text(detail).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity, minHeight: 130)
-            .padding(8)
-            .background(wizard.os == os ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(wizard.os == os ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: wizard.os == os ? 2 : 1)
-            )
-            .overlay(alignment: .topTrailing) {
-                if wizard.os == os {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor).padding(6)
-                }
-            }
-            .padding(3)
-            .overlay(
-                RoundedRectangle(cornerRadius: 13)
-                    .strokeBorder(Color(nsColor: .keyboardFocusIndicatorColor), lineWidth: focused == os && wizard.os != os ? 3 : 0)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .focusEffectDisabled()
-        .focused($focused, equals: os)
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(wizard.os == os ? .isSelected : [])
-    }
-}
-
 /// Step 2: where the system comes from.
 struct SourceStep: View {
     @Bindable var wizard: WizardModel

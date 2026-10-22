@@ -1,6 +1,7 @@
 import Foundation
 import OSLog
 import Observation
+import SwiftUI
 import VMPaneControl
 import VMPaneCore
 import VMPaneHost
@@ -32,6 +33,8 @@ public final class LibraryStore {
         public var agentLastAt: Date?
         /// What its running helper says agents are doing (nil: no helper, or an older one).
         public var agentActing: Bool?
+        /// Its install's stage, from its helper (Windows Setup, a cloud image's first boot, a macOS install).
+        public var install: HelperViewModel.InstallProgress?
 
         /// An agent acts on it (its helper says so), else used it within the last minute (its audit log).
         public var agentActive: Bool { agentActing ?? agentLastAt.map { -$0.timeIntervalSinceNow < 60 } ?? false }
@@ -53,6 +56,12 @@ public final class LibraryStore {
     public var lastError: String?
     /// A Parallels VM opened from Finder, for the library window's import sheet.
     public var parallelsToImport: URL?
+    /// An installer (.iso, .ipsw) opened with VMPane: the library window offers a new VM from it.
+    public var installerToUse: URL?
+    /// VMs being created in the background (`LibraryStore+Create`).
+    public internal(set) var creations: [Creation] = []
+    @ObservationIgnored var creationRequests: [UUID: VMCreator.Request] = [:]
+    @ObservationIgnored var creationTasks: [UUID: Task<Void, Never>] = [:]
 
     /// Asks before a VM starts on a Mac low on memory; nil: starts without asking.
     @ObservationIgnored public var lowMemoryGuard: LowMemoryGuard?
@@ -164,26 +173,15 @@ public final class LibraryStore {
         selection = rows.first { $0.bundleURL.standardizedFileURL == bundle.url.standardizedFileURL }?.id
     }
 
-    /// Creates VMs in this library (the wizard).
-    public func makeCreator() -> VMCreator {
-        VMCreator(ops: LibraryOps(library: library, identity: .ui))
-    }
-
-    /// A VM the wizard just made: listed, selected, and started (which begins its install).
-    public func didCreate(_ bundle: VMBundle) async {
-        await reload()
-        guard let id = rows.first(where: { $0.bundleURL.standardizedFileURL == bundle.url.standardizedFileURL })?.id else { return }
-        selection = id
-        await perform(.start(headless: false), on: id)
-    }
-
     /// Re-reads the library (bundles added, moved or removed), attaches to helpers that started since, and
     /// measures disk usage in the background.
     public func reload() async {
         let library = library
         let items: [VMLibrary.Item]
+        let unfinished: Set<UUID>
         do {
             items = try await Blocking.run { try library.items() }
+            unfinished = await Blocking.run { Set(items.filter(\.bundle.isUnfinished).map(\.id)) }
         } catch {
             lastError = "Cannot read the library: \(error)"
             return
@@ -195,11 +193,15 @@ public final class LibraryStore {
             Logger(subsystem: VMPane.SigningIdentifier.app, category: "library").notice(
                 "library listed \(items.count, privacy: .public) VMs \(Self.sinceLaunchMs(), privacy: .public) ms after launch")
         }
-        rows = items.map { item in
-            Row(
+        // A VM a create here is still preparing is listed once it is finished (`creations` shows it meanwhile).
+        rows = items.filter { !(unfinished.contains($0.id) && beingCreated($0)) }.map { item in
+            var row = Row(
                 id: item.id, name: item.config?.name ?? item.bundle.url.deletingPathExtension().lastPathComponent,
                 os: item.config?.os, bundleURL: item.bundle.url, state: known[item.id]?.state,
-                diskBytes: known[item.id]?.diskBytes, error: item.error)
+                diskBytes: known[item.id]?.diskBytes, error: item.error ?? unfinishedProblem(item, unfinished))
+            // What its helper said (it says it again only when it changes).
+            (row.agentActing, row.install) = (known[item.id]?.agentActing, known[item.id]?.install)
+            return row
         }
         for id in Set(watches.keys).subtracting(rows.map(\.id)) {
             watches.removeValue(forKey: id)?.cancel()
@@ -237,6 +239,7 @@ public final class LibraryStore {
                     switch event {
                     case .state(let state): self?.setState(state, for: id)
                     case .activity(let json): self?.setActivity(AgentActivity(json), for: id)
+                    case .install(let json): self?.setInstall(json, for: id)
                     }
                 }
                 self?.setState(nil, for: id)
@@ -252,7 +255,7 @@ public final class LibraryStore {
     private func setState(_ state: VMRunState?, for id: UUID) {
         guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
         rows[index].state = state
-        if state == nil { rows[index].agentActing = nil }
+        if state == nil { (rows[index].agentActing, rows[index].install) = (nil, nil) }
         if state == nil || state == .stopped { rows[index].suspended = VMBundle.isSuspended(rows[index].bundleURL) }
     }
 
@@ -328,5 +331,30 @@ extension LibraryStore {
             else { return }
             self?.setActivity(AgentActivity(json), for: id)
         }
+    }
+
+    /// A bundle a quit left half made (`VMBundle.isUnfinished`; one a create here is making is not listed).
+    fileprivate func unfinishedProblem(_ item: VMLibrary.Item, _ unfinished: Set<UUID>) -> String? {
+        unfinished.contains(item.id) ? "VMPane stopped before this VM was finished. Delete it, then create it again." : nil
+    }
+
+    /// Whether a create here makes `item`: its bundle, or (before the create has said which) its name.
+    fileprivate func beingCreated(_ item: VMLibrary.Item) -> Bool {
+        creations.contains { creation in
+            guard creation.failure == nil else { return false }
+            if let bundle = creation.bundle { return bundle.standardizedFileURL == item.bundle.url.standardizedFileURL }
+            return creation.name == item.config?.name
+        }
+    }
+
+    fileprivate func setInstall(_ json: JSONValue, for id: UUID) {
+        guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
+        let install = HelperViewModel.InstallProgress(
+            phase: json["phase"]?.stringValue ?? "install", percent: Int(json["percent"]?.intValue ?? 0),
+            message: json["message"]?.stringValue ?? "")
+        if install.message != rows[index].install?.message, !install.message.isEmpty {
+            AccessibilityNotification.Announcement("\(rows[index].name): \(install.message)").post()
+        }
+        rows[index].install = install
     }
 }

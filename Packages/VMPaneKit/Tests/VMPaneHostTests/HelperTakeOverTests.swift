@@ -193,3 +193,38 @@ private func refusal(_ client: UDSClient, _ method: String, _ params: JSONValue 
     #expect(lastInput - tookOver < .milliseconds(300), "no input 300 ms after the take over")
     await helper.tearDown()
 }
+
+/// A Shift or mouse button an agent left down is let go when the person takes over: the agent's own release would be
+/// refused, and the person would type with it held.
+@Test func aTakeOverLetsGoOfWhatTheAgentHeld() async throws {
+    let helper = try await runningAtControl()
+    _ = try await helper.client.call("vm.input.key", params: ["usage": 225, "down": true])
+    _ = try await helper.client.call("vm.input.pointer", params: ["x": 10, "y": 20, "buttons": 1])
+    _ = await helper.controller.agentActivityRequest(ControlMethod.vmAgentTakeOver.rawValue)
+    let calls = helper.backend.recordedCalls
+    #expect(calls.last(where: { $0.hasPrefix("input.key") }) == "input.key(usage: 225, down: false)", "\(calls)")
+    #expect(calls.last?.hasPrefix("input.pointer") == true && calls.last?.contains("buttons: 0") == true, "\(calls)")
+    await helper.tearDown()
+}
+
+/// An agent that leaves (its connection closes) or is stopped does not leave a key down.
+@Test func anAgentThatLeavesOrIsStoppedLetsGoOfItsKeys() async throws {
+    let helper = try await runningAtControl()
+    let socket = await helper.controller.prepared.runFiles.socketURL
+    let other = try UDSClient.connect(to: socket)
+    _ = try await other.call(
+        "helper.hello", params: ["proto": 1, "minProto": 1, "client": ["name": "codex", "version": "1", "kind": "mcp"]])
+    _ = try await other.call("vm.input.key", params: ["usage": 224, "down": true])
+    other.close()
+    var released = false
+    for _ in 0..<50 where !released {
+        released = helper.backend.recordedCalls.contains("input.key(usage: 224, down: false)")
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    #expect(released, "the key the departed agent held was let go")
+
+    _ = try await helper.client.call("vm.input.key", params: ["usage": 226, "down": true])
+    _ = await helper.controller.agentActivityRequest(ControlMethod.vmAgentStop.rawValue)
+    #expect(helper.backend.recordedCalls.contains("input.key(usage: 226, down: false)"))
+    await helper.tearDown()
+}

@@ -49,7 +49,7 @@ keeps working after updates; `vmpane doctor` says whether `install-cli` made it.
 ## First launch
 
 VMPane opens with a welcome: what it does, that it sends no telemetry and no crash reports, and that AI agents
-are off until you allow them per VM. Choose **Get Started**, then **New VM** to make your first VM. To see the
+are off until you allow them per VM. Choose **Get Started**, then a system (macOS, Ubuntu, Debian, Fedora, Windows 11) to make your first VM. To see the
 welcome again: **Settings › General › Privacy › Show the Welcome Again**.
 
 ## Updates

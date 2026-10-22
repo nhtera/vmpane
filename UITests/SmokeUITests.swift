@@ -24,6 +24,6 @@ final class SmokeUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Welcome to VMPane"].waitForExistence(timeout: 10))
         try AppUnderTest.audit(app, window: app.windows.firstMatch)
         app.buttons["Get Started"].click()
-        XCTAssertTrue(app.staticTexts["No Virtual Machines"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Create Your First VM"].waitForExistence(timeout: 10))
     }
 }

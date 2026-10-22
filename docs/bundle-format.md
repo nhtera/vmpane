@@ -43,7 +43,11 @@ VM a distinct machine. A clone gets new values (the machine identifier is regene
 A bundle found to share an id or a MAC with another library VM — typically a Finder copy — gets a new
 identity when it is opened or imported (never the VM already in the library); its saved RAM state is
 dropped. New VMs and clones are built under a hidden staging name and published by an exclusive rename;
-deletes rename to a hidden name first. Bundles whose parts are symlinks, or whose disk paths leave the
+deletes rename to a hidden name first. A VM the app is still making (its downloads are done before the bundle
+exists; its installer and settings are saved after) carries an empty `.creating` file until it is finished: a
+bundle left with one by a quit is listed as unfinished, to delete; its helper refuses to start it. A download a quit
+interrupted stays in `~/Library/Caches/app.vmpane.mac/` (`*.partial`) until that image is created again, which
+resumes it; delete the file to give the space back. Bundles whose parts are symlinks, or whose disk paths leave the
 bundle, are refused.
 
 ## Generations and saved state

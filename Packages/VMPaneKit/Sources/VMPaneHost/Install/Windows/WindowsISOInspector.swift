@@ -34,7 +34,7 @@ public enum WindowsISOInspector {
             candidates.map { root.appendingPathComponent($0) }.first { fm.fileExists(atPath: $0.path) }
         }
         guard let image = exists(["sources/install.wim", "sources/install.esd", "SOURCES/INSTALL.WIM", "SOURCES/INSTALL.ESD"]) else {
-            return exists(["efi/boot/bootaa64.efi", "EFI/BOOT/BOOTAA64.EFI"]) == nil ? .notArm64 : .notWindows
+            return .notWindows  // no install image: not Windows media, whatever its architecture (`notArm64` is x64 Windows)
         }
         guard exists(["efi/boot/bootaa64.efi", "EFI/BOOT/BOOTAA64.EFI"]) != nil else { return .notArm64 }
         guard let images = try? WIMHeaderReader.images(of: image), !images.isEmpty else { return .notWindows }

@@ -23,29 +23,38 @@ final class LibraryUITests: XCTestCase {
     }
 
     @MainActor
-    func testEmptyLibraryOffersANewVM() {
+    func testEmptyLibraryOffersTheSystems() {
         let app = launch()
-        XCTAssertTrue(app.staticTexts["No Virtual Machines"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["New VM…"].exists)
+        XCTAssertTrue(app.staticTexts["Create Your First VM"].waitForExistence(timeout: 10))
+        app.buttons["Fedora"].click()
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 5), "a card opens the new-VM sheet")
+        XCTAssertTrue(sheet.buttons["Fedora"].isSelected)
+        sheet.buttons["Cancel"].click()
+        XCTAssertTrue(sheet.waitForNonExistence(timeout: 5))
     }
 
+    /// The sheet's front: a Linux card is ready to create as it is; Windows needs its ISO, so Return goes to Customize;
+    /// Customize… walks the steps, and Back returns to the cards.
     @MainActor
-    func testWizardWalksLinuxToTheInstallerStep() {
+    func testNewVMSheetCardsAndCustomize() {
         let app = launch()
         app.typeKey("n", modifierFlags: .command)
         let sheet = app.sheets.firstMatch
         XCTAssertTrue(sheet.waitForExistence(timeout: 5))
-        XCTAssertTrue(sheet.buttons["macOS"].isSelected, "macOS is chosen at the start")
-        XCTAssertTrue(sheet.buttons["Continue"].isEnabled)
-        sheet.buttons["Linux"].click()
-        XCTAssertTrue(sheet.buttons["Linux"].isSelected && !sheet.buttons["macOS"].isSelected)
-        XCTAssertTrue(sheet.buttons["Continue"].isEnabled)
-        sheet.buttons["Continue"].click()
-        XCTAssertTrue(sheet.buttons["Choose an arm64 ISO…"].waitForExistence(timeout: 5))
-        XCTAssertFalse(sheet.buttons["Continue"].isEnabled, "no installer chosen")
+        sheet.buttons["Ubuntu"].click()
+        XCTAssertTrue(sheet.buttons["Ubuntu"].isSelected)
+        XCTAssertTrue(sheet.buttons["Create"].isEnabled, "Ubuntu needs nothing more")
+        sheet.buttons["Customize…"].click()
+        XCTAssertTrue(sheet.buttons["Choose an arm64 ISO…"].waitForExistence(timeout: 5), "Customize starts at the installer")
         sheet.buttons["Back"].click()
+        XCTAssertTrue(sheet.buttons["Windows 11"].waitForExistence(timeout: 5), "Back returns to the cards")
+        sheet.buttons["Windows 11"].click()
+        XCTAssertFalse(sheet.buttons["Create"].isEnabled, "no Windows ISO yet")
+        sheet.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(sheet.buttons["Choose the Windows ISO…"].waitForExistence(timeout: 5), "Return goes where the ISO is chosen")
         sheet.buttons["Cancel"].click()
-        XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Cancel closes the wizard")
+        XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Cancel closes the sheet")
     }
 
     @MainActor

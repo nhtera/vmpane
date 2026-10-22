@@ -77,14 +77,7 @@ public struct ParallelsImporter: Sendable {
             let text = String(bytes: handle.availableData, encoding: .utf8) ?? ""
             if let percent = Self.lastPercent(text) { progress(percent / 100 * 0.99) }
         }
-        let status: Int32 = try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { (done: CheckedContinuation<Int32, Error>) in
-                process.terminationHandler = { done.resume(returning: $0.terminationStatus) }
-                do { try process.run() } catch { done.resume(throwing: error) }
-            }
-        } onCancel: {
-            process.terminate()
-        }
+        let status = try await CancellableProcess.run(process)
         progressPipe.fileHandleForReading.readabilityHandler = nil
         try Task.checkCancellation()
         guard status == 0 else {

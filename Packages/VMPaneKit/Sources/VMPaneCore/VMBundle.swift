@@ -35,6 +35,17 @@ public struct VMBundle: Sendable, Equatable {
     public var snapshotsDirectory: URL { url.appendingPathComponent("snapshots", isDirectory: true) }
     public var installDirectory: URL { url.appendingPathComponent("install", isDirectory: true) }
     public var restoreJournalURL: URL { url.appendingPathComponent("restore.journal") }
+    /// Present while the app is still making the VM (its installer and settings not saved yet): a bundle left with
+    /// it by a quit is not a VM that can run.
+    public var unfinishedMarkerURL: URL { url.appendingPathComponent(".creating") }
+    public var isUnfinished: Bool { FileManager.default.fileExists(atPath: unfinishedMarkerURL.path) }
+
+    /// The VM is made: the marker goes.
+    public func markFinished() throws {
+        guard isUnfinished else { return }
+        try FileManager.default.removeItem(at: unfinishedMarkerURL)
+        try DurableWrite.syncDirectory(url)
+    }
     public var logsDirectory: URL { url.appendingPathComponent("logs", isDirectory: true) }
 
     /// File of a disk entry (`disks[].file` is relative to the bundle). Rejects absolute paths and `..`.

@@ -1,52 +1,68 @@
 import SwiftUI
 import VMPaneCore
+import VMPaneHost
 import VMPaneUI
 
-/// The new-VM wizard, as a sheet over the library: one step at a time, then the create with its progress.
+/// What the new-VM sheet opens with: a card, or an installer dropped on VMPane (its kind already read).
+struct NewVMStart: Identifiable {
+    let id = UUID()
+    var card: WizardModel.Card?
+    var media: (url: URL, kind: InstallMediaKind)?
+}
+
+/// The new-VM sheet: system cards with good defaults and one line saying what Create makes (⌘N, then Return makes
+/// the last card used); Customize… goes through the steps. On Create the sheet closes and the library shows the VM
+/// being made.
 struct NewVMWizard: View {
     let store: LibraryStore
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("newVMCard") private var lastCard = WizardModel.Card.ubuntu.rawValue
     @State private var wizard: WizardModel
-    @State private var creating = false
-    @State private var progress: VMCreator.Progress?
-    @State private var failure: String?
-    @State private var creation: Task<Void, Never>?
+    @State private var customizing = false
 
-    init(store: LibraryStore) {
+    init(store: LibraryStore, start: NewVMStart = NewVMStart()) {
         self.store = store
-        _wizard = State(initialValue: WizardModel(existingNames: store.rows.map(\.name)))
+        let wizard = WizardModel(existingNames: store.rows.map(\.name) + store.creations.map(\.name))
+        if let media = start.media {
+            wizard.use(media.url, kind: media.kind)
+        } else {
+            let saved = UserDefaults.standard.string(forKey: "newVMCard").flatMap(WizardModel.Card.init(rawValue:))
+            wizard.choose(start.card ?? saved ?? .ubuntu)
+        }
+        // A dropped installer that needs more (Windows: the account): the first step still to fill in.
+        if start.media != nil, !wizard.canLeave(.summary) {
+            wizard.step = wizard.steps.first(where: { $0 != .os && !wizard.canLeave($0) }) ?? .source
+        }
+        _wizard = State(initialValue: wizard)
+        _customizing = State(initialValue: start.media != nil && !wizard.canLeave(.summary))
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            StepHeader(steps: wizard.steps, current: wizard.step)
-                .padding()
-            Divider()
-            Group {
-                if creating {
-                    CreateProgressView(progress: progress)
-                } else {
-                    stepView
-                }
+            if customizing {
+                StepHeader(steps: customSteps, current: wizard.step).padding()
+                Divider()
+                stepView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding()
+            } else {
+                QuickCreate(wizard: wizard)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding()
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding()
             Divider()
             footer.padding()
         }
-        .frame(width: 640, height: 520)
-        .alert("The VM could not be created", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(failure ?? "")
-        }
+        .frame(width: 680, height: 540)
         .onDisappear { wizard.clearSecrets() }
     }
 
+    /// The steps after the card (the card chose the system).
+    private var customSteps: [WizardModel.Step] { wizard.steps.filter { $0 != .os } }
+
     @ViewBuilder private var stepView: some View {
         switch wizard.step {
-        case .os: OSChoiceStep(wizard: wizard)
-        case .source: SourceStep(wizard: wizard)
+        case .os, .source: SourceStep(wizard: wizard)
         case .account: AccountStep(wizard: wizard)
         case .resources: ResourcesStep(wizard: wizard)
         case .name: NameStep(wizard: wizard)
@@ -57,59 +73,78 @@ struct NewVMWizard: View {
 
     private var footer: some View {
         HStack {
-            Button("Cancel", role: .cancel) {
-                // A running create (a download can take long) stops and removes what it made.
-                if let creation {
-                    creation.cancel()
-                } else {
-                    dismiss()
-                }
-            }
-            .keyboardShortcut(.cancelAction)
+            Button("Cancel", role: .cancel) { dismiss() }
+                .keyboardShortcut(.cancelAction)
             Spacer()
-            if let problem = wizard.problems(in: wizard.step).first, wizard.step != .os, !creating {
+            if customizing, let problem = wizard.problems(in: wizard.step).first {
                 Text(problem).font(.caption).foregroundStyle(.secondary).lineLimit(2)
             }
-            Button("Back") { wizard.back() }
-                .disabled(wizard.step == wizard.steps.first || creating)
-            if wizard.step == .summary {
-                Button("Create") { create() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!wizard.canLeave(.summary) || creating)
+            if customizing {
+                Button("Back") {
+                    if wizard.step == customSteps.first { customizing = false } else { wizard.back() }
+                }
+                if wizard.step == .summary {
+                    createButton
+                } else {
+                    Button("Continue") { wizard.next() }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(!wizard.canLeave(wizard.step))
+                }
+            } else if wizard.canLeave(.summary) {
+                Button("Customize…") { customize() }
+                createButton
             } else {
-                Button("Continue") { wizard.next() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!wizard.canLeave(wizard.step))
+                // Nothing to create yet (Windows needs Microsoft's ISO): Return goes where it is chosen.
+                Button("Customize…") { customize() }.keyboardShortcut(.defaultAction)
+                Button("Create") {}.disabled(true)
             }
         }
     }
 
+    /// The steps, from the first one still to fill in.
+    private func customize() {
+        wizard.step = customSteps.first { !wizard.canLeave($0) } ?? customSteps.first ?? .source
+        customizing = true
+    }
+
+    private var createButton: some View {
+        Button("Create") { create() }
+            .keyboardShortcut(.defaultAction)
+            .disabled(!wizard.canLeave(.summary))
+    }
+
     private func create() {
         guard let request = wizard.request() else { return }
-        creating = true
-        let creator = store.makeCreator()
-        creation = Task {
-            defer { creation = nil }
-            do {
-                let bundle = try await creator.create(request) { update in
-                    Task { @MainActor in progress = update }
+        if let card = wizard.card { lastCard = card.rawValue }
+        store.create(request)
+        wizard.clearSecrets()
+        dismiss()
+    }
+}
+
+/// The sheet's front: the cards, what Create makes, and what is still missing.
+private struct QuickCreate: View {
+    @Bindable var wizard: WizardModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("New Virtual Machine").font(.title2.bold())
+            OSCardGrid(selected: wizard.card) { wizard.choose($0) }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(wizard.summaryLine).font(.headline).accessibilityLabel("Creates \(wizard.summaryLine)")
+                if let note = wizard.generatedAccountNote {
+                    Text(note).font(.callout).foregroundStyle(.secondary)
                 }
-                wizard.clearSecrets()
-                dismiss()
-                await store.didCreate(bundle)
-            } catch is CancellationError {
-                creating = false
-            } catch let error as URLError where error.code == .cancelled {
-                creating = false
-            } catch {
-                creating = false
-                failure = ErrorText.readable(error)
+                if let problem = wizard.problems(in: .summary).first {
+                    Label(problem, systemImage: "info.circle").font(.callout).foregroundStyle(.secondary)
+                }
+                Text("AI agents cannot see a VM until you allow it.").font(.callout).foregroundStyle(.secondary)
             }
         }
     }
 }
 
-/// Where the wizard is.
+/// Where the sheet is in its steps.
 private struct StepHeader: View {
     let steps: [WizardModel.Step]
     let current: WizardModel.Step
@@ -126,31 +161,5 @@ private struct StepHeader: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Step \((steps.firstIndex(of: current) ?? 0) + 1) of \(steps.count): \(current.title)")
         .accessibilityAddTraits(.isStaticText)  // read as text: without a role VoiceOver cannot say what it is
-    }
-}
-
-private struct CreateProgressView: View {
-    let progress: VMCreator.Progress?
-
-    var body: some View {
-        VStack(spacing: 12) {
-            switch progress {
-            case .downloading(let received, let total)?:
-                if let total, total > 0 {
-                    ProgressView(value: Double(received), total: Double(total))
-                } else {
-                    ProgressView()
-                }
-                Text("Downloading the installer… \(ByteCountFormatter.string(fromByteCount: received, countStyle: .file))")
-            case .preparing?:
-                ProgressView()
-                Text("Preparing the install…")
-            default:
-                ProgressView()
-                Text("Creating the VM…")
-            }
-        }
-        .frame(maxWidth: 360)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

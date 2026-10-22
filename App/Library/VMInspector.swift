@@ -43,6 +43,7 @@ private struct SystemSection: View {
     let store: LibraryStore
     let row: LibraryStore.Row
     @State private var guest: (osVersion: String?, toolsVersion: String?) = (nil, nil)
+    @State private var hasPassword = false
 
     var body: some View {
         Form {
@@ -54,9 +55,36 @@ private struct SystemSection: View {
             LabeledContent("Location") {
                 Text(row.bundleURL.path).lineLimit(2).truncationMode(.middle).textSelection(.enabled)
             }
+            if hasPassword {
+                LabeledContent("Account password") {
+                    Button("Copy Password") { copyPassword() }
+                        .help("The guest account's password VMPane keeps for you; the clipboard forgets it after a minute")
+                }
+            }
         }
         .formStyle(.grouped)
         .task(id: row.state) { guest = await store.guestInfo(row.id) }
+        .task(id: row.id) { hasPassword = store.hasGuestPassword(row.id) }
+    }
+
+    /// Onto this Mac's clipboard only (not Universal Clipboard), marked concealed (clipboard managers leave it alone) and
+    /// as VMPane's (its clipboard sharing with macOS and Windows guests leaves it alone), and off it again after a minute
+    /// unless something else was copied since.
+    private func copyPassword() {
+        guard let password = store.guestPassword(row.id) else { return }
+        let pasteboard = NSPasteboard.general
+        let marks = [
+            NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"), NSPasteboard.PasteboardType("app.vmpane.guest-password"),
+        ]
+        pasteboard.prepareForNewContents(with: .currentHostOnly)
+        pasteboard.declareTypes([.string] + marks, owner: nil)
+        pasteboard.setString(password, forType: .string)
+        for mark in marks { pasteboard.setString("", forType: mark) }
+        let copied = pasteboard.changeCount
+        Task {
+            try? await Task.sleep(for: .seconds(60))
+            if NSPasteboard.general.changeCount == copied { NSPasteboard.general.clearContents() }
+        }
     }
 }
 

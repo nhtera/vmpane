@@ -49,8 +49,9 @@ public struct LibraryOps: Sendable {
         PolicyIntegrity.effective(config, key: PolicyKeyFile(paths: library.paths).key(create: false))
     }
 
-    /// Creates a bundle in the default library directory, with an empty sparse root disk.
-    public func create(name: String, os: GuestOS, diskGiB: Int) throws -> VMBundle {
+    /// Creates a bundle in the default library directory, with an empty sparse root disk; `unfinished` marks it as
+    /// still being made (`VMBundle.markFinished` once its install and settings are saved).
+    public func create(name: String, os: GuestOS, diskGiB: Int, unfinished: Bool = false) throws -> VMBundle {
         try gate("vm.create", vm: nil, level: .off)
         let config = VMConfigV1(VMConfigFields.new(name: name, os: os, diskGiB: diskGiB, macAddress: MachineIdentity.randomMACAddress()))
         try FileManager.default.createDirectory(
@@ -58,6 +59,7 @@ public struct LibraryOps: Sendable {
             attributes: [.posixPermissions: 0o700])
         let bundle = try VMBundle.createStaged(at: uniqueURL(for: name), config: config) { staged in
             try DiskImage.createRaw(at: staged.fileURL(relativePath: config.disks[0].file), sizeBytes: UInt64(diskGiB) << 30)
+            if unfinished { try Data().write(to: staged.unfinishedMarkerURL) }
         }
         try library.register(bundle)
         return bundle

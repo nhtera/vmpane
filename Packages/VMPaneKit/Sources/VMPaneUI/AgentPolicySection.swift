@@ -47,8 +47,8 @@ struct AgentPolicySection: View {
     }
 }
 
-/// The guest password agents sign in with: saved at once (not with Apply) where only VMPane can read it, never shown
-/// again. Never your Mac's password: it is typed into the VM, whose screen the agent sees.
+/// The guest password agents sign in with: saved at once (not with Apply) where only VMPane can read it, shown to no
+/// one (the inspector's Copy Password gives it back to the person). Never your Mac's password: it is typed into the VM, whose screen the agent sees.
 struct SignInPasswordRow: View {
     let vm: UUID
     let name: String

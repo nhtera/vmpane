@@ -1,11 +1,12 @@
 import SwiftUI
 import VMPaneCore
+import VMPaneHost
 import VMPaneUI
 
 /// The VM library: every VM in the sidebar (list or grid, filtered), the selected one on the stage, and its inspector.
 struct LibraryWindow: View {
     @Bindable var store: LibraryStore
-    @State private var showingWizard = false
+    @State private var newVM: NewVMStart?
     @State private var cloning: LibraryStore.Row?
     @State private var cloneName = ""
     @State private var deleting: LibraryStore.Row?
@@ -28,12 +29,7 @@ struct LibraryWindow: View {
                 }
             }
             .navigationSplitViewColumnWidth(min: 240, ideal: 280)
-            .dropDestination(for: URL.self) { urls, _ in
-                let bundles = urls.filter { $0.pathExtension == VMPane.bundleExtension }
-                guard !bundles.isEmpty else { return false }
-                Task { await store.importBundles(bundles) }
-                return true
-            }
+            .dropDestination(for: URL.self) { urls, _ in drop(urls) }
             .onDeleteCommand {
                 if let id = store.selection, let row = store.row(id), !row.isRunning { deleting = row }
             }
@@ -46,15 +42,10 @@ struct LibraryWindow: View {
                 .inspector(isPresented: $showInspector) {
                     VMInspector(store: store, row: row, section: $inspectorSection)
                 }
-            } else if store.rows.isEmpty {
+            } else if store.rows.isEmpty, store.creations.isEmpty {
                 // In the detail area: on the sidebar's translucent background the title fails contrast, and it wraps.
-                ContentUnavailableView {
-                    Text("No Virtual Machines")
-                } description: {
-                    Text("Create a VM to get started.")
-                } actions: {
-                    Button("New VM…") { showingWizard = true }
-                }
+                EmptyLibrary { newVM = NewVMStart(card: $0) }
+                    .dropDestination(for: URL.self) { urls, _ in drop(urls) }
             } else {
                 Text("Select a VM").foregroundStyle(.secondary)
             }
@@ -66,7 +57,7 @@ struct LibraryWindow: View {
                     .help("Make a VMPane VM from a Parallels virtual machine")
             }
             ToolbarItem(placement: .primaryAction) {
-                Button("New VM", systemImage: "plus") { showingWizard = true }
+                Button("New VM", systemImage: "plus") { newVM = NewVMStart() }
                     .help("Create a virtual machine")
                     .keyboardShortcut("n", modifiers: .command)
             }
@@ -86,7 +77,12 @@ struct LibraryWindow: View {
                     .disabled(store.selection == nil)
             }
         }
-        .sheet(isPresented: $showingWizard) { NewVMWizard(store: store) }
+        .sheet(item: $newVM) { NewVMWizard(store: store, start: $0) }
+        .onChange(of: store.installerToUse, initial: true) { _, installer in
+            guard let installer else { return }
+            store.installerToUse = nil
+            useInstaller(installer)
+        }
         .sheet(item: $importing) { pvm in ImportParallelsSheet(store: store, pvm: pvm) }
         .onChange(of: store.parallelsToImport, initial: true) { _, pvm in
             guard let pvm else { return }
@@ -136,6 +132,27 @@ struct LibraryWindow: View {
 }
 
 extension LibraryWindow {
+    /// Files dropped on the library: VMs join it; an installer (.iso, .ipsw) opens the new-VM sheet with it.
+    fileprivate func drop(_ urls: [URL]) -> Bool {
+        let bundles = urls.filter { $0.pathExtension == VMPane.bundleExtension }
+        if !bundles.isEmpty { Task { await store.importBundles(bundles) } }
+        if let installer = urls.first(where: { ["iso", "ipsw"].contains($0.pathExtension.lowercased()) }) { useInstaller(installer) }
+        return !bundles.isEmpty || urls.contains { ["iso", "ipsw"].contains($0.pathExtension.lowercased()) }
+    }
+
+    /// Reads what the installer is (an ISO is mounted for a moment, off the main thread), then opens the sheet with
+    /// it, or says why VMPane cannot use it; nothing is copied before that.
+    fileprivate func useInstaller(_ url: URL) {
+        Task {
+            do {
+                let kind = try await Blocking.run { try InstallMediaKind.detect(url) }
+                newVM = NewVMStart(media: (url, kind))
+            } catch {
+                store.lastError = String(describing: error)
+            }
+        }
+    }
+
     /// Asks for a Parallels `.pvm` (the default Parallels folder first).
     fileprivate func chooseParallelsVM() {
         let panel = NSOpenPanel()
@@ -191,5 +208,21 @@ struct VMActionMenu: View {
 
     private func act(_ action: LibraryStore.Action) {
         Task { await store.perform(action, on: row.id) }
+    }
+}
+
+/// The library with no VM yet: the systems to start from, and where an installer can be dropped.
+private struct EmptyLibrary: View {
+    let choose: (WizardModel.Card) -> Void
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Text("Create Your First VM").font(.title.bold())
+            OSCardGrid(selected: nil, choose: choose).frame(maxWidth: 640)
+            Text("Or drop an installer (.iso or .ipsw) here.").foregroundStyle(.secondary)
+            Label("AI agents cannot see a VM until you allow it.", systemImage: "lock.shield").foregroundStyle(.secondary)
+        }
+        .padding(30)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

@@ -64,6 +64,10 @@ final class GeneralPasteboard: HostPasteboard {
     func read() async -> ClipboardContent {
         await MainActor.run {
             let pasteboard = NSPasteboard.general
+            // VMPane's Copy Password (a guest's own password) stays on the Mac; a password manager's still goes in.
+            if pasteboard.types?.contains(NSPasteboard.PasteboardType("app.vmpane.guest-password")) == true {
+                return ClipboardContent()
+            }
             let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
             var png = pasteboard.data(forType: .png)
             if png == nil, let tiff = pasteboard.data(forType: .tiff) {

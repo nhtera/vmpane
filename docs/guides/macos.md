@@ -5,7 +5,8 @@ allows two macOS VMs running at once per Mac.
 
 ## Creating a macOS VM
 
-In **New VM**, choose **macOS**, then the restore image:
+In **New VM** (⌘N), choose **macOS**: **Create** makes it from the newest restore image in VMPane's catalog, or
+**Customize…** chooses the restore image (a `.ipsw` dropped on the library or the Dock icon opens it too):
 
 - **From the catalog**: VMPane's list of restore images (today macOS Sequoia 15.6.1), downloaded from Apple and
   checked against a pinned SHA-256. An interrupted download resumes; a download that does not match is deleted.

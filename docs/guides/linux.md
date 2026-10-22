@@ -2,9 +2,11 @@
 
 ## Ready in minutes: cloud images
 
-New VM › Linux › *Ready in minutes* makes a VM from the distribution's own arm64 cloud image (Ubuntu 26.04 LTS,
-Debian 13, Fedora 44) with nothing to click through: you give a user name, a password and, if you like, an SSH public
-key, and choose whether to add a desktop.
+**New VM** (⌘N) › **Ubuntu**, **Debian** or **Fedora** › **Create** makes a VM from the distribution's own arm64
+cloud image (Ubuntu 26.04 LTS, Debian 13, Fedora 44) with nothing to click through. The account is your Mac's user
+name with a password VMPane makes up and keeps for you (**Copy Password** in the VM's inspector); **Customize…**
+lets you choose the name, a password of your own, an SSH public key, a desktop, the resources and the rest. ⌘N then
+Return makes another of the card you used last.
 
 - The image is downloaded once and checked against the SHA-256 pinned in VMPane, then converted to a disk once (in
   `~/Library/Caches/app.vmpane.mac/Cloud/`); each VM's disk is an APFS clone of it, grown to the size you chose.
@@ -24,8 +26,9 @@ key, and choose whether to add a desktop.
 
 ## Installing from an ISO
 
-Create a Linux VM from the catalog (Ubuntu Server, Debian, Fedora Server; arm64 ISOs, checked against a
-pinned SHA-256 after download) or from your own ISO. VMPane refuses ISOs without an arm64 UEFI loader
+Create a Linux VM from the catalog (**Customize…** › Installer: Ubuntu Server, Debian, Fedora Server; arm64 ISOs,
+checked against a pinned SHA-256 after download) or from your own ISO, chosen there or dropped on the library or
+VMPane's Dock icon. VMPane refuses ISOs without an arm64 UEFI loader
 (`EFI/BOOT/BOOTAA64.EFI`): x86_64 images cannot boot on Apple silicon.
 
 The ISO is attached as a USB drive. When the installer reboots, the installed system starts; the ISO stays

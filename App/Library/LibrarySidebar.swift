@@ -36,6 +36,7 @@ struct LibrarySidebar: View {
         Group {
             if grid {
                 ScrollView {
+                    ForEach(store.creations) { CreationRow(store: store, creation: $0).padding(.horizontal, 12) }
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 12)], spacing: 12) {
                         ForEach(rows) { row in
                             VMCard(row: row, selected: store.selection == row.id)
@@ -47,10 +48,13 @@ struct LibrarySidebar: View {
                     .padding(12)
                 }
             } else {
-                List(rows, selection: $store.selection) { row in
-                    VMRowView(row: row)
-                        .tag(row.id)
-                        .contextMenu { menu(row) }
+                List(selection: $store.selection) {
+                    ForEach(store.creations) { CreationRow(store: store, creation: $0) }
+                    ForEach(rows) { row in
+                        VMRowView(row: row)
+                            .tag(row.id)
+                            .contextMenu { menu(row) }
+                    }
                 }
             }
         }
@@ -93,6 +97,10 @@ struct VMRowView: View {
                     Text(OSBadge.name(row.os)).font(.caption).foregroundStyle(.secondary)
                     StateDot(row.state, suspended: row.suspended)
                 }
+                if let install = row.install, install.isActive {
+                    ProgressView(value: Double(install.percent), total: 100).controlSize(.small)
+                    Text(install.message).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
                 if row.agentActive, let client = row.agentClient { AgentBadge(client: client) }
             }
             Spacer(minLength: 0)
@@ -105,6 +113,7 @@ struct VMRowView: View {
     /// The row as one sentence ("Debian 13, Linux, running, Claude acting").
     static func spoken(_ row: LibraryStore.Row) -> String {
         var parts = [row.name, OSBadge.name(row.os), StateDot.label(row.state, suspended: row.suspended).lowercased()]
+        if let install = row.install, install.isActive { parts.append("installing, \(install.percent) percent") }
         if row.agentActive, let client = row.agentClient { parts.append("\(client) acting") }
         if row.error != nil { parts.append("has a problem") }
         return parts.joined(separator: ", ")

@@ -143,6 +143,7 @@ private let mac = WizardModel.Host(cores: 10, memoryGiB: 16)
     let config = try ConfigStore.load(bundle)
     #expect(config.name == "Sequoia" && config.memory.mib == 8192)
     #expect(config.install?.restoreImage == "/tmp/UniversalMac.ipsw")
+    #expect(!bundle.isUnfinished, "the marker goes once the VM is made")
 
     // A Linux "ISO" that is not one: the create fails and its bundle is gone again.
     let notAnISO = root.appendingPathComponent("junk.iso")

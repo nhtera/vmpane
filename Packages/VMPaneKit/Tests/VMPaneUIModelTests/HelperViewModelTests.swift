@@ -35,15 +35,6 @@ final class FakeChannel: HelperChannel, @unchecked Sendable {
     }
 }
 
-@MainActor
-private func eventually(_ condition: @MainActor () -> Bool) async -> Bool {
-    for _ in 0..<100 {
-        if condition() { return true }
-        try? await Task.sleep(for: .milliseconds(20))
-    }
-    return condition()
-}
-
 @Test @MainActor func windowFollowsTheHelpersEvents() async {
     let channel = FakeChannel()
     channel.answer("vm.info", .success(["state": "stopped", "allowedRequests": ["start"]]))

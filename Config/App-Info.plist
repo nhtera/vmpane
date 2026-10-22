@@ -43,6 +43,13 @@
       <key>CFBundleTypeExtensions</key><array><string>pvm</string></array>
       <key>LSTypeIsPackage</key><true/>
     </dict>
+    <dict>
+      <!-- Dropped on the Dock icon or opened with VMPane: the new-VM sheet, with the installer's system read from it. -->
+      <key>CFBundleTypeName</key><string>Installer Image</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>CFBundleTypeExtensions</key><array><string>iso</string><string>ipsw</string></array>
+    </dict>
   </array>
 </dict>
 </plist>

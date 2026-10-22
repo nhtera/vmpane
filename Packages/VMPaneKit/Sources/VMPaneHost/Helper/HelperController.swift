@@ -72,6 +72,8 @@ public actor HelperController {
     var inputsInFlight = 0
     /// What agents did lately, and the person's Take over (`AgentActivity`).
     var activity = AgentActivityState()
+    /// What agents' single input requests hold down, per connection (`HelperController+HeldInput`).
+    var heldInput: [ObjectIdentifier: HeldInput] = [:]
     /// How long a question waits for the person (`HelperController+Confirm`); no answer is a no.
     var confirmationTimeout: Duration = .seconds(60)
     /// Agent sessions' undo snapshots (`HelperController+AgentSession`).
@@ -132,6 +134,10 @@ public actor HelperController {
         let server = UDSServer(socketURL: prepared.runFiles.socketURL) { [weak self] request, connection in
             guard let self else { return .failure(RPCError(.internalError, "helper is shutting down")) }
             return await self.handle(request, from: connection)
+        }
+        server.onDisconnect = { [weak self] connection in
+            let key = ObjectIdentifier(connection)
+            Task { await self?.releaseHeldInput(of: key) }
         }
         try server.start()
         self.server = server

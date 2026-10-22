@@ -34,8 +34,12 @@ public struct ImageCatalog: Codable, Sendable, Equatable {
             self.distro = distro
         }
 
-        /// The name with its version once ("macOS Sequoia 15.6.1" already carries it; "Ubuntu" does not).
-        public var title: String { name.hasSuffix(version) ? name : "\(name) \(version)" }
+        /// The name with its version once ("macOS Sequoia 15.6.1", "Ubuntu 26.04 LTS" and "Debian 13.7 (network
+        /// installer)" for 13.7.0 already carry it; "Ubuntu" does not).
+        public var title: String {
+            let short = version.split(separator: ".").prefix(2).joined(separator: ".")
+            return name.contains(version) || name.contains(short) ? name : "\(name) \(version)"
+        }
     }
 
     public var schemaVersion: Int

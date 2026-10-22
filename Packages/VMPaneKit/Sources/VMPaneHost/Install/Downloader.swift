@@ -1,5 +1,7 @@
 import CryptoKit
 import Foundation
+import VMPaneCore
+import os
 
 public enum DownloadError: Error, Equatable, Sendable, CustomStringConvertible {
     case httpStatus(Int)
@@ -22,7 +24,7 @@ public enum DownloadError: Error, Equatable, Sendable, CustomStringConvertible {
 
 /// Large-file downloads (IPSWs, ISOs) that survive interruption: data goes to `<file>.partial`, a later
 /// call resumes it with an HTTP `Range` request, and the result is checked against its SHA-256 before it
-/// is moved into place.
+/// is moved into place. A cancelled task stops the transfer at once (`CancellationError`) and keeps the partial file.
 public enum Downloader {
     /// Downloads `url` to `destination`, resuming a previous partial download. `progress` gets (bytes, total).
     public static func download(
@@ -43,7 +45,7 @@ public enum Downloader {
         let delegate = StreamingDelegate(writer: writer, resumeFrom: have)
         try await delegate.run(request, session: session)
 
-        let actual = try sha256(of: partial)
+        let actual = try await Blocking.run { try sha256(of: partial) }
         guard actual == expected.lowercased() else {
             try? FileManager.default.removeItem(at: partial)
             throw DownloadError.checksumMismatch(expected: expected, actual: actual)
@@ -104,6 +106,8 @@ private final class StreamingDelegate: NSObject, URLSessionDataDelegate, @unchec
     private let resumeFrom: Int64
     private var continuation: CheckedContinuation<Void, Error>?
     private var failure: Error?
+    /// The caller's task was cancelled (the transfer ends as cancelled, not as done).
+    private let cancelled = OSAllocatedUnfairLock(initialState: false)
 
     init(writer: PartialFileWriter, resumeFrom: Int64) {
         self.writer = writer
@@ -111,11 +115,17 @@ private final class StreamingDelegate: NSObject, URLSessionDataDelegate, @unchec
     }
 
     func run(_ request: URLRequest, session: URLSession) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            self.continuation = continuation
-            let task = session.dataTask(with: request)
-            task.delegate = self
-            task.resume()
+        try Task.checkCancellation()
+        let task = session.dataTask(with: request)
+        task.delegate = self
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                self.continuation = continuation
+                task.resume()
+            }
+        } onCancel: {
+            cancelled.withLock { $0 = true }
+            task.cancel()
         }
     }
 
@@ -161,7 +171,9 @@ private final class StreamingDelegate: NSObject, URLSessionDataDelegate, @unchec
         if error == nil, failure == nil, let total = writer.total, writer.written < total {
             finishError = DownloadError.incomplete(received: writer.written, expected: total)
         }
-        if let failure {
+        if cancelled.withLock({ $0 }) {
+            continuation?.resume(throwing: CancellationError())
+        } else if let failure {
             continuation?.resume(throwing: failure)
         } else if let error, (error as? URLError)?.code != .cancelled {
             continuation?.resume(throwing: error)

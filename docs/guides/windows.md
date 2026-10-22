@@ -12,7 +12,9 @@ not provide Windows or a licence: you need a Windows 11 Arm64 ISO and, to activa
   While the wizard waits, VMPane picks up the finished file (`Win11_…_Arm64.iso`) from `~/Downloads`.
 - **Your own ISO**: any Windows 11 Arm64 install ISO.
 
-VMPane reads the image list inside the ISO and refuses media that are not Arm64 (x64 media cannot boot on
+In **New VM** (⌘N), choose **Windows 11**: **Customize…** (or Return) goes to the ISO. An ISO dropped on the library
+or VMPane's Dock icon opens New VM with it, and is checked first: "This is an x64 ISO. VMPane needs Windows 11 for
+Arm (ARM64)." VMPane reads the image list inside the ISO and refuses media that are not Arm64 (x64 media cannot boot on
 Apple silicon) or not Windows 11 (build 22000 or later), and an edition the ISO does not have.
 
 ## Installing

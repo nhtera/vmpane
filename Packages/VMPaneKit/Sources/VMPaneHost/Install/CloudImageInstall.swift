@@ -65,6 +65,11 @@ public enum CloudImageInstall {
         cache.directory.appendingPathComponent("\(image.id)-\(image.sha256.prefix(16)).raw")
     }
 
+    /// Whether `image` was converted already: a new VM only clones it.
+    public static func hasBase(_ image: ImageCatalog.Image, cache: ImageCache = cache) -> Bool {
+        FileManager.default.fileExists(atPath: baseFile(image, cache: cache).path)
+    }
+
     /// The raw base disk for `image`: downloaded and checked, then converted once (`<id>-<sha256 prefix>.raw`).
     public static func base(
         _ image: ImageCatalog.Image, qemuImg: URL, cache: ImageCache = cache, session: URLSession = .shared,
@@ -73,7 +78,25 @@ public enum CloudImageInstall {
         guard image.isCloudImage else { throw Failure.notCloudImage }
         let base = baseFile(image, cache: cache)
         if FileManager.default.fileExists(atPath: base.path) { return base }
+        // One create of an image makes its base; another waits, then finds it (the download goes once it is converted).
+        try await FileGate.shared.enter(base.path)
+        do {
+            let made = try await makeBase(image, qemuImg: qemuImg, cache: cache, session: session, progress: progress)
+            await FileGate.shared.leave(base.path)
+            return made
+        } catch {
+            await FileGate.shared.leave(base.path)
+            throw error
+        }
+    }
+
+    private static func makeBase(
+        _ image: ImageCatalog.Image, qemuImg: URL, cache: ImageCache, session: URLSession, progress: @escaping @Sendable (Stage) -> Void
+    ) async throws -> URL {
+        let base = baseFile(image, cache: cache)
+        if FileManager.default.fileExists(atPath: base.path) { return base }
         let qcow2 = try await cache.ensure(image, session: session) { progress(.downloading(received: $0, total: $1)) }
+        try Task.checkCancellation()
         // A partial of its own: another create of the same image may be converting it too; the first to finish wins.
         let partial = cache.directory.appendingPathComponent(".\(base.lastPathComponent).\(UUID().uuidString).partial")
         defer { try? FileManager.default.removeItem(at: partial) }
@@ -188,14 +211,7 @@ public enum CloudImageInstall {
             let text = String(bytes: handle.availableData, encoding: .utf8) ?? ""
             if let percent = ParallelsImporter.lastPercent(text) { progress(percent / 100) }
         }
-        let status: Int32 = try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { (done: CheckedContinuation<Int32, Error>) in
-                process.terminationHandler = { done.resume(returning: $0.terminationStatus) }
-                do { try process.run() } catch { done.resume(throwing: error) }
-            }
-        } onCancel: {
-            process.terminate()
-        }
+        let status = try await CancellableProcess.run(process)
         progressPipe.fileHandleForReading.readabilityHandler = nil
         try Task.checkCancellation()
         guard status == 0 else {

@@ -22,6 +22,8 @@ public final class UDSServer: @unchecked Sendable {
     private var listenFD: Int32 = -1
     private var acceptSource: DispatchSourceRead?
     private var connections: Set<ControlConnection> = []
+    /// Told about each connection that closed (set before `start`).
+    public var onDisconnect: (@Sendable (ControlConnection) -> Void)?
 
     public init(socketURL: URL, handler: @escaping Handler) {
         self.socketURL = socketURL
@@ -102,6 +104,7 @@ public final class UDSServer: @unchecked Sendable {
                 onClose: { [weak self] connection in
                     guard let server = self else { return }
                     server.queue.async { server.connections.remove(connection) }
+                    server.onDisconnect?(connection)
                 })
             connections.insert(connection)
             connection.start()

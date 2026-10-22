@@ -103,6 +103,10 @@ extension HelperController {
         guard HelperStateMachine.allowedRequests(in: state).contains(request) else {
             return .failure(RPCError(.invalidState, "cannot \(request.rawValue) while \(state.rawValue)"))
         }
+        // A VM the app did not finish making (`.creating`: a quit left it) has no installer or settings to run with.
+        if request == .start, prepared.lock.bundle.isUnfinished {
+            return .failure(RPCError(.invalidState, "this VM was not finished being created: delete it, then create it again"))
+        }
         guard request == .start, isInstallingMacOS else { return await carryOut(request, backend, params) }
         // A macOS install runs inside the start, for many minutes: reply once it is under way (a refusal, e.g. for
         // space, still comes back as the reply), so the app, vmpane and agents do not time out. The state stays

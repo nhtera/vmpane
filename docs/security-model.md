@@ -114,8 +114,15 @@ files, sign binaries or drive the app's UI like the user.
 
 - **Sign-in** (`vm_sign_in`, off by default per VM): the guest password is entered in the app and kept in the
   login Keychain, in an item whose access list trusts only VMPane and its VM helper (Developer ID builds;
-  development builds keep a 0600 file in VMPane's folder instead, never the Keychain). The helper reads it and types
-  it into the guest itself: it is never part of a request, a reply, the audit log (which records only that
+  development builds keep a 0600 file in VMPane's folder instead, never the Keychain). A Linux VM made from a card
+  with no password typed gets a generated one (16 characters), kept the same way so the person can have it: the
+  inspector's **Copy Password** (any kept password: it is the person's) puts it on this Mac's clipboard only (not
+  Universal Clipboard), marked concealed (`org.nspasteboard.ConcealedType`: clipboard managers skip it) and as
+  VMPane's (`app.vmpane.guest-password`: VMPane's clipboard sharing with macOS and Windows guests skips it), and
+  clears it after a minute. A Linux guest's own SPICE clipboard (Virtualization's) does not know the marks: the
+  password reaches that guest's clipboard if its window is in front within the minute; agents cannot read a Linux
+  guest's clipboard through VMPane (`vm.clipboard.*` refuses Linux guests), only one already running commands in it
+  could. Keeping a made-up password does not let agents sign in: that stays off until the person turns it on. The helper reads it and types it into the guest itself: it is never part of a request, a reply, the audit log (which records only that
   `vm.signIn` was called, with "Record typed text" on too) or a log. It signs in only when the guest's root service
   reports the login screen or a locked session (`session.state`), never on what the signed-in user can fake (a lock
   hint, a session helper going away, a lock-screen look-alike), and only with a password field on the screen; at Run

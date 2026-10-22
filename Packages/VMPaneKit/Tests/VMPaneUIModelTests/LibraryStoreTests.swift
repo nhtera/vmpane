@@ -36,6 +36,9 @@ final class FakeLinks: LiveVMLink, @unchecked Sendable {
     /// The helper says what agents are doing.
     func emitActivity(_ vmID: UUID, _ activity: JSONValue) { _ = lock.withLock { streams[vmID] }?.yield(.activity(activity)) }
 
+    /// The helper says where its install is.
+    func emitInstall(_ vmID: UUID, _ progress: JSONValue) { _ = lock.withLock { streams[vmID] }?.yield(.install(progress)) }
+
     /// The helper goes away.
     func end(_ vmID: UUID) { lock.withLock { streams.removeValue(forKey: vmID) }?.finish() }
 
@@ -56,14 +59,14 @@ final class FakeLinks: LiveVMLink, @unchecked Sendable {
 }
 
 @MainActor
-private struct Fixture {
+struct Fixture {
     let store: LibraryStore
     let ops: LibraryOps
     let root: URL
 }
 
 @MainActor
-private func makeStore(_ links: FakeLinks, launch: @escaping @Sendable (VMBundle, Bool) async throws -> Void = { _, _ in })
+func makeStore(_ links: FakeLinks, launch: @escaping @Sendable (VMBundle, Bool) async throws -> Void = { _, _ in })
     throws -> Fixture
 {
     let root = URL(fileURLWithPath: "/tmp/vp-ui-\(UUID().uuidString.prefix(8))", isDirectory: true)
@@ -74,7 +77,7 @@ private func makeStore(_ links: FakeLinks, launch: @escaping @Sendable (VMBundle
 
 /// Waits (up to 2 s) for `condition` on the main actor.
 @MainActor
-private func eventually(_ condition: @MainActor () -> Bool) async -> Bool {
+func eventually(_ condition: @MainActor () -> Bool) async -> Bool {
     for _ in 0..<100 {
         if condition() { return true }
         try? await Task.sleep(for: .milliseconds(20))
