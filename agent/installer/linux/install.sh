@@ -9,6 +9,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 bin=/usr/local/bin/vmpane-agent
 unit=/etc/systemd/system/vmpane-agent.service
 user_unit=/etc/systemd/user/vmpane-session.service
+autostart=/etc/xdg/autostart/vmpane-session-env.desktop
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "install.sh: run as root (sudo $0)" >&2
@@ -18,7 +19,7 @@ fi
 if [ "${1:-}" = "--uninstall" ]; then
     systemctl disable --now vmpane-agent.service 2>/dev/null || true
     systemctl --global disable vmpane-session.service 2>/dev/null || true
-    rm -f "$bin" "$unit" "$user_unit"
+    rm -f "$bin" "$unit" "$user_unit" "$autostart"
     systemctl daemon-reload
     echo "VMPane agent removed"
     exit 0
@@ -40,6 +41,10 @@ mv -f "$bin.new" "$bin"
 install -m 0644 "$here/vmpane-agent.service" "$unit"
 install -d -m 0755 "$(dirname "$user_unit")"
 install -m 0644 "$here/vmpane-session.service" "$user_unit"
+# At each desktop login: the display and session bus reach the user's systemd manager, where the session helper
+# reads them for apps it opens on the desktop.
+install -d -m 0755 "$(dirname "$autostart")"
+install -m 0644 "$here/vmpane-session-env.desktop" "$autostart"
 systemctl daemon-reload
 # Starts with each user's next login; running helpers of an older version are refused and restart themselves.
 systemctl --global enable vmpane-session.service >/dev/null 2>&1

@@ -70,7 +70,7 @@ private let labels: [Label] = [
     #expect(lines.allSatisfy { $0.rect.minX >= 2100 && $0.rect.minY >= 1400 }, "boxes in the whole screen's pixels")
 }
 
-@Test(.serialized) func aWholeScreenReadsInHalfASecond() throws {
+@Test func aWholeScreenReadsInHalfASecond() throws {
     let image = try #require(screen(labels))
     _ = try ScreenText.recognize(image)  // Vision loads its models on first use
     let clock = ContinuousClock()

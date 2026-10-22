@@ -112,3 +112,19 @@ private func config(_ level: PolicyLevel) -> VMConfigV1 {
     #expect(throws: LibraryOps.PolicyDenied.self) { try agent.list() }
     #expect(try human.list().isEmpty, "an operator is not an agent")
 }
+
+@Test func letAgentsSignInCountsOnlyWhenTagged() {
+    let key = SymmetricKey(size: .bits256)
+    // A tag made before the setting existed still holds: the setting off adds nothing to what is signed.
+    let before = PolicyIntegrity.signed(config(.control), key: key)
+    var unchanged = before
+    unchanged.mcp.signIn = false
+    #expect(PolicyIntegrity.effective(unchanged, key: key) == .init(level: .control, tampered: false, clipboardAllowWithAgents: false))
+    var signIn = config(.control)
+    signIn.mcp.signIn = true
+    #expect(PolicyIntegrity.effective(PolicyIntegrity.signed(signIn, key: key), key: key).signIn)
+    var edited = before
+    edited.mcp.signIn = true  // turned on by hand in config.json
+    let effective = PolicyIntegrity.effective(edited, key: key)
+    #expect(effective.tampered && !effective.signIn && effective.level == .off)
+}

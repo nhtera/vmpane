@@ -6,7 +6,9 @@ use std::time::SystemTime;
 
 use nix::sys::time::TimeSpec;
 use nix::time::{ClockId, clock_settime};
-use vmpane_agent_proto::methods::{ListeningPort, PortProto};
+use vmpane_agent_proto::error::ErrorCode;
+use vmpane_agent_proto::jsonrpc::ErrorObject;
+use vmpane_agent_proto::methods::{ExecStartParams, ListeningPort, PortProto, SessionState};
 
 pub const HAS_NET_INFO: bool = true;
 
@@ -56,26 +58,73 @@ pub fn shutdown_command(reboot: bool, force: bool) -> (&'static str, Vec<&'stati
 /// Whether `uid` owns an active login session (logind's `/run/systemd/sessions/*`): a seat's foreground
 /// session, or, on a guest without seats (servers), any active one. Without logind, any non-root user.
 pub fn is_console_user(uid: u32) -> bool {
-    let Ok(entries) = std::fs::read_dir("/run/systemd/sessions") else {
-        return uid != 0;
-    };
+    match logind_sessions() {
+        Some(sessions) => {
+            let texts: Vec<String> = sessions.into_iter().map(|(_, text)| text).collect();
+            session_allows(&texts, uid)
+        }
+        None => uid != 0,
+    }
+}
+
+/// logind's session files (`/run/systemd/sessions/*`) by session id, None without logind.
+fn logind_sessions() -> Option<Vec<(String, String)>> {
+    let entries = std::fs::read_dir("/run/systemd/sessions").ok()?;
     // Session state files only: logind keeps a `<id>.ref` FIFO beside each, and reading one blocks forever.
-    let sessions: Vec<String> = entries
-        .flatten()
-        .filter(|e| {
-            e.file_type().is_ok_and(|t| t.is_file())
-                && !e.file_name().to_string_lossy().contains('.')
-        })
-        .filter_map(|e| std::fs::read_to_string(e.path()).ok())
-        .collect();
-    session_allows(&sessions, uid)
+    Some(
+        entries
+            .flatten()
+            .filter(|e| {
+                e.file_type().is_ok_and(|t| t.is_file())
+                    && !e.file_name().to_string_lossy().contains('.')
+            })
+            .filter_map(|e| {
+                let text = std::fs::read_to_string(e.path()).ok()?;
+                Some((e.file_name().to_string_lossy().into_owned(), text))
+            })
+            .collect(),
+    )
+}
+
+fn field(text: &str, key: &str) -> Option<String> {
+    text.lines()
+        .find_map(|l| l.strip_prefix(key).map(str::to_owned))
+}
+
+/// The seat's foreground session as logind (root) keeps it: the display manager's login screen is a session of
+/// class `greeter`. A user session's lock screen is the user's own (its lock hint is the user's to set), so a
+/// locked one is never reported as locked: unknown with the hint, unlocked without.
+pub fn session_state() -> SessionState {
+    logind_sessions().map_or(SessionState::Unknown, |sessions| {
+        state_of(&sessions, locked_hint)
+    })
+}
+
+/// logind's `LockedHint` of session `id` (not in the session files).
+fn locked_hint(id: &str) -> bool {
+    std::process::Command::new("loginctl")
+        .args(["show-session", id, "--property=LockedHint", "--value"])
+        .output()
+        .is_ok_and(|out| String::from_utf8_lossy(&out.stdout).trim() == "yes")
+}
+
+fn state_of(sessions: &[(String, String)], locked: impl Fn(&str) -> bool) -> SessionState {
+    let foreground = sessions.iter().find(|(_, s)| {
+        field(s, "ACTIVE=").as_deref() == Some("1")
+            && field(s, "SEAT=").is_some_and(|seat| !seat.is_empty())
+    });
+    let Some((id, session)) = foreground else {
+        return SessionState::Unknown;
+    };
+    match field(session, "CLASS=").as_deref() {
+        Some("greeter") => SessionState::Greeter,
+        Some("user") if locked(id) => SessionState::Unknown,
+        Some("user") => SessionState::Unlocked,
+        _ => SessionState::Unknown,
+    }
 }
 
 fn session_allows(sessions: &[String], uid: u32) -> bool {
-    let field = |text: &str, key: &str| {
-        text.lines()
-            .find_map(|l| l.strip_prefix(key).map(str::to_owned))
-    };
     let owned = |text: &str| field(text, "UID=").and_then(|u| u.parse::<u32>().ok()) == Some(uid);
     let foreground: Vec<&String> = sessions
         .iter()
@@ -87,6 +136,68 @@ fn session_allows(sessions: &[String], uid: u32) -> bool {
     sessions
         .iter()
         .any(|s| owned(s) && field(s, "STATE=").as_deref() == Some("active"))
+}
+
+pub fn desktop_params(
+    params: ExecStartParams,
+) -> Result<(ExecStartParams, Option<super::AppLaunch>), ErrorObject> {
+    Ok((params, None))
+}
+
+/// Processes running `executable` (macOS only: Linux launches are their own process group).
+pub fn pids_running(_executable: &std::path::Path) -> Vec<i32> {
+    Vec::new()
+}
+
+/// The desktop's environment (display, session bus), as the user's systemd manager has it now: the session
+/// helper started before the desktop did, so its own environment has none of it. Variables the request sets win.
+pub async fn desktop_environment(
+    cmd: &mut tokio::process::Command,
+    params: &ExecStartParams,
+) -> Result<(), ErrorObject> {
+    let query = tokio::process::Command::new("systemctl")
+        .args(["--user", "show-environment"])
+        .kill_on_drop(true)
+        .output();
+    let out = tokio::time::timeout(std::time::Duration::from_secs(5), query)
+        .await
+        .map_err(|_| {
+            ErrorObject::new(
+                ErrorCode::Timeout,
+                "the user's systemd manager did not answer",
+            )
+        })?
+        .map_err(|err| crate::dispatch::io_error("cannot read the desktop's environment", &err))?;
+    let environment = parse_environment(&String::from_utf8_lossy(&out.stdout));
+    if !environment
+        .iter()
+        .any(|(key, _)| key == "WAYLAND_DISPLAY" || key == "DISPLAY")
+    {
+        return Err(ErrorObject::new(
+            ErrorCode::NoSession,
+            "no desktop is running in the guest (a server without one, or nobody signed in to it)",
+        ));
+    }
+    for (key, value) in environment {
+        if !params.env.contains_key(&key) {
+            cmd.env(key, value);
+        }
+    }
+    Ok(())
+}
+
+/// `KEY=value` lines (`systemctl show-environment`; values with special characters come `$'…'`-quoted and are
+/// left out: the display and bus variables never need it).
+fn parse_environment(text: &str) -> Vec<(String, String)> {
+    text.lines()
+        .filter_map(|line| line.split_once('='))
+        .filter(|(key, value)| {
+            !key.is_empty()
+                && key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+                && !value.starts_with("$'")
+        })
+        .map(|(key, value)| (key.to_owned(), value.to_owned()))
+        .collect()
 }
 
 /// Shows `path` in the desktop's file manager (FileManager1 over D-Bus), else opens its folder.
@@ -344,6 +455,47 @@ mod tests {
         );
         assert!(session_allows(&[ssh], 1001), "no seats: any active session");
         assert!(!session_allows(&[], 1000));
+    }
+
+    #[test]
+    fn session_state_follows_the_seats_foreground_session() {
+        let session = |id: &str, text: &str| (id.to_owned(), text.to_owned());
+        let greeter = session("c1", "UID=120\nCLASS=greeter\nSEAT=seat0\nACTIVE=1\n");
+        let user = session("2", "UID=1000\nCLASS=user\nSEAT=seat0\nACTIVE=1\n");
+        let ssh = session("3", "UID=1000\nCLASS=user\nACTIVE=1\n");
+        let unlocked = |_: &str| false;
+        assert_eq!(
+            state_of(&[greeter, ssh.clone()], unlocked),
+            SessionState::Greeter
+        );
+        assert_eq!(
+            state_of(std::slice::from_ref(&user), unlocked),
+            SessionState::Unlocked
+        );
+        assert_eq!(
+            state_of(&[user], |id| id == "2"),
+            SessionState::Unknown,
+            "the user's own lock is not the system's"
+        );
+        assert_eq!(
+            state_of(&[ssh], unlocked),
+            SessionState::Unknown,
+            "no seat: no screen"
+        );
+        assert_eq!(state_of(&[], unlocked), SessionState::Unknown);
+    }
+
+    #[test]
+    fn reads_the_user_managers_environment() {
+        let text = "DISPLAY=:0\nWAYLAND_DISPLAY=wayland-0\nXDG_RUNTIME_DIR=/run/user/1000\nODD=$'a\\nb'\nbad key=1\n";
+        assert_eq!(
+            parse_environment(text),
+            vec![
+                ("DISPLAY".into(), ":0".into()),
+                ("WAYLAND_DISPLAY".into(), "wayland-0".into()),
+                ("XDG_RUNTIME_DIR".into(), "/run/user/1000".into()),
+            ]
+        );
     }
 
     #[test]

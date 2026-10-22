@@ -62,7 +62,8 @@ public struct SettingsSheet: View {
                 }
                 AgentPolicySection(
                     mcp: $model.draft.mcp, clipboardAllowWithAgents: $model.draft.clipboard.allowWithAgents,
-                    tampered: model.policyTampered, writableShares: model.draft.shares.contains { !$0.readOnly })
+                    tampered: model.policyTampered, writableShares: model.draft.shares.contains { !$0.readOnly },
+                    vm: model.draft.id, name: model.draft.name)
                 if model.draft.network.contains(where: { $0.mode == .nat }) {
                     Section("Port Forwarding") {
                         row("portForwards") {

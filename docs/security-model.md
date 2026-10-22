@@ -96,7 +96,7 @@ files, sign binaries or drive the app's UI like the user.
 - **Kill switch**: `vmpane mcp kill`, the menu bar or ⌃⌥⌘. (while VMPane runs), or `mcp.disableAll` from any
   client, writes a tagged `killswitch` file every helper watches (and reads at launch), so it works with no app
   running. While engaged, every non-app call is refused (helpers and Core-direct library operations), agent
-  connections close, commands agents started are killed, their file transfers stop, and port forwards agents
+  connections close, commands and desktop apps agents started are killed (after the agent left too), their file transfers stop, and port forwards agents
   added go down (measured: all within 0.15 s). Only the app releases it. The file is written released when the
   policy key is made; after that a missing or edited file counts as engaged.
 - **Audit**: every request a non-app client makes of a VM's helper, every refusal, and every clone or delete
@@ -104,6 +104,20 @@ files, sign binaries or drive the app's UI like the user.
   typed text and clipboard contents as SHA-256 unless the VM records typed text, a command's input always as
   SHA-256 and size; 10 MB × 5). Listing the library, creating and importing touch no VM and are not recorded.
   It is a record, not tamper-proof.
+
+- **Sign-in** (`vm_sign_in`, off by default per VM): the guest password is entered in the app and kept in the
+  login Keychain, in an item whose access list trusts only VMPane and its VM helper (Developer ID builds;
+  development builds keep a 0600 file in VMPane's folder instead, never the Keychain). The helper reads it and types
+  it into the guest itself: it is never part of a request, a reply, the audit log (which records only that
+  `vm.signIn` was called, with "Record typed text" on too) or a log. It signs in only when the guest's root service
+  reports the login screen or a locked session (`session.state`), never on what the signed-in user can fake (a lock
+  hint, a session helper going away, a lock-screen look-alike), and only with a password field on the screen; at Run
+  commands and Full control the person is asked each time (no answer in a minute is a no). The setting is inside
+  the policy's tag. A hostile guest can still show its own lock screen to the helper: what it gets is the guest's
+  own password, so use the VM's own password, never the Mac's.
+- **Desktop launches** (`vm_exec desktop`) run as the signed-in user like any `as: user` command and stay when the
+  agent leaves; the kill switch ends them, with what they started (Windows: a job; Linux and macOS: the process
+  group). Programs the guest system starts for them (Store apps, `open`) are out of its reach.
 
 ## Accepted risks (v1)
 

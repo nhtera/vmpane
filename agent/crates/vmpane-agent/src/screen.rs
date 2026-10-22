@@ -39,6 +39,7 @@ pub async fn elements(params: ScreenElementsParams) -> Result<Reply, ErrorObject
 }
 
 /// Controls worth listing even without a name (an unnamed edit box is still where text goes).
+#[cfg(any(windows, target_os = "macos"))]
 pub fn interactive(role: &str) -> bool {
     matches!(
         role,

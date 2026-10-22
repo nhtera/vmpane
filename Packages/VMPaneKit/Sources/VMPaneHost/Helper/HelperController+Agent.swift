@@ -122,21 +122,7 @@ extension HelperController {
             switch ControlMethod(rawValue: method) {
             case .agentExec?:
                 let request = try RPCParams.decode(ExecRequest.self, from: params).get()
-                if let input = request.input, input.utf8.count > Self.execInputLimit {
-                    throw RPCError(.invalidParams, "input is at most 64 KiB (feed more with agent.exec.input)")
-                }
-                let execId = try await agentExecs.start(request.agentParams, owner: owner, on: connection)
-                // The kill switch only finds the execs already started: one that was starting (the guest slow to
-                // answer, e.g. busy with a transfer) is ended here.
-                if let stopped, await stopped() {
-                    try? await agentExecs.signal(execId, signal: .kill, owner: owner)
-                    throw RPCError(.policyDenied, "AI agents are stopped (VMPane's kill switch); the app can let them act again")
-                }
-                // Input given with the command (shown in the confirmation, recorded as a hash): fed, then closed.
-                if let input = request.input {
-                    try await agentExecs.input(execId, data: Data(input.utf8), eof: true, owner: owner)
-                }
-                return .success(["execId": .int(Int64(execId))])
+                return .success(try await exec(request, owner: owner, on: connection, stopped: stopped))
             case .agentExecInput?:
                 let input = try RPCParams.decode(ExecInput.self, from: params).get()
                 guard let data = Data(base64Encoded: input.dataB64 ?? "") else { throw RPCError(.invalidParams, "dataB64 is not base64") }
@@ -161,6 +147,50 @@ extension HelperController {
         } catch {
             return .failure(RPCError(.internalError, ErrorText.readable(error)))
         }
+    }
+
+    /// `agent.exec`: a command with its output to the caller, or (`desktop`) an app on the user's desktop.
+    private func exec(
+        _ request: ExecRequest, owner: ControlConnection, on connection: AgentConnection, stopped: (@Sendable () async -> Bool)?
+    ) async throws -> JSONValue {
+        if let input = request.input, input.utf8.count > Self.execInputLimit {
+            throw RPCError(.invalidParams, "input is at most 64 KiB (feed more with agent.exec.input)")
+        }
+        let byAgent = identity(of: owner).identity == .automated
+        if request.desktop == true {
+            return try await openOnDesktop(request, owner: owner, byAgent: byAgent, on: connection, stopped: stopped)
+        }
+        let execId = try await agentExecs.start(request.agentParams, owner: owner, byAgent: byAgent, on: connection)
+        // The kill switch only finds the execs already started: one that was starting (the guest slow to
+        // answer, e.g. busy with a transfer) is ended here.
+        if let stopped, await stopped() {
+            try? await agentExecs.signal(execId, signal: .kill, owner: owner)
+            throw RPCError(.policyDenied, "AI agents are stopped (VMPane's kill switch); the app can let them act again")
+        }
+        // Input given with the command (shown in the confirmation, recorded as a hash): fed, then closed.
+        if let input = request.input {
+            try await agentExecs.input(execId, data: Data(input.utf8), eof: true, owner: owner)
+        }
+        return ["execId": .int(Int64(execId))]
+    }
+
+    /// `agent.exec {desktop: true}`: the program opens on the signed-in user's desktop and the call returns at once.
+    private func openOnDesktop(
+        _ request: ExecRequest, owner: ControlConnection, byAgent: Bool, on connection: AgentConnection,
+        stopped: (@Sendable () async -> Bool)?
+    ) async throws -> JSONValue {
+        guard await agentHub.status.peer?.hello.caps?.contains(AgentCap.desktop) == true else {
+            throw RPCError(.agentUnavailable, "Update the guest tools to open apps on the desktop")
+        }
+        guard request.runAs ?? .user == .user, request.stdin != true, request.input == nil, request.timeoutMs == nil else {
+            throw RPCError(.invalidParams, "an app on the desktop runs as the user, without stdin or a timeout")
+        }
+        let started = try await agentExecs.launch(request.agentParams, owner: owner, byAgent: byAgent, on: connection)
+        if let stopped, await stopped() {
+            try? await agentExecs.signal(started.execId, signal: .kill, owner: owner)
+            throw RPCError(.policyDenied, "AI agents are stopped (VMPane's kill switch); the app can let them act again")
+        }
+        return ["execId": .int(Int64(started.execId)), "pid": .int(Int64(started.pid)), "launched": true]
     }
 
     /// From `hello`, with what changes over a connection (a user-session helper coming and going) asked live.
@@ -335,16 +365,18 @@ private struct ExecRequest: Decodable {
     var stdin: Bool?
     /// Text for the command's stdin, given with it (at most 64 KiB).
     var input: String?
+    /// Open it on the user's desktop: no output, the call returns at once.
+    var desktop: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case argv, shell, cwd, env, timeoutMs, stdin, input
+        case argv, shell, cwd, env, timeoutMs, stdin, input, desktop
         case runAs = "as"
     }
 
     var agentParams: AgentExecStartParams {
         AgentExecStartParams(
             argv: argv, shell: shell, env: env, cwd: cwd, as: runAs ?? .user, stdin: (stdin ?? false) || input != nil,
-            timeoutMs: timeoutMs)
+            timeoutMs: timeoutMs, desktop: desktop == true ? true : nil)
     }
 }
 

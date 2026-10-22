@@ -5,7 +5,8 @@ use std::path::Path;
 use std::process::ExitStatus;
 use std::time::SystemTime;
 
-use vmpane_agent_proto::methods::Signal;
+use vmpane_agent_proto::jsonrpc::ErrorObject;
+use vmpane_agent_proto::methods::{ExecStartParams, SessionState, Signal};
 use windows::Win32::Foundation::{FILETIME, SYSTEMTIME};
 use windows::Win32::System::SystemInformation::SetSystemTime;
 use windows::Win32::System::Time::FileTimeToSystemTime;
@@ -52,6 +53,93 @@ pub fn signal_tree(pid: u32, _signal: Signal) {
         .args(["/T", "/F", "/PID", &pid.to_string()])
         .creation_flags(CREATE_NO_WINDOW)
         .output();
+}
+
+/// Nothing is handed to the system on Windows: the job holds what the launch starts.
+pub struct AppLaunch;
+
+pub fn desktop_params(
+    params: ExecStartParams,
+) -> Result<(ExecStartParams, Option<AppLaunch>), ErrorObject> {
+    Ok((params, None))
+}
+
+/// The session helper runs on the user's desktop; a console program gets a console window of its own there.
+pub async fn desktop_environment(
+    cmd: &mut tokio::process::Command,
+    _params: &ExecStartParams,
+) -> Result<(), ErrorObject> {
+    cmd.creation_flags(CREATE_NEW_PROCESS_GROUP);
+    Ok(())
+}
+
+/// A desktop launch: a job holding the process and everything it starts (`cmd /c` ends at once, its program
+/// stays), so ending the launch ends them all. Closing the job leaves them running.
+pub struct DesktopTree {
+    job: windows::Win32::Foundation::HANDLE,
+}
+
+// SAFETY: a job handle may be used and closed from any thread.
+unsafe impl Send for DesktopTree {}
+unsafe impl Sync for DesktopTree {}
+
+impl DesktopTree {
+    pub fn adopt(
+        child: &tokio::process::Child,
+        _pid: u32,
+        _app: Option<AppLaunch>,
+    ) -> std::io::Result<DesktopTree> {
+        use windows::Win32::Foundation::{CloseHandle, HANDLE};
+        use windows::Win32::System::JobObjects::{AssignProcessToJobObject, CreateJobObjectW};
+        let process = child
+            .raw_handle()
+            .ok_or_else(|| std::io::Error::other("the app already ended"))?;
+        // SAFETY: the job is new and owned here; the process handle is the child's, open while it is borrowed.
+        unsafe {
+            let job = CreateJobObjectW(None, None).map_err(std::io::Error::other)?;
+            if let Err(err) = AssignProcessToJobObject(job, HANDLE(process)) {
+                let _ = CloseHandle(job);
+                return Err(std::io::Error::other(err));
+            }
+            Ok(DesktopTree { job })
+        }
+    }
+
+    /// Whether a process of the job still runs.
+    pub fn alive(&self) -> bool {
+        use windows::Win32::System::JobObjects::{
+            JOBOBJECT_BASIC_ACCOUNTING_INFORMATION, JobObjectBasicAccountingInformation,
+            QueryInformationJobObject,
+        };
+        let mut info = JOBOBJECT_BASIC_ACCOUNTING_INFORMATION::default();
+        // SAFETY: the job is open until `Drop`; the buffer is the struct the class asks for.
+        let queried = unsafe {
+            QueryInformationJobObject(
+                Some(self.job),
+                JobObjectBasicAccountingInformation,
+                (&raw mut info).cast(),
+                std::mem::size_of::<JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>() as u32,
+                None,
+            )
+        };
+        queried.is_ok() && info.ActiveProcesses > 0
+    }
+
+    pub fn signal(&self, _signal: Signal) {
+        // SAFETY: the job is open until `Drop`.
+        unsafe {
+            let _ = windows::Win32::System::JobObjects::TerminateJobObject(self.job, 1);
+        }
+    }
+}
+
+impl Drop for DesktopTree {
+    fn drop(&mut self) {
+        // SAFETY: closed exactly once; without JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE its processes keep running.
+        unsafe {
+            let _ = windows::Win32::Foundation::CloseHandle(self.job);
+        }
+    }
 }
 
 pub fn shell_command(shell: &str) -> tokio::process::Command {
@@ -123,6 +211,52 @@ pub fn shutdown_command(reboot: bool, force: bool) -> (&'static str, Vec<&'stati
         args.push("/f");
     }
     ("shutdown.exe", args)
+}
+
+/// The console session as Windows keeps it (`WTSSessionInfoEx`): no user name is the sign-in screen; else its
+/// lock flag, which only Winlogon sets.
+pub fn session_state() -> SessionState {
+    use windows::Win32::System::RemoteDesktop::{
+        WTS_CURRENT_SERVER_HANDLE, WTS_SESSIONSTATE_LOCK, WTS_SESSIONSTATE_UNLOCK, WTSFreeMemory,
+        WTSINFOEXW, WTSQuerySessionInformationW, WTSSessionInfoEx,
+    };
+    use windows::core::PWSTR;
+    let Some(id) = session::console_session() else {
+        return SessionState::Unknown;
+    };
+    let mut buffer = PWSTR::null();
+    let mut bytes = 0u32;
+    // SAFETY: the buffer comes from the call, is read as the WTSINFOEXW it is when large enough, and is freed once.
+    unsafe {
+        if WTSQuerySessionInformationW(
+            Some(WTS_CURRENT_SERVER_HANDLE),
+            id,
+            WTSSessionInfoEx,
+            &mut buffer,
+            &mut bytes,
+        )
+        .is_err()
+            || buffer.is_null()
+        {
+            return SessionState::Unknown;
+        }
+        let state = if (bytes as usize) < std::mem::size_of::<WTSINFOEXW>() {
+            SessionState::Unknown
+        } else {
+            let info = &*buffer.0.cast::<WTSINFOEXW>();
+            let level1 = &info.Data.WTSInfoExLevel1;
+            let user = &level1.UserName;
+            let named = user.iter().take_while(|c| **c != 0).count() > 0;
+            match (info.Level, named, level1.SessionFlags as u32) {
+                (1, false, _) => SessionState::Greeter,
+                (1, true, WTS_SESSIONSTATE_LOCK) => SessionState::Locked,
+                (1, true, WTS_SESSIONSTATE_UNLOCK) => SessionState::Unlocked,
+                _ => SessionState::Unknown,
+            }
+        };
+        WTSFreeMemory(buffer.0.cast());
+        state
+    }
 }
 
 /// No volume freeze without VSS: nothing frozen, nothing to thaw.

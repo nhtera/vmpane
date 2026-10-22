@@ -67,23 +67,30 @@ public enum PolicyIntegrity {
         public let tampered: Bool
         /// Agents may use the clipboard (only with a valid tag).
         public let clipboardAllowWithAgents: Bool
+        /// Agents may sign the guest in (`mcp.signIn`, only with a valid tag).
+        public var signIn = false
     }
 
     /// The policy that applies: the saved one when its tag checks out, else `off`.
     public static func effective(_ config: VMConfigV1, key: SymmetricKey?) -> Effective {
-        let raised = config.mcp.policy != .off || config.clipboard.allowWithAgents
+        let raised = config.mcp.policy != .off || config.clipboard.allowWithAgents || config.mcp.signIn == true
         guard raised else { return Effective(level: .off, tampered: false, clipboardAllowWithAgents: false) }
         guard let key, let tag = config.mcp.tag, let given = Data(base64Encoded: tag),
             HMAC<SHA256>.isValidAuthenticationCode(given, authenticating: Data(message(config).utf8), using: key)
         else { return Effective(level: .off, tampered: true, clipboardAllowWithAgents: false) }
-        return Effective(level: config.mcp.policy, tampered: false, clipboardAllowWithAgents: config.clipboard.allowWithAgents)
+        return Effective(
+            level: config.mcp.policy, tampered: false, clipboardAllowWithAgents: config.clipboard.allowWithAgents,
+            signIn: config.mcp.signIn == true)
     }
 
     private static func message(_ config: VMConfigV1) -> String {
         let mcp = config.mcp
-        return [
+        var parts = [
             config.id.uuidString.lowercased(), mcp.policy.rawValue, String(mcp.confirmExec), String(mcp.autoSnapshot),
             String(mcp.auditTypedText), String(config.clipboard.allowWithAgents),
-        ].joined(separator: "\n")
+        ]
+        // Only when on: tags written before the setting existed stay valid.
+        if mcp.signIn == true { parts.append("signIn") }
+        return parts.joined(separator: "\n")
     }
 }

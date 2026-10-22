@@ -152,6 +152,26 @@
         }
       ]
     },
+    "DesktopStarted": {
+      "description": "`exec.start {desktop: true}` result.",
+      "properties": {
+        "execId": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pid": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "execId",
+        "pid"
+      ],
+      "type": "object"
+    },
     "DisplaySetParams": {
       "properties": {
         "heightPx": {
@@ -253,6 +273,10 @@
             "string",
             "null"
           ]
+        },
+        "desktop": {
+          "description": "Open it on the logged-in user's desktop (agents with [`cap::DESKTOP`]; `as` must be `user`): started\nwith the desktop's environment, without output streams, and left running when the host goes away. The\nresult is [`DesktopStarted`]; `exec.exited` comes once it and everything it started ended, and\n`exec.signal` ends them all (a Windows job; a process group elsewhere). On macOS an app bundle's path as\n`argv[0]` opens a new instance of the app through LaunchServices (macOS refuses its own apps started any\nother way), and the launch follows that app; apps a plain `open` starts are macOS's.",
+          "type": "boolean"
         },
         "env": {
           "additionalProperties": {
@@ -811,6 +835,43 @@
       },
       "type": "object"
     },
+    "SessionState": {
+      "description": "What the guest's screen is, as the system knows it (never from anything the signed-in user can set).",
+      "oneOf": [
+        {
+          "const": "greeter",
+          "description": "The login screen: nobody is signed in at the console.",
+          "type": "string"
+        },
+        {
+          "const": "locked",
+          "description": "A signed-in user's session, locked.",
+          "type": "string"
+        },
+        {
+          "const": "unlocked",
+          "description": "A signed-in user's session, unlocked.",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "description": "None of these can be told (no console, or the guest cannot say).",
+          "type": "string"
+        }
+      ]
+    },
+    "SessionStateResult": {
+      "description": "`session.state` result.",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/SessionState"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "type": "object"
+    },
     "Signal": {
       "oneOf": [
         {
@@ -980,7 +1041,14 @@
         "$ref": "#/$defs/ExecStartParams"
       },
       "result": {
-        "$ref": "#/$defs/ExecStartResult"
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ExecStartResult"
+          },
+          {
+            "$ref": "#/$defs/DesktopStarted"
+          }
+        ]
       }
     },
     "file.mkdirTemp": {
@@ -1112,6 +1180,17 @@
       },
       "result": {
         "$ref": "#/$defs/Empty"
+      }
+    },
+    "session.state": {
+      "cap": "session.state",
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/Empty"
+      },
+      "result": {
+        "$ref": "#/$defs/SessionStateResult"
       }
     },
     "time.set": {

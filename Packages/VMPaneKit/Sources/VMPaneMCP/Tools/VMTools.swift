@@ -7,7 +7,25 @@ enum VMTools {
     static let readOnly: JSONValue = ["readOnlyHint": true, "openWorldHint": false]
 
     static func all(_ access: VMAccess) -> [Tool] {
-        [list(access), status(access), power(access), screenshot(access)] + snapshots(access) + clipboard(access) + [wait(access)]
+        [list(access), status(access), power(access), screenshot(access)] + snapshots(access) + clipboard(access)
+            + [wait(access), signIn(access)]
+    }
+
+    static func signIn(_ access: VMAccess) -> Tool {
+        Tool(
+            "vm_sign_in",
+            "Sign in to a VM that shows its login or lock screen, with the password its owner kept for it in VMPane (you never "
+                + "see it). Only when the owner turned on Let agents sign in; at levels that run commands the person at the Mac is "
+                + "asked first. If the screen lists users, click yours first. Returns verified.status signed_in once the guest "
+                + "reports a signed-in session.",
+            schema: Schema.object(["vm": Schema.vm], required: ["vm"]),
+            annotations: ["destructiveHint": false, "openWorldHint": false]
+        ) { args, _ in
+            // The person may take up to a minute to answer; then up to 30 s for the guest.
+            let result = try await access.call(try args.string("vm"), .vmSignIn, [:], timeout: .seconds(120))
+            let status = result["verified"]?["status"]?.stringValue ?? "unknown"
+            return ToolResult(text: status == "signed_in" ? "signed in" : "already signed in", structured: result)
+        }
     }
 
     static func list(_ access: VMAccess) -> Tool {

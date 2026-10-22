@@ -166,11 +166,18 @@ struct AccountStep: View {
 
     var body: some View {
         Form {
-            Section("Your Windows account") {
+            Section {
                 TextField("User name", text: $wizard.userName)
                 SecureField("Password", text: $wizard.password)
                 Picker("Edition", selection: $wizard.edition) {
                     ForEach(["Windows 11 Pro", "Windows 11 Home"], id: \.self) { Text($0) }
+                }
+                Toggle("Remember the password so agents can sign in", isOn: $wizard.keepSignInPassword)
+            } header: {
+                Text("Your Windows account")
+            } footer: {
+                if wizard.keepSignInPassword {
+                    Text("Kept where only VMPane can read it; VMPane types it at the lock screen, agents never see it.")
                 }
             }
             Section {

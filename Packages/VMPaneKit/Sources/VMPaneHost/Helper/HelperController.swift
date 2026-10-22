@@ -66,6 +66,12 @@ public actor HelperController {
     var snapshotting = false
     /// An input batch is running (`HelperController+InputBatch`): the next one waits for it.
     var batching = false
+    /// The helper is signing the guest in (`HelperController+SignIn`): agents' input is refused meanwhile.
+    var signingIn = false
+    /// Single input requests being sent (`displayRequest`), which a sign-in waits for.
+    var inputsInFlight = 0
+    /// How long a question waits for the person (`HelperController+Confirm`); no answer is a no.
+    var confirmationTimeout: Duration = .seconds(60)
     /// Agent sessions' undo snapshots (`HelperController+AgentSession`).
     var agentSessions: [String: AgentSession] = [:]
     /// The file drop in progress (`vm.files.cancel` stops it).
@@ -162,6 +168,7 @@ public actor HelperController {
         let caller = identity(of: connection)
         let started = ContinuousClock.now
         if let denial = authorize(request, caller) { return .failure(denial) }
+        if let held = heldForSignIn(ControlMethod(rawValue: request.method), connection) { return .failure(held) }
         if let refusal = await agentChecks(request, caller) {
             audit(request, caller, result: .failure(refusal), since: started)
             return .failure(refusal)
@@ -184,6 +191,7 @@ public actor HelperController {
         case .vmScreenshot?, .vmScreenRead?, .vmInputKey?, .vmInputText?, .vmInputPointer?, .vmInputScroll?:
             return await displayRequest(request.method, request.params)
         case .vmInputBatch?: return await inputBatch(request.params, from: connection)
+        case .vmSignIn?: return await signIn(from: connection)
         case .vmDisplayShow?:
             displayContinuation.yield()
             return .success(.object([:]))
@@ -193,23 +201,7 @@ public actor HelperController {
         case .eventsSubscribe?: return subscribe(request.params, connection)
         case .vmSettingsGet?: return RPCParams.encode(config)
         case .vmPortsList?: return await portsList()
-        case .vmFilesDrop?:
-            guard dropTask == nil else { return .failure(RPCError(.invalidState, "files are already being copied into the VM")) }
-            let params = request.params
-            let task = Task { await self.dropFiles(params) }
-            dropTask = task
-            dropOwner = ObjectIdentifier(connection)
-            defer {
-                dropTask = nil
-                dropOwner = nil
-            }
-            return await task.value
-        case .vmFilesCancel?:
-            guard dropOwner == ObjectIdentifier(connection) else {
-                return .failure(RPCError(.invalidState, "no file drop started by this connection"))
-            }
-            dropTask?.cancel()
-            return .success([:])
+        case .vmFilesDrop?, .vmFilesCancel?: return await filesRequest(request, from: connection)
         case .mcpDisableAll?: return await killSwitchRequest(engage: true)
         case .mcpEnableAll?: return await killSwitchRequest(engage: false)
         case .vmClipboardRead?: return await clipboardRead(request.params)
@@ -317,6 +309,7 @@ public actor HelperController {
 /// What tests and the helper app replace.
 extension HelperController {
     public func setGracefulStopTimeout(_ timeout: Duration) { gracefulStopTimeout = timeout }
+    func setConfirmationTimeout(_ timeout: Duration) { confirmationTimeout = timeout }
     func setSessionLockCheck(_ check: @escaping @Sendable () -> Bool) { isSessionLocked = check }
     func setClassifier(_ classifier: PeerClassifier) {
         self.classifier = classifier

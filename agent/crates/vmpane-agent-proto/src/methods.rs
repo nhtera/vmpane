@@ -44,6 +44,9 @@ pub mod method {
     pub const FS_THAW: &str = "fs.thaw";
     /// The controls in the user's foreground window, served by the session helper ([`cap::SCREEN`]).
     pub const SCREEN_ELEMENTS: &str = "screen.elements";
+    /// Whether the guest shows its login screen, a locked session or a signed-in desktop, answered by the
+    /// daemon from what only the system can set ([`cap::SESSION_STATE`]).
+    pub const SESSION_STATE: &str = "session.state";
 }
 
 /// Capabilities an agent advertises in `hello`. A method whose cap is missing answers `capUnsupported`.
@@ -66,6 +69,10 @@ pub mod cap {
     /// `screen.elements`: UI Automation (Windows) or the accessibility tree (macOS, once the user has granted
     /// the agent Accessibility; until then it answers `permissionDenied`).
     pub const SCREEN: &str = "screen";
+    /// `exec.start` takes `desktop: true`: the program opens on the logged-in user's desktop, detached.
+    pub const DESKTOP: &str = "desktop";
+    /// `session.state`.
+    pub const SESSION_STATE: &str = "session.state";
 }
 
 /// Who sends a method.
@@ -169,6 +176,22 @@ pub struct ExecStartParams {
     /// Kill the process tree after this long.
     #[serde(default)]
     pub timeout_ms: Option<u64>,
+    /// Open it on the logged-in user's desktop (agents with [`cap::DESKTOP`]; `as` must be `user`): started
+    /// with the desktop's environment, without output streams, and left running when the host goes away. The
+    /// result is [`DesktopStarted`]; `exec.exited` comes once it and everything it started ended, and
+    /// `exec.signal` ends them all (a Windows job; a process group elsewhere). On macOS an app bundle's path as
+    /// `argv[0]` opens a new instance of the app through LaunchServices (macOS refuses its own apps started any
+    /// other way), and the launch follows that app; apps a plain `open` starts are macOS's.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub desktop: bool,
+}
+
+/// `exec.start {desktop: true}` result.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopStarted {
+    pub exec_id: u32,
+    pub pid: u32,
 }
 
 /// Stream ids are guest-allocated (even), `stdin` included: the host sends on it.
@@ -496,6 +519,30 @@ mod tests {
             json!({"type": "text", "stream": 2, "size": 5, "files": []})
         );
     }
+}
+
+// MARK: session state
+
+/// What the guest's screen is, as the system knows it (never from anything the signed-in user can set).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum SessionState {
+    /// The login screen: nobody is signed in at the console.
+    Greeter,
+    /// A signed-in user's session, locked.
+    Locked,
+    /// A signed-in user's session, unlocked.
+    Unlocked,
+    /// None of these can be told (no console, or the guest cannot say).
+    #[default]
+    Unknown,
+}
+
+/// `session.state` result.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionStateResult {
+    pub state: SessionState,
 }
 
 // MARK: screen

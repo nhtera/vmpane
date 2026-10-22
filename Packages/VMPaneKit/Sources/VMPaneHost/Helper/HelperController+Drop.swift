@@ -180,3 +180,26 @@ extension HelperController {
         return ids.count == 2 && ids.allSatisfy { !$0.isEmpty && $0.allSatisfy(\.isNumber) }
     }
 }
+
+extension HelperController {
+    /// `vm.files.drop` (one at a time) and `vm.files.cancel` (by the connection that started it).
+    func filesRequest(_ request: RPCRequest, from connection: ControlConnection) async -> Result<JSONValue, RPCError> {
+        guard request.method == ControlMethod.vmFilesDrop.rawValue else {
+            guard dropOwner == ObjectIdentifier(connection) else {
+                return .failure(RPCError(.invalidState, "no file drop started by this connection"))
+            }
+            dropTask?.cancel()
+            return .success([:])
+        }
+        guard dropTask == nil else { return .failure(RPCError(.invalidState, "files are already being copied into the VM")) }
+        let params = request.params
+        let task = Task { await self.dropFiles(params) }
+        dropTask = task
+        dropOwner = ObjectIdentifier(connection)
+        defer {
+            dropTask = nil
+            dropOwner = nil
+        }
+        return await task.value
+    }
+}

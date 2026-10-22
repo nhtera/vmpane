@@ -19,6 +19,7 @@ public enum ControlMethod: String, CaseIterable, Sendable {
     case vmInputScroll = "vm.input.scroll"
     case vmInputBatch = "vm.input.batch"
     case vmScreenRead = "vm.screen.read"
+    case vmSignIn = "vm.signIn"
     case vmDisplayShow = "vm.display.show"
     case vmInstallCancel = "vm.install.cancel"
     case vmSettingsGet = "vm.settings.get"

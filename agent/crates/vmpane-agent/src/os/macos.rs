@@ -9,7 +9,9 @@ use std::os::fd::{FromRawFd, OwnedFd};
 use std::process::Command;
 use std::time::SystemTime;
 
-use vmpane_agent_proto::methods::{ListeningPort, PortProto};
+use vmpane_agent_proto::error::ErrorCode;
+use vmpane_agent_proto::jsonrpc::ErrorObject;
+use vmpane_agent_proto::methods::{ExecStartParams, ListeningPort, PortProto, SessionState};
 
 pub const HAS_NET_INFO: bool = true;
 
@@ -72,6 +74,135 @@ pub fn vsock_connect(cid: u32, port: u32) -> std::io::Result<OwnedFd> {
 pub fn is_console_user(uid: u32) -> bool {
     use std::os::unix::fs::MetadataExt;
     std::fs::metadata("/dev/console").is_ok_and(|m| m.uid() == uid && uid != 0)
+}
+
+/// An app bundle's path as `argv[0]` opens the app (as a new instance) through LaunchServices: macOS refuses
+/// its own apps started any other way (launch constraints). The launch then follows the app's instances.
+pub fn desktop_params(
+    mut params: ExecStartParams,
+) -> Result<(ExecStartParams, Option<super::AppLaunch>), ErrorObject> {
+    use objc2_foundation::{NSBundle, NSString};
+    let Some(first) = params.argv.first().cloned() else {
+        return Ok((params, None));
+    };
+    if !first.trim_end_matches('/').ends_with(".app") {
+        return Ok((params, None));
+    }
+    let executable = NSBundle::bundleWithPath(&NSString::from_str(&first))
+        .and_then(|bundle| bundle.executablePath())
+        .map(|path| std::path::PathBuf::from(path.to_string()))
+        .ok_or_else(|| ErrorObject::new(ErrorCode::NotFound, format!("{first} is not an app")))?;
+    let executable = executable.canonicalize().unwrap_or(executable);
+    let mut argv = vec![
+        "/usr/bin/open".to_owned(),
+        "-n".to_owned(),
+        "-a".to_owned(),
+        first,
+    ];
+    if params.argv.len() > 1 {
+        argv.push("--args".to_owned());
+        argv.extend(params.argv.drain(1..));
+    }
+    params.argv = argv;
+    let before = pids_running(&executable);
+    Ok((params, Some(super::AppLaunch { executable, before })))
+}
+
+/// Processes running `executable` (by their executable's path).
+pub fn pids_running(executable: &std::path::Path) -> Vec<i32> {
+    let mut pids = vec![0i32; 4096];
+    let size = i32::try_from(pids.len() * std::mem::size_of::<i32>()).unwrap_or(i32::MAX);
+    // SAFETY: the buffer holds `size` bytes; the call returns how many pids it wrote.
+    let count = unsafe { libc::proc_listallpids(pids.as_mut_ptr().cast(), size) };
+    pids.truncate(usize::try_from(count).unwrap_or(0));
+    pids.into_iter()
+        .filter(|pid| *pid > 0)
+        .filter(|pid| {
+            let mut path = [0u8; libc::PROC_PIDPATHINFO_MAXSIZE as usize];
+            // SAFETY: the buffer is as large as the call may fill.
+            let length =
+                unsafe { libc::proc_pidpath(*pid, path.as_mut_ptr().cast(), path.len() as u32) };
+            usize::try_from(length).is_ok_and(|n| {
+                n > 0 && std::path::Path::new(&*String::from_utf8_lossy(&path[..n])) == executable
+            })
+        })
+        .collect()
+}
+
+/// The session helper runs in the user's GUI session: its environment is the desktop's.
+pub async fn desktop_environment(
+    _cmd: &mut tokio::process::Command,
+    _params: &ExecStartParams,
+) -> Result<(), ErrorObject> {
+    Ok(())
+}
+
+/// The console as the system has it: the login window while root owns /dev/console; otherwise the console
+/// user's entry in the I/O Registry's `IOConsoleUsers`, which WindowServer keeps (only root can change the
+/// registry root's properties), locked when it has `CGSSessionScreenIsLocked`.
+pub fn session_state() -> SessionState {
+    use std::os::unix::fs::MetadataExt;
+    let Ok(console) = std::fs::metadata("/dev/console") else {
+        return SessionState::Unknown;
+    };
+    if console.uid() == 0 {
+        return SessionState::Greeter;
+    }
+    match console_user_locked(console.uid()) {
+        Some(true) => SessionState::Locked,
+        Some(false) => SessionState::Unlocked,
+        None => SessionState::Unknown,
+    }
+}
+
+/// Whether `uid`'s console session shows the lock screen; None when the registry has no such session.
+fn console_user_locked(uid: u32) -> Option<bool> {
+    use std::ptr::NonNull;
+
+    use objc2_core_foundation::{
+        CFArray, CFBoolean, CFDictionary, CFNumber, CFRetained, CFString, CFType,
+    };
+    #[link(name = "IOKit", kind = "framework")]
+    unsafe extern "C" {
+        fn IORegistryGetRootEntry(main_port: u32) -> u32;
+        fn IORegistryEntryCreateCFProperty(
+            entry: u32,
+            key: &CFString,
+            allocator: *const std::ffi::c_void,
+            options: u32,
+        ) -> *mut CFType;
+        fn IOObjectRelease(object: u32) -> i32;
+    }
+    // SAFETY: the root entry is released once after the copy; the property comes back retained (a create call).
+    let users = unsafe {
+        let root = IORegistryGetRootEntry(0);
+        if root == 0 {
+            return None;
+        }
+        let key = CFString::from_static_str("IOConsoleUsers");
+        let value = IORegistryEntryCreateCFProperty(root, &key, std::ptr::null(), 0);
+        IOObjectRelease(root);
+        CFRetained::from_raw(NonNull::new(value)?)
+    };
+    let users = users.downcast::<CFArray>().ok()?;
+    // SAFETY: an array of CF objects; each is checked to be a dictionary before use.
+    for user in unsafe { users.cast_unchecked::<CFType>() }.iter() {
+        let Some(user) = user.downcast_ref::<CFDictionary>() else {
+            continue;
+        };
+        // SAFETY: the keys of IOConsoleUsers entries are strings; values are checked by type below.
+        let user = unsafe { user.cast_unchecked::<CFString, CFType>() };
+        let get = |key: &'static str| user.get(&CFString::from_static_str(key));
+        let number = get("kCGSSessionUserIDKey");
+        let id = number
+            .as_ref()
+            .and_then(|n| n.downcast_ref::<CFNumber>()?.as_i64());
+        let flag = |key| get(key).and_then(|v| Some(v.downcast_ref::<CFBoolean>()?.as_bool()));
+        if id == Some(i64::from(uid)) && flag("kCGSSessionOnConsoleKey") == Some(true) {
+            return Some(flag("CGSSessionScreenIsLocked") == Some(true));
+        }
+    }
+    None
 }
 
 /// Selects `path` in Finder.

@@ -5,13 +5,15 @@ import os
 
 /// Processes started through `agent.exec`: their output goes to the control connection that started them
 /// (`exec.output`, then `exec.exited` once all output is delivered), and only that connection may feed their
-/// stdin or signal them.
+/// stdin or signal them. Desktop launches have no output and stay until they end.
 actor AgentExecs {
     private struct Route {
         /// Nil for the helper's own commands (`run`).
         let owner: ControlConnection?
         let connection: AgentConnection
         let stdin: UInt32?
+        /// Started by an AI agent: the kill switch ends it, after the connection that started it closed too.
+        var byAgent = false
     }
 
     private enum Exit {
@@ -38,13 +40,13 @@ actor AgentExecs {
         outbound: { [$0["stdin"]?.intValue].compactMap { $0.flatMap { UInt32(exactly: $0) } } })
 
     /// Starts the process and its output forwarding; returns the exec id.
-    func start(_ params: AgentExecStartParams, owner: ControlConnection, on connection: AgentConnection) async throws
-        -> UInt32
+    func start(_ params: AgentExecStartParams, owner: ControlConnection, byAgent: Bool, on connection: AgentConnection)
+        async throws -> UInt32
     {
         let call = try await connection.call(AgentMethod.execStart, RPCParams.encode(params).get(), streams: Self.streamNames)
         let started = try RPCParams.decode(AgentExecStartResult.self, from: call.result).get()
         let key = Key(connection, started.execId)
-        routes[key] = Route(owner: owner, connection: connection, stdin: started.stdin)
+        routes[key] = Route(owner: owner, connection: connection, stdin: started.stdin, byAgent: byAgent)
         let outputs = [("stdout", call.inbound[started.stdout]), ("stderr", call.inbound[started.stderr])]
         Task {
             await withTaskGroup(of: Void.self) { group in
@@ -63,6 +65,22 @@ actor AgentExecs {
             self.remove(key)
         }
         return started.execId
+    }
+
+    /// Opens a program on the guest's desktop (`desktop: true`): it is known here until it ends, so its owner can
+    /// signal it and the kill switch can end it.
+    func launch(_ params: AgentExecStartParams, owner: ControlConnection, byAgent: Bool, on connection: AgentConnection)
+        async throws -> AgentDesktopStarted
+    {
+        let call = try await connection.call(AgentMethod.execStart, RPCParams.encode(params).get())
+        let started = try RPCParams.decode(AgentDesktopStarted.self, from: call.result).get()
+        let key = Key(connection, started.execId)
+        routes[key] = Route(owner: owner, connection: connection, stdin: nil, byAgent: byAgent)
+        Task {
+            _ = await self.waitForExit(key)
+            self.remove(key)
+        }
+        return started
     }
 
     /// A command the helper ran for itself.
@@ -108,18 +126,23 @@ actor AgentExecs {
         exits[key] = nil
     }
 
-    /// Kills every process started through the connections in `owners` (the kill switch's agents).
-    func kill(ownedBy owners: Set<ObjectIdentifier>) async {
-        let doomed = routes.filter { _, route in route.owner.map { owners.contains(ObjectIdentifier($0)) } ?? false }
+    /// Kills every process AI agents started (the kill switch), desktop launches included.
+    func killAgents() async {
+        let doomed = routes.filter(\.value.byAgent)
         AgentConnection.log.notice(
             "kill switch: \(doomed.count, privacy: .public) of \(self.routes.count, privacy: .public) exec(s) to kill")
-        for (key, route) in doomed {
-            let params = RPCParams.encode(AgentExecSignalParams(execId: key.execId, signal: .kill))
-            do {
-                _ = try await route.connection.call(AgentMethod.execSignal, try? params.get(), timeout: .seconds(2))
-            } catch {
-                AgentConnection.log.error(
-                    "kill switch: exec \(key.execId, privacy: .public) not killed: \(String(describing: error), privacy: .public)")
+        // All at once: a guest slow to answer one must not hold up the rest.
+        await withTaskGroup(of: Void.self) { group in
+            for (key, route) in doomed {
+                group.addTask {
+                    let params = RPCParams.encode(AgentExecSignalParams(execId: key.execId, signal: .kill))
+                    do {
+                        _ = try await route.connection.call(AgentMethod.execSignal, try? params.get(), timeout: .seconds(2))
+                    } catch {
+                        AgentConnection.log.error(
+                            "kill switch: exec \(key.execId, privacy: .public) not killed: \(String(describing: error), privacy: .public)")
+                    }
+                }
             }
         }
     }

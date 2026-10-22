@@ -73,7 +73,8 @@ extension HelperController {
         let caller = identity(of: connection)
         let admitted = agentGeneration
         // One batch at a time on a VM: another's held keys and screen changes would mix into this one's.
-        while batching {
+        // One batch at a time, and none while the helper signs the guest in.
+        while batching || signingIn {
             if agentsStopped(since: admitted, caller) { return .failure(RPCError(.policyDenied, Self.stoppedReason)) }
             try? await Task.sleep(for: .milliseconds(20))
         }

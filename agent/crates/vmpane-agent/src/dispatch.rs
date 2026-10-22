@@ -7,7 +7,8 @@ use tokio::sync::mpsc;
 use vmpane_agent_proto::error::ErrorCode;
 use vmpane_agent_proto::jsonrpc::{ErrorObject, Request};
 use vmpane_agent_proto::methods::{
-    ClipboardContents, Empty, FilePushParams, PathParams, ScreenElementsParams, cap, method,
+    ClipboardContents, Empty, FilePushParams, PathParams, ScreenElementsParams, SessionStateResult,
+    cap, method,
 };
 
 use crate::agent::Role;
@@ -30,6 +31,7 @@ fn required_cap(name: &str) -> Option<&'static str> {
         method::PORTS_LISTENING => cap::PORTS,
         method::FS_FREEZE | method::FS_THAW => cap::FREEZE,
         method::SCREEN_ELEMENTS => cap::SCREEN,
+        method::SESSION_STATE => cap::SESSION_STATE,
         _ => return None,
     })
 }
@@ -137,6 +139,15 @@ pub async fn handle(
                 result: value,
                 then: None,
             })
+        }
+        // Answered here, by root: never by the session helper, which the signed-in user controls.
+        method::SESSION_STATE => {
+            let state = tokio::task::spawn_blocking(crate::os::session_state)
+                .await
+                .map_err(|_| {
+                    ErrorObject::new(ErrorCode::InternalError, "reading the session failed")
+                })?;
+            Reply::ok(&SessionStateResult { state })
         }
         method::DISPLAY_SET => Err(ErrorObject::new(
             ErrorCode::NoSession,

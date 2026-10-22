@@ -63,7 +63,17 @@ pub fn protocol_document() -> Value {
             ack.cap = Some(cap::ACK);
             ack
         },
-        request::<ExecStartParams, ExecStartResult>(&mut g, method::EXEC_START, Some(cap::EXEC)),
+        {
+            // With `desktop: true` the result is a `DesktopStarted` instead.
+            let mut start = request::<ExecStartParams, ExecStartResult>(
+                &mut g,
+                method::EXEC_START,
+                Some(cap::EXEC),
+            );
+            let desktop = g.subschema_for::<DesktopStarted>().to_value();
+            start.result = start.result.map(|plain| json!({"anyOf": [plain, desktop]}));
+            start
+        },
         request::<ExecSignalParams, Empty>(&mut g, method::EXEC_SIGNAL, Some(cap::EXEC)),
         notification::<ExecExited>(&mut g, method::EXEC_EXITED),
         request::<FilePushParams, FilePushResult>(&mut g, method::FILE_PUSH, Some(cap::FILE)),
@@ -85,6 +95,11 @@ pub fn protocol_document() -> Value {
             &mut g,
             method::SCREEN_ELEMENTS,
             Some(cap::SCREEN),
+        ),
+        request::<Empty, SessionStateResult>(
+            &mut g,
+            method::SESSION_STATE,
+            Some(cap::SESSION_STATE),
         ),
     ];
     let mut methods = Map::new();

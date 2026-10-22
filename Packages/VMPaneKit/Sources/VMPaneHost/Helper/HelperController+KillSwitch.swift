@@ -56,8 +56,7 @@ extension HelperController {
         if confirming { await confirmationDismiss?() }  // an open question is a no now
         if let owner = dropOwner, identities[owner]?.identity != .ui { dropTask?.cancel() }
         let agents = identities.values.filter { $0.identity != .ui }
-        let owners = Set(agents.compactMap { $0.connection.map(ObjectIdentifier.init) })
-        await agentExecs.kill(ownedBy: owners)
+        await agentExecs.killAgents()
         // Closed a moment later, so an answer on its way (the agent's own mcp.disableAll) still goes out; meanwhile
         // every request on them is refused.
         let connections = agents.compactMap(\.connection)

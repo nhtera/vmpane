@@ -2,7 +2,8 @@
 //!
 //! Each process leads its own process group (Unix) so a timeout, a signal or a disconnect reaches the whole
 //! tree; on Windows the tree is killed with `taskkill /T`. A process outliving the connection is killed: its
-//! output has nowhere to go.
+//! output has nowhere to go. Desktop launches (`desktop: true`) are the exception: they have no output, belong
+//! to the user's desktop, and stay when the host goes away.
 
 use std::collections::HashMap;
 use std::process::Stdio;
@@ -18,7 +19,8 @@ use vmpane_agent_proto::error::ErrorCode;
 use vmpane_agent_proto::frame::StreamStatus;
 use vmpane_agent_proto::jsonrpc::ErrorObject;
 use vmpane_agent_proto::methods::{
-    Empty, ExecExited, ExecSignalParams, ExecStartParams, ExecStartResult, RunAs, Signal, method,
+    DesktopStarted, Empty, ExecExited, ExecSignalParams, ExecStartParams, ExecStartResult, RunAs,
+    Signal, method,
 };
 
 use crate::agent::Role;
@@ -30,6 +32,8 @@ use crate::session_link::{SessionLink, StreamNames, relay_params};
 const READ_SIZE: usize = 64 << 10;
 /// After the process exits, how long its output streams may stay open (background children holding them).
 const OUTPUT_GRACE: Duration = Duration::from_secs(5);
+/// How often a desktop launch is checked for what it started, once its first process ended.
+const DESKTOP_POLL: Duration = Duration::from_secs(1);
 
 /// A running exec: a local process (group), or one the user-session helper runs for us.
 #[derive(Clone)]
@@ -39,12 +43,15 @@ enum Running {
         link: Arc<SessionLink>,
         exec_id: u32,
     },
+    /// Opened on the desktop by this (session) helper: it and everything it started.
+    Desktop(Arc<crate::os::DesktopTree>),
 }
 
 impl Running {
     fn signal(&self, signal: Signal) {
         match self {
             Running::Local(pid) => crate::os::signal_tree(*pid, signal),
+            Running::Desktop(tree) => tree.signal(signal),
             Running::Session { link, exec_id } => {
                 let (link, params) = (
                     Arc::clone(link),
@@ -66,20 +73,25 @@ impl Running {
 /// Running execs of one connection, by exec id.
 #[derive(Default)]
 pub struct Registry {
-    running: Mutex<HashMap<u32, Running>>,
+    /// With whether it is a desktop launch (left running when the connection ends).
+    running: Mutex<HashMap<u32, (Running, bool)>>,
     next: AtomicU32,
 }
 
 impl Registry {
-    fn map(&self) -> std::sync::MutexGuard<'_, HashMap<u32, Running>> {
+    fn map(&self) -> std::sync::MutexGuard<'_, HashMap<u32, (Running, bool)>> {
         self.running
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     fn add(&self, running: Running) -> u32 {
+        self.insert(running, false)
+    }
+
+    fn insert(&self, running: Running, desktop: bool) -> u32 {
         let id = self.next.fetch_add(1, Ordering::Relaxed) + 1;
-        self.map().insert(id, running);
+        self.map().insert(id, (running, desktop));
         id
     }
 
@@ -87,9 +99,21 @@ impl Registry {
         self.map().remove(&id);
     }
 
-    /// Kills every process still running (the connection ended).
+    /// Kills every process still running (the connection ended), desktop launches aside.
     pub fn kill_all(&self) {
-        for (_, running) in self.map().drain() {
+        let ended: Vec<Running> = {
+            let mut map = self.map();
+            let ids: Vec<u32> = map
+                .iter()
+                .filter(|(_, (_, desktop))| !desktop)
+                .map(|(id, _)| *id)
+                .collect();
+            ids.iter()
+                .filter_map(|id| map.remove(id))
+                .map(|(running, _)| running)
+                .collect()
+        };
+        for running in ended {
             running.signal(Signal::Kill);
         }
     }
@@ -127,6 +151,9 @@ fn command(params: &ExecStartParams) -> Result<Command, ErrorObject> {
 }
 
 pub async fn start(conn: &Arc<Conn>, params: ExecStartParams) -> Result<Reply, ErrorObject> {
+    if params.desktop {
+        return start_desktop(conn, params).await;
+    }
     // The daemon relays `as: "user"` to the session helper; the helper runs everything as its own user.
     if params.run_as == RunAs::User && conn.agent.role == Role::Daemon {
         return start_in_session(conn, params).await;
@@ -290,7 +317,11 @@ async fn feed(mut rx: mpsc::Receiver<Incoming>, mut pipe: ChildStdin) {
 }
 
 pub fn signal(conn: &Conn, params: ExecSignalParams) -> Result<Reply, ErrorObject> {
-    let running = conn.execs.map().get(&params.exec_id).cloned();
+    let running = conn
+        .execs
+        .map()
+        .get(&params.exec_id)
+        .map(|(running, _)| running.clone());
     let running = running.ok_or_else(|| {
         ErrorObject::new(
             ErrorCode::NotFound,
@@ -423,3 +454,88 @@ async fn relay_stdin(mut host: mpsc::Receiver<Incoming>, link: &SessionLink, hel
         }
     }
 }
+
+/// `exec.start {desktop: true}`: the daemon has the session helper open it; the helper starts it with the
+/// desktop's environment and no output, and reports its end.
+async fn start_desktop(conn: &Arc<Conn>, params: ExecStartParams) -> Result<Reply, ErrorObject> {
+    if params.run_as != RunAs::User || params.stdin || params.timeout_ms.is_some() {
+        return Err(ErrorObject::new(
+            ErrorCode::InvalidParams,
+            "a desktop app runs as the user, without stdin or a timeout",
+        ));
+    }
+    let (running, pid, ended): (Running, u32, Ending) = if conn.agent.role == Role::Daemon {
+        let link = conn.agent.session.current().ok_or_else(|| {
+            ErrorObject::new(ErrorCode::NoSession, "nobody is signed in to the guest")
+        })?;
+        let (value, _) = link
+            .call(method::EXEC_START, relay_params(&params), |_| Vec::new())
+            .await?;
+        let started: DesktopStarted = serde_json::from_value(value).map_err(|err| {
+            ErrorObject::new(
+                ErrorCode::InternalError,
+                format!("bad helper result: {err}"),
+            )
+        })?;
+        let helper = Running::Session {
+            link: Arc::clone(&link),
+            exec_id: started.exec_id,
+        };
+        let ended = Box::pin(async move { link.exited(started.exec_id).await });
+        (helper, started.pid, ended)
+    } else {
+        let (params, app) = crate::os::desktop_params(params)?;
+        let mut cmd = command(&params)?;
+        cmd.stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .kill_on_drop(false);
+        crate::os::desktop_environment(&mut cmd, &params).await?;
+        let mut child = cmd
+            .spawn()
+            .map_err(|err| io_error("cannot start the app", &err))?;
+        let pid = child.id().unwrap_or(0);
+        let tree = Arc::new(
+            crate::os::DesktopTree::adopt(&child, pid, app).map_err(|err| {
+                crate::os::signal_tree(pid, Signal::Kill);
+                io_error("cannot track the app", &err)
+            })?,
+        );
+        let watched = Arc::clone(&tree);
+        let ended = Box::pin(async move {
+            let status = child.wait().await.ok();
+            // What it started can outlive it (`cmd /c`, `open`): the launch ends once all of that is gone too.
+            while watched.alive() {
+                tokio::time::sleep(DESKTOP_POLL).await;
+            }
+            let (code, signal) =
+                status.map_or((None, None), |status| crate::os::exit_parts(&status));
+            Some(ExecExited {
+                exec_id: 0,
+                code,
+                signal,
+                timed_out: false,
+            })
+        });
+        (Running::Desktop(tree), pid, ended)
+    };
+    let exec_id = conn.execs.insert(running, true);
+    let conn = Arc::clone(conn);
+    Reply::then(&DesktopStarted { exec_id, pid }, async move {
+        let exited = ended.await;
+        conn.execs.remove(exec_id);
+        let notice = match exited {
+            Some(exited) => ExecExited { exec_id, ..exited },
+            None => ExecExited {
+                exec_id,
+                code: None,
+                signal: Some("disconnected".into()),
+                timed_out: false,
+            },
+        };
+        let _ = conn.out.notify(method::EXEC_EXITED, &notice).await;
+    })
+}
+
+/// How a desktop launch ends: its exit, or None when it can no longer be told.
+type Ending = std::pin::Pin<Box<dyn std::future::Future<Output = Option<ExecExited>> + Send>>;

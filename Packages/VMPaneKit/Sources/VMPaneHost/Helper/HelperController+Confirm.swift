@@ -23,16 +23,10 @@ extension HelperController {
         confirmationDismiss = dismiss
     }
 
-    static let confirmationTimeout: Duration = .seconds(60)
-
     /// What to ask about `request`, if anything.
     func confirmation(for request: RPCRequest, _ caller: CallerIdentity) -> ConfirmationRequest? {
         guard caller.identity != .ui, caller.identity != .operator, config.mcp.confirmExec else { return nil }
-        // The client names itself: one line, printable, short, so it cannot pose as VMPane's own text.
-        let claimed = caller.claimedClient?.replacingOccurrences(of: " (claimed)", with: "") ?? ""
-        let printable = String(String.UnicodeScalarView(claimed.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }))
-            .trimmingCharacters(in: .whitespaces).prefix(40)
-        let who = printable.isEmpty ? "An AI agent" : "“\(printable)” (an AI agent)"
+        let who = Self.who(caller)
         let params = request.params
         switch request.method {
         case ControlMethod.agentExec.rawValue:
@@ -53,6 +47,15 @@ extension HelperController {
         default:
             return nil
         }
+    }
+
+    /// The agent as the person is told about it. The client names itself: one line, printable, short, so it cannot
+    /// pose as VMPane's own text.
+    static func who(_ caller: CallerIdentity) -> String {
+        let claimed = caller.claimedClient?.replacingOccurrences(of: " (claimed)", with: "") ?? ""
+        let printable = String(String.UnicodeScalarView(claimed.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }))
+            .trimmingCharacters(in: .whitespaces).prefix(40)
+        return printable.isEmpty ? "An AI agent" : "“\(printable)” (an AI agent)"
     }
 
     /// What an agent's call must pass after the policy, in order: input that travels with a confirmed command,
@@ -82,22 +85,30 @@ extension HelperController {
     }
 
     /// Asks, one question at a time and never while agents are stopped, with the timeout; false when nobody
-    /// can answer.
+    /// can answer. At the timeout the question is closed and the answer is no, whether or not the presenter
+    /// gives up (a modal dialog does not end when its task is cancelled).
     func ask(_ question: ConfirmationRequest) async -> Bool {
         guard let presenter = confirmationPresenter else { return false }
         while confirming { try? await Task.sleep(for: .milliseconds(100)) }
         guard !killSwitchEngaged else { return false }
         confirming = true
         defer { confirming = false }
-        return await withTaskGroup(of: Bool.self) { group in
-            group.addTask { await presenter(question) }
-            group.addTask {
-                try? await Task.sleep(for: Self.confirmationTimeout)
-                return false
-            }
-            let answer = await group.next() ?? false
-            group.cancelAll()
-            return answer
+        // The person's answer, or nil at the timeout: whichever comes first.
+        let (answers, answer) = AsyncStream.makeStream(of: Bool?.self, bufferingPolicy: .bufferingNewest(2))
+        let asking = Task { answer.yield(await presenter(question)) }
+        let timeout = confirmationTimeout
+        let timing = Task {
+            try? await Task.sleep(for: timeout)
+            answer.yield(nil)
         }
+        var first = answers.makeAsyncIterator()
+        let given = await first.next() ?? nil
+        timing.cancel()
+        answer.finish()
+        if given == nil {
+            asking.cancel()
+            await confirmationDismiss?()
+        }
+        return given ?? false
     }
 }

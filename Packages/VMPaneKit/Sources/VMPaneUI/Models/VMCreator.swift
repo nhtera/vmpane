@@ -14,6 +14,8 @@ public struct VMCreator: Sendable {
         public var source: WizardModel.Source
         /// Windows only.
         public var unattend: UnattendInput?
+        /// Keep the account's password for agent sign-in (`GuestCredentials`).
+        public var keepSignInPassword = false
         public var configure: @Sendable (inout VMConfigV1) -> Void
     }
 
@@ -37,6 +39,10 @@ public struct VMCreator: Sendable {
         let bundle = try await Blocking.run { try ops.create(name: request.name, os: request.os, diskGiB: request.diskGiB) }
         do {
             try await prepare(bundle, request, progress: progress)
+            if request.keepSignInPassword, let account = request.unattend {
+                let id = try ConfigStore.load(bundle).id
+                try GuestCredentials.store(paths: ops.library.paths).save(account.password, for: id, name: request.name)
+            }
             return bundle
         } catch {
             try? await Blocking.run { try ops.delete(bundle) }
@@ -108,13 +114,13 @@ extension WizardModel {
         let wizard = Snapshot(self)
         return VMCreator.Request(
             os: os, name: name.trimmingCharacters(in: .whitespaces), diskGiB: diskGiB, source: source, unattend: unattend,
-            configure: { wizard.configure(&$0) })
+            keepSignInPassword: os == .windows && keepSignInPassword, configure: { wizard.configure(&$0) })
     }
 
     /// The settings `configure` writes, copied off the main actor.
     struct Snapshot: Sendable {
         let name: String, cpuCount: Int, memoryGiB: Int, audioOutput: Bool, microphone: Bool, clipboard: Bool
-        let mcpPolicy: PolicyLevel, sharedFolders: [URL], rosetta: Bool, os: GuestOS?
+        let mcpPolicy: PolicyLevel, sharedFolders: [URL], rosetta: Bool, os: GuestOS?, signIn: Bool
 
         @MainActor init(_ model: WizardModel) {
             name = model.name
@@ -127,6 +133,7 @@ extension WizardModel {
             sharedFolders = model.sharedFolders
             rosetta = model.rosetta
             os = model.os
+            signIn = model.os == .windows && model.keepSignInPassword
         }
 
         func configure(_ config: inout VMConfigV1) {
@@ -137,6 +144,7 @@ extension WizardModel {
             config.audio.input = microphone
             config.clipboard.mode = clipboard ? .both : .off
             config.mcp.policy = mcpPolicy
+            if signIn { config.mcp.signIn = true }
             var shareNames: Set<String> = []
             config.shares = sharedFolders.enumerated().map { index, folder in
                 // Share names are directory names in the guest: unique, so a second "Documents" becomes "Documents 2".

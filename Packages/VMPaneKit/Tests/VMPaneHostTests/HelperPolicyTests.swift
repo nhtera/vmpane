@@ -314,3 +314,32 @@ private actor Person {
     #expect(refusals.count == targets.count)
     await helper.tearDown()
 }
+
+/// No answer within the timeout is a no and closes the question, even when the dialog does not end by itself (a
+/// modal one ignores its task's cancellation).
+@Test func anUnansweredQuestionIsANoAtTheTimeout() async throws {
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.settings.apply", params: ["patch": ["mcp": ["policy": "admin", "autoSnapshot": false]]])
+    let socket = await helper.controller.prepared.runFiles.socketURL
+    await helper.controller.setClassifier(strangers)
+    await helper.controller.setConfirmationTimeout(.milliseconds(500))
+    let (closed, close) = AsyncStream.makeStream(of: Void.self)
+    await helper.controller.setConfirmationPresenter(
+        { _ in
+            for await _ in closed {}  // open until dismissed, cancelled or not
+            return true
+        }, dismiss: { close.finish() })
+    let agent = try UDSClient.connect(to: socket)
+    defer { agent.close() }
+    try await hello(agent, session: "s1")
+    let clock = ContinuousClock()
+    let started = clock.now
+    do {
+        _ = try await agent.call("vm.snapshot.delete", params: ["id": .string(UUID().uuidString)], timeout: .seconds(10))
+        Issue.record("an unanswered question let it through")
+    } catch let error as RPCError {
+        #expect(error.code == ControlErrorCode.policyDenied.rawValue)
+    }
+    #expect(clock.now - started < .seconds(5), "refused at the timeout, not when the dialog ends")
+    await helper.tearDown()
+}

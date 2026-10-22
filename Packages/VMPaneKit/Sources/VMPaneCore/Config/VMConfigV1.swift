@@ -274,18 +274,23 @@ public struct MCPConfig: ExtensibleFields {
     public var confirmExec: Bool
     public var autoSnapshot: Bool
     public var auditTypedText: Bool
+    /// Let agents sign the guest in with the password kept for it (`GuestCredentials`); absent is off.
+    public var signIn: Bool?
     /// HMAC over the VM id and these settings, written only by the app. Missing or wrong → policy `off`.
     public var tag: String?
 
-    public init(policy: PolicyLevel, confirmExec: Bool, autoSnapshot: Bool, auditTypedText: Bool, tag: String? = nil) {
+    public init(
+        policy: PolicyLevel, confirmExec: Bool, autoSnapshot: Bool, auditTypedText: Bool, signIn: Bool? = nil, tag: String? = nil
+    ) {
         self.policy = policy
         self.confirmExec = confirmExec
         self.autoSnapshot = autoSnapshot
         self.auditTypedText = auditTypedText
+        self.signIn = signIn
         self.tag = tag
     }
 
-    enum CodingKeys: String, CodingKey, CaseIterable { case policy, confirmExec, autoSnapshot, auditTypedText, tag }
+    enum CodingKeys: String, CodingKey, CaseIterable { case policy, confirmExec, autoSnapshot, auditTypedText, signIn, tag }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
 

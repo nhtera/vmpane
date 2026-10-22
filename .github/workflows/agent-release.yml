@@ -45,8 +45,10 @@ jobs:
           mkdir -p "$out"
           install -m 0755 target/aarch64-unknown-linux-musl/release/vmpane-agent "$out/vmpane-agent"
           install -m 0755 installer/linux/install.sh "$out/install.sh"
-          install -m 0644 installer/linux/vmpane-agent.service installer/linux/vmpane-session.service "$out/"
-          (cd "$out" && sha256sum vmpane-agent install.sh vmpane-agent.service vmpane-session.service >SHA256SUMS)
+          install -m 0644 installer/linux/vmpane-agent.service installer/linux/vmpane-session.service \
+            installer/linux/vmpane-session-env.desktop "$out/"
+          (cd "$out" && sha256sum vmpane-agent install.sh vmpane-agent.service vmpane-session.service \
+            vmpane-session-env.desktop >SHA256SUMS)
       - if: ${{ !github.event.repository.private }}
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:

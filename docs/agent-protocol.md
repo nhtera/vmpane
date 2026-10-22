@@ -89,7 +89,7 @@ Host → guest requests unless noted. A method whose cap the agent did not adver
 | method | cap | params → result |
 |---|---|---|
 | `agent.info`, `agent.ping` | — | `{}` → info / `{}` |
-| `exec.start` | exec | `{argv \| shell, env, cwd, as: user\|admin, stdin, timeoutMs}` → `{execId, stdout, stderr, stdin?}` (guest streams) |
+| `exec.start` | exec | `{argv \| shell, env, cwd, as: user\|admin, stdin, timeoutMs}` → `{execId, stdout, stderr, stdin?}` (guest streams). With `desktop: true` (sent only to agents with the `desktop` cap; `as: user`, no stdin, no timeout) → `{execId, pid}`: the session helper starts it with the desktop's environment and no output, and it stays when the connection ends; `exec.exited` comes once it and what it started ended, `exec.signal` ends them all (a Windows job; a process group elsewhere; on macOS an app bundle's path as `argv[0]` opens a new instance through LaunchServices, and the launch follows that app) |
 | `exec.signal` | exec | `{execId, signal: int\|term\|kill}` → `{}` |
 | `exec.exited` (guest → host) | — | `{execId, code, signal, timedOut}`, after both output streams ended |
 | `file.push` | file | `{path, size, sha256, stream, mode, overwrite}` + host stream → `{size, sha256}` once the stream ended |
@@ -103,6 +103,7 @@ Host → guest requests unless noted. A method whose cap the agent did not adver
 | `power.shutdown` | power | `{reboot, force}` → `{}` (answered first) |
 | `net.addrs`, `ports.listening` | net, ports | → interfaces / listening sockets (hints only) |
 | `fs.freeze`, `fs.thaw` | freeze | `{timeoutMs ≤ 60000}` → `{frozen}` / → `{thawed}` |
+| `session.state` | session.state | `{}` → `{state: greeter\|locked\|unlocked\|unknown}`, answered by the daemon (root) from what the signed-in user cannot set: Windows, the console session's `WTSSessionInfoEx` (no user name: the sign-in screen; else its lock flag); Linux, logind's foreground seat session (class `greeter`: the login screen; a user session is `unlocked`, or `unknown` with its lock hint, which is the user's to set); macOS, `/dev/console` owned by root (the login window), else `IOConsoleUsers`' `CGSSessionScreenIsLocked` for the console user |
 | `screen.elements` | screen | `{maxElements ≤ 800}` → `{elements: [{role, name, value?, rect: [x, y, w, h], enabled, focused}], truncated}`: the controls of the user's foreground window in display pixels, names ≤ 120 characters (user-session helper: UI Automation on Windows; macOS: the accessibility tree once Accessibility is granted, else `permissionDenied` and, the first time, macOS's prompt; read in a short-lived `vmpane-agent screen-elements` child, since a running process keeps its first answer about the grant) |
 | `agent.heartbeat` (guest → host) | — | `{}` every 5 s |
 | `transport.ack` (host → guest) | ack | `{bytes}`: bytes the host has read on this connection (see Streams) |
@@ -142,7 +143,7 @@ It dials the daemon's socket (`/run/vmpane-agent.sock`, `/var/run/vmpane-agent.s
 this same protocol, with the daemon in the host's role.
 
 The daemon relays to the current helper, mapping exec and stream ids both ways:
-- `exec.start {as: "user"}` and its `exec.signal`, stdin and output;
+- `exec.start {as: "user"}` and its `exec.signal`, stdin and output (desktop launches too);
 - `session.reveal`;
 - `clipboard.get` / `clipboard.set` with their streams (macOS);
 - the helper's `clipboard.changed`, which goes on to the host. The helper polls the pasteboard every 250 ms and

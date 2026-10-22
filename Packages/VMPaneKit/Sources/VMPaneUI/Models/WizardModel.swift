@@ -59,6 +59,8 @@ public final class WizardModel {
     // Windows account (the password is held in memory only, cleared after create).
     public var userName = ""
     public var password = ""
+    /// Keep the password so agents may sign the VM in (VM Settings › AI agents can change it later).
+    public var keepSignInPassword = false
     public var edition = "Windows 11 Pro"
     public var eulaAccepted = false
     // Resources

@@ -25,6 +25,76 @@ pub fn signal_tree(pid: u32, signal: Signal) {
     let _ = killpg(Pid::from_raw(pid), sig);
 }
 
+/// An app a desktop launch hands to the system (macOS `open`): its executable, and the instances that ran before.
+pub struct AppLaunch {
+    pub executable: std::path::PathBuf,
+    pub before: Vec<i32>,
+}
+
+/// A desktop launch: the process group it leads, and the app it had the system open (macOS).
+pub struct DesktopTree {
+    pgid: u32,
+    app: Option<AppLaunch>,
+    started: std::time::Instant,
+    /// The app has been seen running.
+    seen: std::sync::atomic::AtomicBool,
+}
+
+/// How long an app handed to the system may take to show up before the launch counts as ended.
+const APP_START: std::time::Duration = std::time::Duration::from_secs(10);
+
+impl DesktopTree {
+    pub fn adopt(
+        _child: &tokio::process::Child,
+        pid: u32,
+        app: Option<AppLaunch>,
+    ) -> std::io::Result<DesktopTree> {
+        Ok(DesktopTree {
+            pgid: pid,
+            app,
+            started: std::time::Instant::now(),
+            seen: std::sync::atomic::AtomicBool::new(false),
+        })
+    }
+
+    /// The app's instances started since the launch.
+    fn app_pids(&self) -> Vec<i32> {
+        self.app.as_ref().map_or_else(Vec::new, |app| {
+            crate::os::pids_running(&app.executable)
+                .into_iter()
+                .filter(|pid| !app.before.contains(pid))
+                .collect()
+        })
+    }
+
+    pub fn signal(&self, signal: Signal) {
+        signal_tree(self.pgid, signal);
+        let sig = match signal {
+            Signal::Int => NixSignal::SIGINT,
+            Signal::Term => NixSignal::SIGTERM,
+            Signal::Kill => NixSignal::SIGKILL,
+        };
+        for pid in self.app_pids() {
+            let _ = nix::sys::signal::kill(Pid::from_raw(pid), sig);
+        }
+    }
+
+    /// Whether anything of the launch still runs: its process group, or the app (which may still be starting).
+    pub fn alive(&self) -> bool {
+        use std::sync::atomic::Ordering;
+        let group = i32::try_from(self.pgid)
+            .is_ok_and(|pgid| pgid > 1 && killpg(Pid::from_raw(pgid), None).is_ok());
+        if group || self.app.is_none() {
+            return group;
+        }
+        if !self.app_pids().is_empty() {
+            self.seen.store(true, Ordering::Relaxed);
+            return true;
+        }
+        !self.seen.load(Ordering::Relaxed) && self.started.elapsed() < APP_START
+    }
+}
+
 pub fn shell_command(shell: &str) -> tokio::process::Command {
     let mut cmd = tokio::process::Command::new("/bin/sh");
     cmd.arg("-c").arg(shell);

@@ -56,12 +56,12 @@ impl Agent {
         }
     }
 
-    /// What this build can do. Session caps (reveal, screen) are advertised by the daemon too: they work while a
+    /// What this build can do. Session caps (reveal, screen, desktop) are advertised by the daemon too: they work while a
     /// user-session helper is connected (`session` in `hello` / `agent.info`) and answer `noSession` otherwise.
     pub fn caps(&self) -> Vec<String> {
         let caps: Vec<&str> = match self.role {
             Role::Session => {
-                let mut caps = vec![cap::EXEC, cap::REVEAL];
+                let mut caps = vec![cap::EXEC, cap::REVEAL, cap::DESKTOP];
                 if crate::clipboard::SUPPORTED {
                     caps.push(cap::CLIPBOARD);
                 }
@@ -75,7 +75,7 @@ impl Agent {
                 if crate::os::HAS_NET_INFO {
                     caps.extend([cap::NET, cap::PORTS]);
                 }
-                caps.extend([cap::FREEZE, cap::REVEAL]);
+                caps.extend([cap::FREEZE, cap::REVEAL, cap::DESKTOP, cap::SESSION_STATE]);
                 if crate::transport::NEEDS_ACKS {
                     caps.push(cap::ACK);
                 }

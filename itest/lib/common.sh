@@ -380,12 +380,14 @@ it_wait_install() {
     it_fail "the install did not finish within $2 min (at $phase)"
 }
 
-# Signs the Windows guest behind socket $1 in at every boot (its install's user, a fresh password) and restarts it,
-# through the guest agent; returns once the signed-in session's helper is up. The golden install signs nobody in,
+# Signs the Windows guest behind socket $1 in at every boot (its install's user, a fresh password, left in
+# IT_WINDOWS_PASSWORD: a test account's) and restarts it, through the guest agent; returns once the signed-in
+# session's helper is up. The golden install signs nobody in,
 # so its screen is the lock screen. $2: a scratch folder. $3, when given: an agent .exe put in place of the
 # installed one for the restart (an agent not released yet: cargo xwin build in agent/).
 it_windows_autologon() {
     local socket=$1 script="$2/autologon.ps1" agent=${3:-}
+    IT_WINDOWS_PASSWORD="Vp-$(uuidgen | tr -d - | tr '[:upper:]' '[:lower:]')"
     if [[ -n $agent ]]; then
         it_rpc "$socket" agent.file.push \
             "$(jq -n --arg h "$agent" '{hostPath: $h, guestPath: "C:\\Windows\\Temp\\vmpane-agent.new.exe"}')" >/dev/null || return 1
@@ -393,7 +395,7 @@ it_windows_autologon() {
     cat >"$script" <<'PS1'
 $ErrorActionPreference = 'Stop'
 $user = Get-LocalUser | Where-Object { $_.Enabled -and $_.Name -notin 'Administrator', 'DefaultAccount', 'Guest', 'WDAGUtilityAccount' } | Select-Object -First 1
-$password = 'Vp-' + [guid]::NewGuid().ToString('N')
+$password = '@PASSWORD@'
 $user | Set-LocalUser -Password (ConvertTo-SecureString $password -AsPlainText -Force)
 $key = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
 Set-ItemProperty $key AutoAdminLogon '1'
@@ -408,6 +410,7 @@ if (Test-Path $new) {
 }
 shutdown.exe /r /t 3
 PS1
+    sed -i '' "s/@PASSWORD@/$IT_WINDOWS_PASSWORD/" "$script"
     it_rpc "$socket" agent.file.push "$(jq -n --arg h "$script" '{hostPath: $h, guestPath: "C:\\Windows\\Temp\\autologon.ps1"}')" >/dev/null || return 1
     /usr/bin/python3 "$VMPANE_ROOT/itest/lib/agent_exec.py" "$socket" \
         'powershell -NoProfile -ExecutionPolicy Bypass -File C:\Windows\Temp\autologon.ps1' >/dev/null || return 1

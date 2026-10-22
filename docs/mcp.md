@@ -48,7 +48,8 @@ beyond this Mac) can only be changed in the app.
 | `vm_read_screen` | the text (`ocr`, recognized on the Mac, any guest) and controls (`elements`, from the guest tools in Windows and macOS guests) on screen, each with an id and a box; `auto` (default) or `both`; `region`, `max_items`. `vm_click` and `vm_move` take an `element` id instead of x and y |
 | `vm_actions` | up to 50 of those (`key`, `type`, `click`, `move`, `drag`, `scroll`, `wait`) in one call; per-action results, `stop_on_error` |
 | `vm_wait` | milliseconds, or until the guest tools run |
-| `vm_exec` | a command (`command` for a shell, or `argv`), `as` user or admin; output, exit code |
+| `vm_exec` | a command (`command` for a shell, or `argv`), `as` user or admin; output, exit code. `desktop: true` opens it on the signed-in user's screen instead and returns at once (GUI apps; the kill switch closes it, with everything it started) |
+| `vm_sign_in` | signs a VM at its login or lock screen in with the password its owner kept in VMPane (the agent never sees it); only with Let agents sign in on, and at Run commands or Full control after the person says yes |
 | `vm_file_push`, `vm_file_pull` | files between the VM and `~/VMPane Exchange/<vm>/` on the Mac (only there) |
 | `vm_snapshot_list`, `_create`, `_restore`, `_delete` | snapshots |
 | `vm_clipboard_get`, `vm_clipboard_set` | the clipboard's text (macOS and Windows guests with the guest tools) |
@@ -65,6 +66,22 @@ VM's level refuses a batch's later actions, not text already being typed: the ki
 by an older VMPane reports `unknown` (`helper_outdated`) until it restarts. `vm_snapshot_create` says whether the
 snapshot `includesMemory` and whether it is only `crashConsistent` (never: a running VM's disks are frozen through
 the guest tools, or its memory is saved with them).
+
+`vm_exec desktop` runs the program as the signed-in user with the desktop's environment (on Linux the display and
+session bus the desktop handed to `systemd --user`), detached from VMPane: it keeps running when the agent's session
+ends. Windows tracks it in a job, so a program `cmd /c` started is closed too; apps Windows itself starts (Store
+apps, Settings) are not. On macOS give the app's path as `argv[0]` (`/System/Applications/TextEdit.app`): it opens as
+a new instance through LaunchServices (macOS refuses its own apps started any other way) and the kill switch closes
+it; apps started by a plain `open` are macOS's. Desktop apps are followed while the guest tools stay connected: after
+a reconnect (a guest-tools update, a restored snapshot) the kill switch no longer reaches the ones opened before. A
+guest without a desktop (a server) says so.
+
+`vm_sign_in` signs in only when the guest's root service reports its login screen or a locked session (a Windows
+lock screen, the macOS login window or lock screen, the GNOME login screen; a GNOME session's own lock screen is the
+user's and is refused) and a password field shows once the screen is woken. It clicks the field, types the password
+and Return, and waits up to 30 s for the guest to report a signed-in session. A list of users comes first on some
+login screens: click yours, then call it again. PIN sign-in is not supported. A wrong password or a guest keyboard
+layout other than US ends in a timeout.
 
 `vm_read_screen` needs only Look only, and takes no Before-agent snapshot. Without a screenshot first it sets the
 scale itself (as `vm_screenshot`'s default 1568 would). Ids (`t…` text, `e…` controls) are never reused within a

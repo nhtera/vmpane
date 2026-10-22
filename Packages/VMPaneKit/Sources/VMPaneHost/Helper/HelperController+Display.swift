@@ -31,6 +31,8 @@ extension HelperController {
         guard state == .running || state == .paused else {
             return .failure(RPCError(.invalidState, "the VM is \(state.rawValue)"))
         }
+        inputsInFlight += 1
+        defer { inputsInFlight -= 1 }
         do {
             switch ControlMethod(rawValue: method) {
             case .vmScreenshot?:

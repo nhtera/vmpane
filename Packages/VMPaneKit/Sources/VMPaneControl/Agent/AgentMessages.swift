@@ -32,6 +32,8 @@ public enum AgentMethod {
     public static let fsThaw = "fs.thaw"
     /// The controls of the user's foreground window (`AgentCap.screen`), served by the session helper.
     public static let screenElements = "screen.elements"
+    /// The login screen, a locked or an unlocked session, as the guest system has it (`AgentCap.sessionState`).
+    public static let sessionState = "session.state"
 
     /// Methods the guest may send. Anything else from the guest is a protocol violation.
     public static let fromGuest: Set<String> = [hello, agentHeartbeat, execExited, clipboardChanged]
@@ -53,6 +55,10 @@ public enum AgentCap {
     public static let ack = "ack"
     /// The controls on screen (`screen.elements`): UI Automation on Windows, the accessibility tree on macOS.
     public static let screen = "screen"
+    /// `exec.start` takes `desktop: true` (the program opens on the user's desktop, detached).
+    public static let desktop = "desktop"
+    /// `session.state`, answered by the guest's root service.
+    public static let sessionState = "session.state"
 }
 
 /// The agent protocol's own error codes (JSON-RPC's standard ones are in `ControlErrorCode`).
@@ -135,15 +141,17 @@ public struct AgentExecStartParams: Codable, Equatable, Sendable {
     public var runAs: AgentRunAs
     public var stdin: Bool
     public var timeoutMs: UInt64?
+    /// Open it on the user's desktop (agents with `AgentCap.desktop` only): the result is `AgentDesktopStarted`.
+    public var desktop: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case argv, shell, env, cwd, stdin, timeoutMs
+        case argv, shell, env, cwd, stdin, timeoutMs, desktop
         case runAs = "as"
     }
 
     public init(
         argv: [String]? = nil, shell: String? = nil, env: [String: String]? = nil, cwd: String? = nil,
-        as runAs: AgentRunAs = .user, stdin: Bool = false, timeoutMs: UInt64? = nil
+        as runAs: AgentRunAs = .user, stdin: Bool = false, timeoutMs: UInt64? = nil, desktop: Bool? = nil
     ) {
         self.argv = argv
         self.shell = shell
@@ -152,7 +160,26 @@ public struct AgentExecStartParams: Codable, Equatable, Sendable {
         self.runAs = runAs
         self.stdin = stdin
         self.timeoutMs = timeoutMs
+        self.desktop = desktop
     }
+}
+
+/// `exec.start {desktop: true}` result: no output streams; `exec.exited` comes when it ends.
+public struct AgentDesktopStarted: Codable, Equatable, Sendable {
+    public var execId: UInt32
+    public var pid: UInt32
+}
+
+public enum AgentSessionState: String, Codable, Sendable {
+    /// The login screen.
+    case greeter
+    case locked
+    case unlocked
+    case unknown
+}
+
+public struct AgentSessionStateResult: Codable, Equatable, Sendable {
+    public var state: AgentSessionState
 }
 
 public struct AgentExecStartResult: Codable, Equatable, Sendable {

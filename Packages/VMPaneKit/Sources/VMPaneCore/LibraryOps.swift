@@ -82,6 +82,7 @@ public struct LibraryOps: Sendable {
         guard let lock = try bundle.tryLock(retryingFor: 0.5) else { throw VMRunning() }
         try bundle.delete(holding: lock)
         try library.unregister(id: config.id)
+        try? GuestCredentials.store(paths: library.paths).delete(for: config.id)
     }
 
     /// Adds an existing bundle (e.g. one copied from another Mac) to the library.

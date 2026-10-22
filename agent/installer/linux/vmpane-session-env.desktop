@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=VMPane desktop environment
+Comment=Lets VMPane's guest tools open apps on this desktop (hands the display and session bus to systemd --user)
+Exec=dbus-update-activation-environment --systemd --all
+NoDisplay=true
+X-GNOME-Autostart-Phase=Initialization

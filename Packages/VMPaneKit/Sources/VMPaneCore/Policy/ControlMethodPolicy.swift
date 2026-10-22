@@ -61,6 +61,8 @@ public enum ControlMethodPolicy {
         // Each action is also decided (and audited) as the single request it stands for.
         "vm.input.batch": .level(.control),
         "vm.screen.read": .level(.observe),
+        // Also needs the VM's "Let agents sign in" (`mcp.signIn`), and the person's yes at exec levels.
+        "vm.signIn": .level(.control),
         "vm.display.show": .level(.control),
         "vm.install.cancel": .uiOnly,
         "vm.settings.get": .level(.observe),

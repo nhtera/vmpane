@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Testing
 import VMPaneCore
@@ -136,6 +137,9 @@ final class ScriptedBackend: VMBackend, @unchecked Sendable {
     func grayFrame() async -> GrayFrame? {
         lock.withLock { frames.count > 1 ? frames.removeFirst() : frames.first }
     }
+    /// What `displayImage` returns (the full-resolution screen); nil: none.
+    var image: CGImage?
+    func displayImage() async -> CGImage? { lock.withLock { image } }
     func ejectMedia(_ id: String) async throws { try record("eject.\(id)") }
     func applyLive(_ config: VMConfigV1, paths: [String]) async -> Set<String> {
         lock.withLock {

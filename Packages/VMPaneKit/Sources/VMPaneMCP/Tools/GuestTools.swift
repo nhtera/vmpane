@@ -15,7 +15,9 @@ enum GuestTools {
         Tool(
             "vm_exec",
             "Run a command in the VM (VMPane's guest tools) and get its output and exit code. "
-                + "as: user (the logged-in user, default) or admin.",
+                + "as: user (the logged-in user, default) or admin. desktop: true opens it on the signed-in user's screen "
+                + "instead (GUI apps; returns at once, no output; the kill switch closes it). On macOS give the app's path "
+                + "as argv[0] (/System/Applications/TextEdit.app): it opens as a new instance the kill switch can close.",
             schema: Schema.object(
                 [
                     "vm": Schema.vm, "command": Schema.string("A shell command line (sh -c / cmd /c)."),
@@ -25,13 +27,14 @@ enum GuestTools {
                     "as": Schema.string("Who runs it.", enum: ["user", "admin"]), "cwd": Schema.string("Working directory."),
                     "timeout_s": Schema.integer("Kill it after this many seconds (default 120).", minimum: 1, maximum: 3600),
                     "stdin": Schema.string("Text for its standard input."),
+                    "desktop": Schema.boolean("Open it on the user's desktop and return at once (as user; no stdin)."),
                 ], required: ["vm"]),
             annotations: ["destructiveHint": true, "openWorldHint": true]
         ) { args, context in
             let vm = try args.string("vm")
-            var params: [String: JSONValue] = [
-                "as": .string(args["as"]?.stringValue ?? "user"), "timeoutMs": .int((args["timeout_s"]?.intValue ?? 120) * 1000),
-            ]
+            let desktop = args["desktop"] == true
+            var params: [String: JSONValue] = ["as": .string(args["as"]?.stringValue ?? "user")]
+            if !desktop { params["timeoutMs"] = .int((args["timeout_s"]?.intValue ?? 120) * 1000) }
             // Given with the command: the person asked to allow it sees it, and the record keeps its hash.
             if let input = args["stdin"]?.stringValue { params["input"] = .string(input) }
             if let argv = args["argv"], !argv.arrayItems.isEmpty {
@@ -40,6 +43,7 @@ enum GuestTools {
                 params["shell"] = .string(try args.string("command"))
             }
             if let cwd = args["cwd"]?.stringValue { params["cwd"] = .string(cwd) }
+            if desktop { return try await openOnDesktop(access, vm: vm, params: params) }
             let outcome = try await access.withOwnConnection(vm) { client in
                 try await run(client, params: .object(params), context: context)
             }
@@ -55,6 +59,21 @@ enum GuestTools {
                 ],
                 isError: outcome.code != 0)
         }
+    }
+
+    /// `vm_exec desktop`: opened, not waited for.
+    static func openOnDesktop(_ access: VMAccess, vm: String, params: [String: JSONValue]) async throws -> ToolResult {
+        var params = params
+        params["desktop"] = true
+        let started = try await access.call(vm, .agentExec, .object(params))
+        // A helper from before desktop launches runs it as a plain command instead.
+        guard started["launched"] == true else {
+            throw ToolFailure("this VM's helper is older than desktop apps: restart the VM to use desktop: true")
+        }
+        let pid = started["pid"]?.intValue ?? 0
+        return ToolResult(
+            text: "opened on the desktop (pid \(pid)); take a screenshot or vm_read_screen to see it",
+            structured: ["launched": true, "pid": .int(pid), "execId": started["execId"] ?? .null])
     }
 
     struct Outcome: Sendable {
