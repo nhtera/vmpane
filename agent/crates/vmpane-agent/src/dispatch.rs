@@ -32,6 +32,7 @@ fn required_cap(name: &str) -> Option<&'static str> {
         method::FS_FREEZE | method::FS_THAW => cap::FREEZE,
         method::SCREEN_ELEMENTS => cap::SCREEN,
         method::SESSION_STATE => cap::SESSION_STATE,
+        method::DRAG_PROBE => cap::DRAG,
         _ => return None,
     })
 }
@@ -126,6 +127,19 @@ pub async fn handle(
         method::CLIPBOARD_GET | method::CLIPBOARD_SET => {
             crate::clipboard::relay(conn, request, inbound).await
         }
+        method::DRAG_PROBE => {
+            // The drag is in the logged-in user's desktop: caught by their session helper.
+            let link = conn.agent.session.current().ok_or_else(|| {
+                ErrorObject::new(ErrorCode::NoSession, "nobody is signed in to the guest")
+            })?;
+            let (value, _) = link
+                .call(name, relay_params(&Empty {}), |_| Vec::new())
+                .await?;
+            Ok(Reply {
+                result: value,
+                then: None,
+            })
+        }
         method::SCREEN_ELEMENTS => {
             // The controls are the logged-in user's: read by their session helper.
             let link = conn.agent.session.current().ok_or_else(|| {
@@ -180,6 +194,7 @@ async fn handle_in_session(
         method::SCREEN_ELEMENTS if crate::screen::SUPPORTED => {
             crate::screen::elements(request.decode_params()?).await
         }
+        method::DRAG_PROBE if crate::drag::SUPPORTED => crate::drag::probe().await,
         method::AGENT_PING => Reply::ok(&Empty {}),
         method::AGENT_INFO => Reply::ok(&conn.agent.info(conn.proto)),
         method::EXEC_START => exec::start(conn, request.decode_params()?).await,

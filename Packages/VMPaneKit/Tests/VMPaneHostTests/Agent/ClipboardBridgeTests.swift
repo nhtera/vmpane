@@ -77,9 +77,15 @@ func clipboardTravelsBothWaysWithoutPingPong() async throws {
     let downloads = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("vpc-dl-\(UUID().uuidString.prefix(8))")
     defer { try? FileManager.default.removeItem(at: downloads) }
     let mac = FakePasteboard()
-    let bridge = ClipboardBridge(pasteboard: mac, mode: .both, downloads: downloads) { connection, path, handle, sink in
-        try await HelperController.pull(path, into: handle, sink: sink, on: connection)
-    }
+    // The guest shares the Mac's disk here: a file "put in the guest" keeps its path.
+    let execs = AgentExecs()
+    let bridge = ClipboardBridge(
+        pasteboard: mac, mode: .both, staging: downloads,
+        pull: { connection, paths, sink, prefix in
+            let guest = HelperController.Guest(connection: connection, execs: execs, windows: false)
+            return try await HelperController.pullTree(paths, into: sink, under: prefix, from: guest)
+        },
+        push: { _, paths in paths })
     await bridge.attach(guest.connection)
     let notifications = guest.connection.notifications
     let relay = Task {
@@ -102,7 +108,45 @@ func clipboardTravelsBothWaysWithoutPingPong() async throws {
     try await Task.sleep(for: .milliseconds(800))
     #expect(await mac.changeCount() == count, "no ping-pong")
 
-    // Files copied in the guest land in the VM's downloads folder, quarantined, and the Mac gets those.
+    // Unfocused: nothing moves; on focus the guest's latest change is fetched.
+    await bridge.setFocused(false)
+    guest.board.clearContents()
+    guest.board.setString("while away", forType: .string)
+    try await Task.sleep(for: .milliseconds(800))
+    #expect(mac.content.text != "while away")
+    await bridge.setFocused(true)
+    #expect(await eventually { mac.content.text == "while away" })
+
+    await bridge.stop()
+    await guest.stop()
+}
+
+@Test(.enabled(if: agentBuilt, "build the agent: cd agent && cargo build"))
+func filesTravelBothWaysThroughStaging() async throws {
+    let guest = try await ClipboardGuest.start()
+    let downloads = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("vpc-dl-\(UUID().uuidString.prefix(8))")
+    defer { try? FileManager.default.removeItem(at: downloads) }
+    let mac = FakePasteboard()
+    // The guest shares the Mac's disk here: a file "put in the guest" keeps its path.
+    let execs = AgentExecs()
+    let bridge = ClipboardBridge(
+        pasteboard: mac, mode: .both, staging: downloads,
+        pull: { connection, paths, sink, prefix in
+            let guest = HelperController.Guest(connection: connection, execs: execs, windows: false)
+            return try await HelperController.pullTree(paths, into: sink, under: prefix, from: guest)
+        },
+        push: { _, paths in paths })
+    await bridge.attach(guest.connection)
+    let notifications = guest.connection.notifications
+    let relay = Task {
+        for await notice in notifications where notice.method == AgentMethod.clipboardChanged {
+            await bridge.guestChanged()
+        }
+    }
+    defer { relay.cancel() }
+    await bridge.setFocused(true)
+
+    // Files copied in the guest land in the VM's staging folder, quarantined, and the Mac gets those.
     let file = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("vpc-\(UUID().uuidString.prefix(6)) report.txt")
     try Data("guest file".utf8).write(to: file)
     defer { try? FileManager.default.removeItem(at: file) }
@@ -113,14 +157,72 @@ func clipboardTravelsBothWaysWithoutPingPong() async throws {
     #expect(landed.hasPrefix(downloads.path) && landed.hasSuffix("report.txt"))
     #expect(try String(contentsOfFile: landed, encoding: .utf8) == "guest file")
 
-    // Unfocused: nothing moves; on focus the guest's latest change is fetched.
-    await bridge.setFocused(false)
+    // The next copy of files gets a staging folder of its own; the one before goes.
+    let second = file.deletingLastPathComponent().appendingPathComponent("vpc-\(UUID().uuidString.prefix(6)) notes.txt")
+    try Data("second".utf8).write(to: second)
+    defer { try? FileManager.default.removeItem(at: second) }
     guest.board.clearContents()
-    guest.board.setString("while away", forType: .string)
-    try await Task.sleep(for: .milliseconds(800))
-    #expect(mac.content.text != "while away")
+    guest.board.writeObjects([second as NSURL])
+    #expect(await eventually { mac.content.files.first?.hasSuffix("notes.txt") == true })
+    #expect(!FileManager.default.fileExists(atPath: landed))
+    #expect(try FileManager.default.contentsOfDirectory(atPath: downloads.path).count == 1)
+
+    // Files copied on the Mac reach the guest's clipboard as files, with their names as text, without Finder's icon.
+    let icon = try #require(
+        NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: 1, pixelsHigh: 1, bitsPerSample: 8,
+            samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)?
+            .representation(using: .png, properties: [:]))
+    mac.set(ClipboardContent(text: file.lastPathComponent, png: icon, files: [file.path]))
+    #expect(await eventually { (guest.board.readObjects(forClasses: [NSURL.self]) as? [URL])?.map(\.path) == [file.path] })
+    #expect(guest.board.data(forType: .png) == nil)
+
+    await bridge.stop()
+    await guest.stop()
+}
+
+@Test(.enabled(if: agentBuilt, "build the agent: cd agent && cargo build"))
+func formattedTextTravelsWhenKeptAndPlainTextOtherwise() async throws {
+    let guest = try await ClipboardGuest.start()
+    let downloads = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("vpc-dl-\(UUID().uuidString.prefix(8))")
+    defer { try? FileManager.default.removeItem(at: downloads) }
+    let mac = FakePasteboard()
+    let bridge = ClipboardBridge(pasteboard: mac, mode: .both, staging: downloads, pull: { _, _, _, _ in [] }, push: { _, _ in [] })
+    await bridge.attach(guest.connection)
+    let notifications = guest.connection.notifications
+    let relay = Task {
+        for await notice in notifications where notice.method == AgentMethod.clipboardChanged {
+            await bridge.guestChanged()
+        }
+    }
+    defer { relay.cancel() }
+    await bridge.setRich(true)
     await bridge.setFocused(true)
-    #expect(await eventually { mac.content.text == "while away" })
+
+    // Mac → guest: HTML and RTF go with the plain text.
+    let rtf = Data(#"{\rtf1\ansi {\b bold} text}"#.utf8)
+    mac.set(ClipboardContent(text: "bold text", html: "<b>bold</b> text", rtf: rtf))
+    #expect(await eventually { guest.board.string(forType: .html) == "<b>bold</b> text" })
+    #expect(guest.board.string(forType: .string) == "bold text")
+    #expect(guest.board.data(forType: .rtf) == rtf)
+
+    // Guest → Mac: the same.
+    guest.board.clearContents()
+    guest.board.setString("italic", forType: .string)
+    guest.board.setString("<i>italic</i>", forType: .html)
+    #expect(await eventually { mac.content.html == "<i>italic</i>" })
+    #expect(mac.content.text == "italic")
+
+    // "Keep text formatting" off: plain text only, both ways.
+    await bridge.setRich(false)
+    mac.set(ClipboardContent(text: "plain now", html: "<u>plain now</u>"))
+    #expect(await eventually { guest.board.string(forType: .string) == "plain now" })
+    #expect(guest.board.string(forType: .html) == nil)
+    guest.board.clearContents()
+    guest.board.setString("back plain", forType: .string)
+    guest.board.setString("<s>back plain</s>", forType: .html)
+    #expect(await eventually { mac.content.text == "back plain" })
+    #expect(mac.content.html == nil)
 
     await bridge.stop()
     await guest.stop()

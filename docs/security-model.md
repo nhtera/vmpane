@@ -22,15 +22,20 @@ files like the disks); a Windows VM's TPM and UEFI variables; the agent policy a
 - **Guest tools channel.** The host decodes the agent's frames with fixed caps (1 MiB JSON frames, bounded
   streams); a violation closes the channel. A file copied out of a guest goes where the host side named it:
   `vmpane cp` wherever you say, an agent's `vm_file_pull` only inside `~/VMPane Exchange/<vm>/`. Names the
-  guest chooses (files copied or dragged out of it) go through `HostFileSink`: only under
-  `~/Downloads/VMPane/<vm>/`, checked (`SafeName`), opened with `O_NOFOLLOW` and `O_EXCL` relative to that
-  folder, quarantined, with count and size caps.
+  guest chooses (files copied or dragged out of it) go through `HostFileSink`: only under its folder (the
+  clipboard's staging folder, `~/Library/Caches/app.vmpane.mac.vm/Clipboard/<vm>/`, or the folder Finder named for
+  a drag), checked (`SafeName`), opened with `O_NOFOLLOW` and `O_EXCL` relative to that folder, never over an
+  existing file, quarantined, with count and size caps (1000 files, 2 GiB). Folders are listed by the guest's user
+  and walked without following links.
 - **Addresses the guest reports** (DHCP leases, agent hints) only nominate: the helper uses an address only when
   the host's ARP table maps it to the VM's MAC on the VM's bridge, inside the NAT subnet.
 - **Shared folders for Windows** are served by a WebDAV server on 127.0.0.1 behind a random 128-bit path,
   jailed to the share (`PathJail`: walk with `openat` and `O_NOFOLLOW`), with connection and idle limits.
-- **Clipboard and drag and drop** move data only while the person has the VM window in front (clipboard) or
-  drops on it; files from the guest go through `HostFileSink`.
+- **Clipboard and drag and drop** move data only while the person has the VM window in front (clipboard), drops
+  on it, or drags out of it; files from the guest go through `HostFileSink`. Files copied on the Mac go into the
+  guest user's own staging folder (each copy replaces the last; at most 1000 files, 2 GiB). Dragging out of a
+  Windows VM starts only from a drag the person makes out of the window: the guest names what it drags, and its
+  drag is refused in the guest (DROPEFFECT_NONE), so a "move" never deletes anything there.
 - **Imported Parallels VMs** come from elsewhere: their settings are parsed with external entities off and
   sizes bounded, and `qemu-img` converts the disk under a deny-by-default sandbox
   (`VMPaneQEMU/Sandbox/qemu-img-import.sb`: read the image's folder, write the new VM's, no network).

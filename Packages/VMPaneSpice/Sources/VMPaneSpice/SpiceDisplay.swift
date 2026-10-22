@@ -21,6 +21,11 @@ public final class SpiceDisplay: NSObject, GuestDisplaySource {
     private let view: SpiceView
     /// The view that shows the guest (to embed the window's own content around it).
     public var displayView: NSView { view }
+    /// Files dragged out of the guest's picture go on to Finder through this (set by the helper).
+    public var dragOut: SpiceDragOut? {
+        get { view.dragOut }
+        set { view.dragOut = newValue }
+    }
     private let renderer: CSMetalRenderer
     private let socket: URL
     private var connection: CSConnection?

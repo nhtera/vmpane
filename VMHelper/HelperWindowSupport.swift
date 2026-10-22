@@ -57,13 +57,20 @@ final class WindowCloser: NSObject, NSWindowDelegate {
     }
 }
 
-/// The Mac's general pasteboard, for the clipboard bridge (text, PNG, file URLs).
+/// The Mac's general pasteboard, for the clipboard bridge (text, formatted text as HTML and RTF, PNG, file URLs).
 final class GeneralPasteboard: HostPasteboard {
-    func changeCount() async -> Int { await MainActor.run { NSPasteboard.general.changeCount } }
+    /// Integration tests: a named pasteboard of their own instead (never the user's clipboard).
+    private let name: String?
+
+    init(named name: String? = nil) { self.name = name }
+
+    @MainActor private var board: NSPasteboard { name.map { NSPasteboard(name: .init($0)) } ?? .general }
+
+    func changeCount() async -> Int { await MainActor.run { board.changeCount } }
 
     func read() async -> ClipboardContent {
         await MainActor.run {
-            let pasteboard = NSPasteboard.general
+            let pasteboard = board
             // VMPane's Copy Password (a guest's own password) stays on the Mac; a password manager's still goes in.
             if pasteboard.types?.contains(NSPasteboard.PasteboardType("app.vmpane.guest-password")) == true {
                 return ClipboardContent()
@@ -73,18 +80,22 @@ final class GeneralPasteboard: HostPasteboard {
             if png == nil, let tiff = pasteboard.data(forType: .tiff) {
                 png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:])
             }
-            return ClipboardContent(text: pasteboard.string(forType: .string), png: png, files: urls.map(\.path))
+            return ClipboardContent(
+                text: pasteboard.string(forType: .string), html: pasteboard.string(forType: .html), rtf: pasteboard.data(forType: .rtf),
+                png: png, files: urls.map(\.path))
         }
     }
 
     func write(_ content: ClipboardContent) async -> Int {
         await MainActor.run {
-            let pasteboard = NSPasteboard.general
+            let pasteboard = board
             pasteboard.clearContents()
             if !content.files.isEmpty {
                 pasteboard.writeObjects(content.files.map { URL(fileURLWithPath: $0) as NSURL })
             } else {
                 if let text = content.text { pasteboard.setString(text, forType: .string) }
+                if let html = content.html { pasteboard.setString(html, forType: .html) }
+                if let rtf = content.rtf { pasteboard.setData(rtf, forType: .rtf) }
                 if let png = content.png { pasteboard.setData(png, forType: .png) }
             }
             return pasteboard.changeCount

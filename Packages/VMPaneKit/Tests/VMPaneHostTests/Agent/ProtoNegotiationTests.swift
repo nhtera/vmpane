@@ -335,11 +335,13 @@ func theHostAcknowledgesWhatItReadToAgentsThatAsk(asks: Bool) async throws {
 @Test func silenceWhileTheVMIsPausedKeepsTheConnection() async throws {
     let (agent, hostFD) = try FakeAgent.pair()
     let connection = AgentConnection(socket: AgentSocket(fd: hostFD), hostVersion: "h", heartbeat: .milliseconds(100))
+    // Paused from the start: on a loaded Mac three heartbeats (300 ms) can pass between the hello and a pause set
+    // after it, and the connection would close before the pause is what is tested.
+    await connection.setGuestPaused(true)
     let peer = Task { try await connection.open(helloTimeout: .seconds(5)) }
     try agent.hello()
     _ = try await peer.value
     _ = await agent.nextMessage()  // the hello response
-    await connection.setGuestPaused(true)
     try await Task.sleep(for: .milliseconds(800))  // eight heartbeats of silence
     #expect(await connection.isOpen)
     await connection.setGuestPaused(false)

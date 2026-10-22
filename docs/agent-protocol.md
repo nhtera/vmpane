@@ -96,12 +96,13 @@ Host → guest requests unless noted. A method whose cap the agent did not adver
 | `file.pull` | file | `{path, maxBytes}` → `{size, stream}` (guest stream of exactly `size` bytes) |
 | `file.stat` / `file.mkdirTemp` | file | `{path}` → `{kind, size, mode, mtimeUnixNanos}` / `{prefix}` → `{path}` |
 | `session.reveal` | reveal | `{path}` → `{}`: selects it in Finder / Explorer / the file manager (user-session helper) |
-| `clipboard.get` / `clipboard.set` | clipboard | `{types}` → `{items}` / `{items}` → `{}`: text and PNG on streams (≤ 32 MiB), file lists inline; macOS and Windows guests (user-session helper) |
+| `clipboard.get` / `clipboard.set` | clipboard | `{types}` → `{items}` / `{items}` → `{}`: text and PNG on streams (≤ 32 MiB), file lists inline; macOS and Windows guests (user-session helper). Agents with `clipboard.rich` also carry formatted text, `html` (a UTF-8 HTML document; Windows' CF_HTML converted) and `rtf`, on streams; the host sends or asks for those only then (an older agent refuses unknown types) |
 | `display.set` | display | not implemented yet (Windows display path C) |
 | `clipboard.changed` (guest → host) | — | `{types, seq}`, at most 10/s |
 | `time.set` | time | `{unixNanos}` → `{}` |
 | `power.shutdown` | power | `{reboot, force}` → `{}` (answered first) |
 | `net.addrs`, `ports.listening` | net, ports | → interfaces / listening sockets (hints only) |
+| `drag.probe` | drag | `{}` → `{items: [{path, folder}]}`: the files a drag going on in the guest carries (none without one), caught by a nearly invisible drop target over the whole screen that refuses the drop, so the guest's drag ends cancelled once its button goes up (Windows; user-session helper) |
 | `fs.freeze`, `fs.thaw` | freeze | `{timeoutMs ≤ 60000}` → `{frozen}` / → `{thawed}` |
 | `session.state` | session.state | `{}` → `{state: greeter\|locked\|unlocked\|unknown}`, answered by the daemon (root) from what the signed-in user cannot set: Windows, the console session's `WTSSessionInfoEx` (no user name: the sign-in screen; else its lock flag); Linux, logind's foreground seat session (class `greeter`: the login screen; a user session is `unlocked`, or `unknown` with its lock hint, which is the user's to set); macOS, `/dev/console` owned by root (the login window), else `IOConsoleUsers`' `CGSSessionScreenIsLocked` for the console user |
 | `screen.elements` | screen | `{maxElements ≤ 800}` → `{elements: [{role, name, value?, rect: [x, y, w, h], enabled, focused}], truncated}`: the controls of the user's foreground window in display pixels, names ≤ 120 characters (user-session helper: UI Automation on Windows; macOS: the accessibility tree once Accessibility is granted, else `permissionDenied` and, the first time, macOS's prompt; read in a short-lived `vmpane-agent screen-elements` child, since a running process keeps its first answer about the grant) |
@@ -144,8 +145,8 @@ this same protocol, with the daemon in the host's role.
 
 The daemon relays to the current helper, mapping exec and stream ids both ways:
 - `exec.start {as: "user"}` and its `exec.signal`, stdin and output (desktop launches too);
-- `session.reveal`;
-- `clipboard.get` / `clipboard.set` with their streams (macOS);
+- `session.reveal`, `screen.elements` and `drag.probe`;
+- `clipboard.get` / `clipboard.set` with their streams;
 - the helper's `clipboard.changed`, which goes on to the host. The helper polls the pasteboard every 250 ms and
   does not report its own `clipboard.set`.
 

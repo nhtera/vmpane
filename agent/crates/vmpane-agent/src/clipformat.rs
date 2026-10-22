@@ -1,7 +1,8 @@
 //! The Windows clipboard's data formats, converted to and from what the host moves (Windows guests; built on
-//! every OS so the tests run on the Mac): UTF-16 text with CRLF line ends, file lists (`DROPFILES`), and
-//! device-independent bitmaps (CF_DIB), which most Windows apps copy and paste images as, to and from PNG.
-//! Bitmaps of 24 and 32 bits per pixel only: what screenshots and image apps put on the clipboard.
+//! every OS so the tests run on the Mac): UTF-16 text with CRLF line ends, file lists (`DROPFILES`), formatted
+//! text (`HTML Format`, CF_HTML: UTF-8 HTML after a header of byte offsets), and device-independent bitmaps
+//! (CF_DIB), which most Windows apps copy and paste images as, to and from PNG. Bitmaps of 24 and 32 bits per
+//! pixel only: what screenshots and image apps put on the clipboard.
 
 use std::io::Cursor;
 
@@ -72,6 +73,105 @@ pub fn paths_from_dropfiles(bytes: &[u8]) -> Vec<String> {
         .take_while(|name| !name.is_empty())
         .map(String::from_utf16_lossy)
         .collect()
+}
+
+/// CF_HTML's header: the byte offsets of the document and of the fragment in it, 10 digits each (105 bytes).
+fn html_header(
+    start_html: usize,
+    end_html: usize,
+    start_fragment: usize,
+    end_fragment: usize,
+) -> String {
+    format!(
+        "Version:0.9\r\nStartHTML:{start_html:010}\r\nEndHTML:{end_html:010}\r\n\
+         StartFragment:{start_fragment:010}\r\nEndFragment:{end_fragment:010}\r\n"
+    )
+}
+
+const START_FRAGMENT: &str = "<!--StartFragment-->";
+const END_FRAGMENT: &str = "<!--EndFragment-->";
+
+/// An HTML document or fragment (what the Mac's `public.html` holds) as CF_HTML, NUL-terminated: the fragment is
+/// the document's body, or all of it when it has none (then wrapped in `<html><body>`).
+pub fn html_to_cf(html: &str) -> Vec<u8> {
+    // ASCII lowercasing keeps byte offsets.
+    let lower = html.to_ascii_lowercase();
+    // `<body` then `>` or white space (not `<bodyx>`).
+    let body_tag = lower.match_indices("<body").map(|(at, _)| at).find(|&at| {
+        lower[at + 5..]
+            .chars()
+            .next()
+            .is_some_and(|c| c == '>' || c.is_ascii_whitespace())
+    });
+    let body = body_tag.and_then(|open| {
+        let start = open + lower[open..].find('>')? + 1;
+        let end = lower.rfind("</body")?;
+        (start <= end).then_some((start, end))
+    });
+    let (document, fragment) = match body {
+        Some((start, end)) => {
+            let document = [
+                &html[..start],
+                START_FRAGMENT,
+                &html[start..end],
+                END_FRAGMENT,
+                &html[end..],
+            ]
+            .concat();
+            let at = start + START_FRAGMENT.len();
+            (document, (at, at + end - start))
+        }
+        None => {
+            let open = format!("<html><body>{START_FRAGMENT}");
+            let document = format!("{open}{html}{END_FRAGMENT}</body></html>");
+            (document, (open.len(), open.len() + html.len()))
+        }
+    };
+    let header = html_header(0, 0, 0, 0).len();
+    let mut out = html_header(
+        header,
+        header + document.len(),
+        header + fragment.0,
+        header + fragment.1,
+    )
+    .into_bytes();
+    out.extend_from_slice(document.as_bytes());
+    out.push(0);
+    out
+}
+
+/// CF_HTML as an HTML document: StartHTML..EndHTML (with the styles Word and browsers put in its head), else the
+/// fragment, else everything from the first tag; each from its first tag on (an offset a little off, into the
+/// header or before some white space, still reads). None when there is no HTML in it.
+pub fn html_from_cf(bytes: &[u8]) -> Option<String> {
+    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+    let bytes = &bytes[..end];
+    let first_tag = bytes.iter().position(|&b| b == b'<')?;
+    let offset = |name: &str| -> Option<usize> {
+        let header = std::str::from_utf8(&bytes[..first_tag]).ok()?;
+        let line = header
+            .lines()
+            .find_map(|line| line.strip_prefix(name)?.strip_prefix(':'))?;
+        line.trim()
+            .parse::<i64>()
+            .ok()
+            .and_then(|n| usize::try_from(n).ok())
+    };
+    let range = |start: &str, stop: &str| -> Option<&[u8]> {
+        let (start, stop) = (offset(start)?, offset(stop)?.min(bytes.len()));
+        let slice = bytes.get(start..stop)?;
+        Some(&slice[slice.iter().position(|&b| b == b'<')?..])
+    };
+    let html = range("StartHTML", "EndHTML")
+        .or_else(|| range("StartFragment", "EndFragment"))
+        .unwrap_or(&bytes[first_tag..]);
+    Some(String::from_utf8_lossy(html).into_owned())
+}
+
+/// RTF as the guest holds it (`Rich Text Format`): the text up to a NUL terminator, if any.
+pub fn rtf_from_cf(bytes: &[u8]) -> Vec<u8> {
+    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+    bytes[..end].to_vec()
 }
 
 /// A CF_DIB (BITMAPINFOHEADER or a later header, then pixels) as PNG; None for a bitmap this does not read
@@ -271,6 +371,81 @@ mod tests {
         ansi.extend_from_slice(&[0; 16]);
         ansi.extend_from_slice(b"C:\\a\0C:\\b\0\0");
         assert_eq!(paths_from_dropfiles(&ansi), vec![r"C:\a", r"C:\b"]);
+    }
+
+    /// The (StartHTML, EndHTML, StartFragment, EndFragment) a CF_HTML header names.
+    fn offsets(cf: &[u8]) -> Vec<usize> {
+        let text = String::from_utf8_lossy(cf);
+        ["StartHTML:", "EndHTML:", "StartFragment:", "EndFragment:"]
+            .iter()
+            .map(|name| {
+                let at = text.find(name).unwrap_or(0) + name.len();
+                text[at..at + 10].parse().unwrap_or(0)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn html_documents_mark_their_body_as_the_fragment() {
+        let html = "<html><head><style>b{color:red}</style></head><BODY class=\"x\"><b>bold ✓</b></BODY></html>";
+        let cf = html_to_cf(html);
+        assert_eq!(cf.last(), Some(&0));
+        let o = offsets(&cf);
+        assert_eq!(o[0], 105);
+        assert_eq!(o[1], cf.len() - 1);
+        assert_eq!(&cf[o[2]..o[3]], "<b>bold ✓</b>".as_bytes());
+        assert_eq!(
+            &cf[o[2] - START_FRAGMENT.len()..o[2]],
+            START_FRAGMENT.as_bytes()
+        );
+        // Read back: the whole document, styles included, with the fragment markers Windows apps look for.
+        let back = html_from_cf(&cf).unwrap_or_default();
+        assert!(back.starts_with("<html><head><style>") && back.ends_with("</html>"));
+        assert!(back.contains("<!--StartFragment--><b>bold ✓</b><!--EndFragment-->"));
+    }
+
+    #[test]
+    fn html_fragments_are_wrapped() {
+        let cf = html_to_cf("<i>a</i> & b");
+        let o = offsets(&cf);
+        assert_eq!(&cf[o[2]..o[3]], b"<i>a</i> & b");
+        assert_eq!(
+            html_from_cf(&cf).as_deref(),
+            Some("<html><body><!--StartFragment--><i>a</i> & b<!--EndFragment--></body></html>")
+        );
+    }
+
+    #[test]
+    fn cf_html_from_other_apps_is_read_leniently() {
+        // Version 1.0 with no document range (-1), an EndFragment past the end, and a source URL.
+        let html = "<html><body><!--StartFragment--><p>x</p><!--EndFragment--></body></html>";
+        let header = "Version:1.0\r\nStartHTML:-1\r\nEndHTML:-1\r\nStartFragment:0000000000\r\nEndFragment:0000009999\r\nSourceURL:https://example.com/\r\n";
+        let start = header.len() + html.find("<p>").unwrap_or(0);
+        let header = header.replace(
+            "StartFragment:0000000000",
+            &format!("StartFragment:{start:010}"),
+        );
+        let cf = [header.as_bytes(), html.as_bytes(), b"\0"].concat();
+        assert_eq!(
+            html_from_cf(&cf).as_deref(),
+            Some("<p>x</p><!--EndFragment--></body></html>")
+        );
+        // StartHTML a little early (into the header's line end): read from the document's first tag.
+        let doc = "<html><body>z</body></html>";
+        let header = |start: usize, end: usize| {
+            format!("Version:0.9\r\nStartHTML:{start:010}\r\nEndHTML:{end:010}\r\n")
+        };
+        let n = header(0, 0).len();
+        let early = format!("{}{doc}", header(n - 2, n + doc.len()));
+        assert_eq!(html_from_cf(early.as_bytes()).as_deref(), Some(doc));
+        // A <bodyx> tag is not the body.
+        let cf = html_to_cf("<bodyx>a</bodyx>");
+        let o = offsets(&cf);
+        assert_eq!(&cf[o[2]..o[3]], b"<bodyx>a</bodyx>");
+        // No usable header at all: everything from the first tag.
+        assert_eq!(html_from_cf(b"junk<p>y</p>").as_deref(), Some("<p>y</p>"));
+        assert_eq!(html_from_cf(b"no tags"), None);
+        assert_eq!(rtf_from_cf(b"{\\rtf1 x}\0\0"), b"{\\rtf1 x}");
     }
 
     #[test]

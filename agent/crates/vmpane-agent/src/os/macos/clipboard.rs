@@ -1,11 +1,11 @@
-//! The macOS pasteboard: text, PNG and file lists. A debug build reads and writes the named pasteboard
+//! The macOS pasteboard: text, formatted text (HTML, RTF), PNG and file lists. A debug build reads and writes the named pasteboard
 //! `$VMPANE_TEST_PASTEBOARD` instead of the general one, so tests never touch the user's clipboard.
 
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
 use objc2_app_kit::{
-    NSPasteboard, NSPasteboardItem, NSPasteboardTypeFileURL, NSPasteboardTypePNG,
-    NSPasteboardTypeString, NSPasteboardWriting,
+    NSPasteboard, NSPasteboardItem, NSPasteboardTypeFileURL, NSPasteboardTypeHTML,
+    NSPasteboardTypePNG, NSPasteboardTypeRTF, NSPasteboardTypeString, NSPasteboardWriting,
 };
 use objc2_foundation::{NSArray, NSData, NSString, NSURL};
 use vmpane_agent_proto::methods::ClipboardType;
@@ -45,6 +45,14 @@ pub fn available() -> Vec<ClipboardType> {
     if pb.stringForType(string).is_some() {
         types.push(ClipboardType::Text);
     }
+    // SAFETY: as above.
+    let (html, rtf) = unsafe { (NSPasteboardTypeHTML, NSPasteboardTypeRTF) };
+    if pb.dataForType(html).is_some() {
+        types.push(ClipboardType::Html);
+    }
+    if pb.dataForType(rtf).is_some() {
+        types.push(ClipboardType::Rtf);
+    }
     types
 }
 
@@ -67,7 +75,14 @@ fn files(pb: &NSPasteboard) -> Vec<String> {
 pub fn read(kind: ClipboardType) -> Option<Content> {
     let pb = pasteboard();
     // SAFETY: as above.
-    let (string, png) = unsafe { (NSPasteboardTypeString, NSPasteboardTypePNG) };
+    let (string, png, html, rtf) = unsafe {
+        (
+            NSPasteboardTypeString,
+            NSPasteboardTypePNG,
+            NSPasteboardTypeHTML,
+            NSPasteboardTypeRTF,
+        )
+    };
     match kind {
         ClipboardType::Text => pb
             .stringForType(string)
@@ -76,6 +91,10 @@ pub fn read(kind: ClipboardType) -> Option<Content> {
         ClipboardType::Files => Some(files(&pb))
             .filter(|f| !f.is_empty())
             .map(Content::Files),
+        ClipboardType::Html => pb
+            .stringForType(html)
+            .map(|s| Content::Bytes(s.to_string().into_bytes())),
+        ClipboardType::Rtf => pb.dataForType(rtf).map(|d| Content::Bytes(d.to_vec())),
     }
 }
 
@@ -83,13 +102,26 @@ pub fn read(kind: ClipboardType) -> Option<Content> {
 pub fn write(items: Vec<(ClipboardType, Content)>) -> std::io::Result<()> {
     let pb = pasteboard();
     // SAFETY: as above.
-    let (string, png, file_url) = unsafe {
+    let (string, png, file_url, html, rtf) = unsafe {
         (
             NSPasteboardTypeString,
             NSPasteboardTypePNG,
             NSPasteboardTypeFileURL,
+            NSPasteboardTypeHTML,
+            NSPasteboardTypeRTF,
         )
     };
+    // Text checked first: a refusal leaves the pasteboard as it was.
+    let utf8 = |kind, bytes: &Vec<u8>| {
+        !matches!(kind, ClipboardType::Text | ClipboardType::Html)
+            || std::str::from_utf8(bytes).is_ok()
+    };
+    if !items.iter().all(|(kind, content)| match content {
+        Content::Bytes(bytes) => utf8(*kind, bytes),
+        Content::Files(_) => true,
+    }) {
+        return Err(std::io::Error::other("clipboard text is not UTF-8"));
+    }
     pb.clearContents();
     let mut ok = true;
     for (kind, content) in items {
@@ -101,6 +133,14 @@ pub fn write(items: Vec<(ClipboardType, Content)>) -> std::io::Result<()> {
             }
             (ClipboardType::Png, Content::Bytes(bytes)) => {
                 pb.setData_forType(Some(&NSData::with_bytes(&bytes)), png)
+            }
+            (ClipboardType::Html, Content::Bytes(bytes)) => {
+                let text = String::from_utf8(bytes)
+                    .map_err(|_| std::io::Error::other("clipboard HTML is not UTF-8"))?;
+                pb.setString_forType(&NSString::from_str(&text), html)
+            }
+            (ClipboardType::Rtf, Content::Bytes(bytes)) => {
+                pb.setData_forType(Some(&NSData::with_bytes(&bytes)), rtf)
             }
             (ClipboardType::Files, Content::Files(paths)) => {
                 let items: Vec<Retained<ProtocolObject<dyn NSPasteboardWriting>>> = paths

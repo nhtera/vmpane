@@ -37,8 +37,8 @@ one.*
 
 ## Guest tools
 
-The guest tools add the clipboard (text and images both ways; files copied in the VM arrive on your Mac in
-`~/Downloads/VMPane/<VM>`), dragging files into the VM (they land in **Desktop › VMPane Drops**, with someone
+The guest tools add the clipboard (text, formatted text and images both ways, and files: copied on one side,
+pasted on the other where you press ⌘V), dragging files into the VM (they land in **Desktop › VMPane Drops**, with someone
 logged in), and, for AI agents, running commands and copying files. VMPane shares them read-only with every macOS VM. In the VM, open
 `/Volumes/My Shared Files/vmpane-tools` in the Finder and double-click **VMPane Agent.pkg** (it needs macOS 15
 or later in the VM). It installs the agent in `/Library/Application Support/VMPane/Agent`, with a launch daemon

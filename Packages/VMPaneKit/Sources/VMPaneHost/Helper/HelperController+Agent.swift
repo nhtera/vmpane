@@ -41,7 +41,8 @@ extension HelperController {
                             await execs.exited(exited, on: connection)
                         }
                     case AgentMethod.clipboardChanged:
-                        await clipboard?.guestChanged()
+                        // Not awaited: a fetch's guest commands (a folder's listing) end with notices from this loop.
+                        Task { await clipboard?.guestChanged() }
                     default:
                         break
                     }

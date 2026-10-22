@@ -26,8 +26,16 @@ the library and the new-VM sheet are rebuilt.
 - New VM is one sheet of system cards sized for your Mac (⌘N, then Return makes another of the last one), made in
   the background with each stage in the library. Drop an .iso or .ipsw on the library or the Dock icon to start
   from it. A Linux VM made from a card gets a password VMPane keeps for you (**Copy Password** in the inspector).
+- The clipboard of macOS and Windows VMs keeps formatting: bold, links, colours, fonts and tables copied in Word,
+  Outlook, Excel or a browser paste formatted on the other side (HTML and RTF, with plain text alongside; **Keep text
+  formatting** in Settings › Sharing turns it off) (#6).
+- Files and folders copy and paste both ways: ⌘C in Finder, Ctrl-V in Explorer pastes them into the open folder, and
+  files copied in the VM paste where you press ⌘V in Finder (up to 1000 files and 2 GB a copy) (#6).
+- Files dragged out of a Windows VM's window drop in Finder, copied from the VM; nothing moves in Windows (#6).
 
 ### Changed
+- Files copied in a VM no longer land in `~/Downloads/VMPane/<VM>`: they wait in a staging folder until pasted,
+  and the next copy replaces them.
 - Downloads can be cancelled and resume later; a VM appears in the library only once its downloads are done, so a
   quit midway leaves none behind.
 - Keys or mouse buttons an agent left held down are let go when you take over or the agent leaves.

@@ -29,7 +29,7 @@ agent, Phase 07): the network lease after a replug, memory freed for the balloon
 view of replaced shares.
 
 Host-side settings (`name`, `portForwards`, `mcp`, `ui`, `clipboard.allowWithAgents`) apply as soon as
-they are saved. Identity, disks, platform and the install source are never changed through settings.
+they are saved; the rest of `clipboard` (`mode`, `keepFormatting`) at the next start. Identity, disks, platform and the install source are never changed through settings.
 
 ## Saved state and the locked Mac
 

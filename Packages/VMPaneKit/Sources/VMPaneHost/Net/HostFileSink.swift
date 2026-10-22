@@ -28,18 +28,41 @@ public final class HostFileSink: @unchecked Sendable {
     public static let defaultMaxFiles = 1000
     public static let defaultMaxBytes: Int64 = 2 << 30
 
+    /// A file-count and byte budget, which sinks into several folders can share (the items of one drag).
+    public final class Budget: @unchecked Sendable {
+        private let maxFiles: Int
+        private let maxBytes: Int64
+        private let lock = NSLock()
+        private var files = 0
+        private var bytes: Int64 = 0
+
+        public init(maxFiles: Int = defaultMaxFiles, maxBytes: Int64 = defaultMaxBytes) {
+            self.maxFiles = maxFiles
+            self.maxBytes = maxBytes
+        }
+
+        func reserve(files: Int, bytes: Int64) throws {
+            try lock.withLock {
+                guard self.files + files <= maxFiles else { throw Failure.tooMany(maxFiles) }
+                guard self.bytes + bytes <= maxBytes else { throw Failure.tooLarge(maxBytes) }
+                self.files += files
+                self.bytes += bytes
+            }
+        }
+    }
+
     public let root: URL
-    private let maxFiles: Int
-    private let maxBytes: Int64
-    private let lock = NSLock()
-    private var files = 0
-    private var bytes: Int64 = 0
+    private let budget: Budget
 
     /// A sink for one transfer into `root` (created if missing).
-    public init(root: URL, maxFiles: Int = defaultMaxFiles, maxBytes: Int64 = defaultMaxBytes) {
+    public convenience init(root: URL, maxFiles: Int = defaultMaxFiles, maxBytes: Int64 = defaultMaxBytes) {
+        self.init(root: root, budget: Budget(maxFiles: maxFiles, maxBytes: maxBytes))
+    }
+
+    /// A sink into `root` that counts against `budget`.
+    public init(root: URL, budget: Budget) {
         self.root = root
-        self.maxFiles = maxFiles
-        self.maxBytes = maxBytes
+        self.budget = budget
     }
 
     /// `~/Downloads/VMPane/<vm name>/`.
@@ -48,6 +71,20 @@ public final class HostFileSink: @unchecked Sendable {
             FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads")
         return downloads.appendingPathComponent("VMPane", isDirectory: true)
+            .appendingPathComponent(sanitizedName(name) ?? "VM", isDirectory: true)
+    }
+
+    /// Where files copied in a guest wait to be pasted on the Mac: `~/Library/Caches/app.vmpane.mac.vm/Clipboard/<vm>/`
+    /// (each copy in a folder of its own, the older ones removed; the pasteboard names the files there). Under
+    /// `$VMPANE_SUPPORT_DIR/Caches` when that is set (integration tests).
+    public static func clipboardStaging(forVM name: String) -> URL {
+        let support = ProcessInfo.processInfo.environment["VMPANE_SUPPORT_DIR"].flatMap { $0.isEmpty ? nil : $0 }
+        let caches =
+            support.map { URL(fileURLWithPath: $0).appendingPathComponent("Caches", isDirectory: true) }
+            ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Caches")
+        return caches.appendingPathComponent(VMPane.SigningIdentifier.helper, isDirectory: true)
+            .appendingPathComponent("Clipboard", isDirectory: true)
             .appendingPathComponent(sanitizedName(name) ?? "VM", isDirectory: true)
     }
 
@@ -82,14 +119,38 @@ public final class HostFileSink: @unchecked Sendable {
         return (FileHandle(fileDescriptor: file.fd, closeOnDealloc: true), url.appendingPathComponent(file.name))
     }
 
+    /// Creates the folder at `relativePath` (as `create` does its file's folders) and returns where it is; `unique`
+    /// gives the last component " 2", " 3"… instead of using a folder that exists. Counts as one file.
+    public func createFolder(_ relativePath: String, unique: Bool = false) throws -> URL {
+        let parts = relativePath.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+        guard !parts.isEmpty else { throw Failure.badName(relativePath) }
+        let names = try parts.map { part -> String in
+            guard let name = Self.sanitizedName(part) else { throw Failure.badName(part) }
+            return name
+        }
+        try reserve(files: 1, bytes: 0)
+        var directory = try openRoot()
+        var url = root
+        defer { close(directory) }
+        for (index, name) in names.enumerated() {
+            var made = name
+            if index == names.count - 1, unique {
+                made = try uniqueName(name, keepingExtension: false) { mkdirat(directory, $0, 0o755) == 0 }
+            } else if mkdirat(directory, name, 0o755) != 0, errno != EEXIST {
+                throw Failure.system("create folder \(name)", errno)
+            }
+            let next = openat(directory, made, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+            guard next >= 0 else { throw Failure.system("open folder \(made)", errno) }
+            close(directory)
+            directory = next
+            url.appendPathComponent(made, isDirectory: true)
+        }
+        return url
+    }
+
     /// Counts `bytes` more against the budget (for transfers whose size is learnt while copying).
     public func reserve(files: Int = 0, bytes: Int64) throws {
-        try lock.withLock {
-            guard self.files + files <= maxFiles else { throw Failure.tooMany(maxFiles) }
-            guard self.bytes + bytes <= maxBytes else { throw Failure.tooLarge(maxBytes) }
-            self.files += files
-            self.bytes += bytes
-        }
+        try budget.reserve(files: files, bytes: bytes)
     }
 
     /// The root folder, opened without following a link at any level VMPane creates.
@@ -101,12 +162,22 @@ public final class HostFileSink: @unchecked Sendable {
     }
 
     private func createUnique(_ name: String, in directory: Int32) throws -> (fd: Int32, name: String) {
-        let base = (name as NSString).deletingPathExtension
-        let ext = (name as NSString).pathExtension
+        var fd: Int32 = -1
+        let made = try uniqueName(name, keepingExtension: true) { candidate in
+            fd = openat(directory, candidate, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o644)
+            return fd >= 0
+        }
+        return (fd, made)
+    }
+
+    /// The first of `name`, "name 2", "name 3"… (a file's before its extension) that `make` creates; `make` fails
+    /// with errno EEXIST for a taken one.
+    private func uniqueName(_ name: String, keepingExtension: Bool, _ make: (String) -> Bool) throws -> String {
+        let base = keepingExtension ? (name as NSString).deletingPathExtension : name
+        let ext = keepingExtension ? (name as NSString).pathExtension : ""
         for attempt in 1...1000 {
             let candidate = attempt == 1 ? name : (ext.isEmpty ? "\(base) \(attempt)" : "\(base) \(attempt).\(ext)")
-            let fd = openat(directory, candidate, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o644)
-            if fd >= 0 { return (fd, candidate) }
+            if make(candidate) { return candidate }
             guard errno == EEXIST else { throw Failure.system("create \(candidate)", errno) }
         }
         throw Failure.system("create \(name)", EEXIST)

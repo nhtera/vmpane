@@ -34,6 +34,8 @@ public enum AgentMethod {
     public static let screenElements = "screen.elements"
     /// The login screen, a locked or an unlocked session, as the guest system has it (`AgentCap.sessionState`).
     public static let sessionState = "session.state"
+    /// The files a drag going on in the guest carries (`AgentCap.drag`, Windows guests), served by the session helper.
+    public static let dragProbe = "drag.probe"
 
     /// Methods the guest may send. Anything else from the guest is a protocol violation.
     public static let fromGuest: Set<String> = [hello, agentHeartbeat, execExited, clipboardChanged]
@@ -44,6 +46,8 @@ public enum AgentCap {
     public static let file = "file"
     public static let clipboard = "clipboard"
     public static let clipboardFiles = "clipboard.files"
+    /// The clipboard also carries formatted text (`html`, `rtf`); older agents refuse those types.
+    public static let clipboardRich = "clipboard.rich"
     public static let time = "time"
     public static let power = "power"
     public static let net = "net"
@@ -59,6 +63,8 @@ public enum AgentCap {
     public static let desktop = "desktop"
     /// `session.state`, answered by the guest's root service.
     public static let sessionState = "session.state"
+    /// `drag.probe`: files dragged out of the VM's window go on to Finder (Windows guests).
+    public static let drag = "drag"
 }
 
 /// The agent protocol's own error codes (JSON-RPC's standard ones are in `ControlErrorCode`).
@@ -254,6 +260,21 @@ public struct AgentPathParams: Codable, Equatable, Sendable {
     public init(path: String) { self.path = path }
 }
 
+/// `drag.probe` result: the files and folders the guest's drag carries (none without a drag of files).
+public struct AgentDragProbeResult: Codable, Equatable, Sendable {
+    public struct Item: Codable, Equatable, Sendable {
+        public var path: String
+        public var folder: Bool?
+
+        public init(path: String, folder: Bool) {
+            self.path = path
+            self.folder = folder
+        }
+    }
+
+    public var items: [Item]
+}
+
 public struct AgentFileStat: Codable, Equatable, Sendable {
     public enum Kind: String, Codable, Sendable { case file, dir, symlink, other }
     public var kind: Kind
@@ -264,6 +285,8 @@ public struct AgentFileStat: Codable, Equatable, Sendable {
 
 public enum AgentClipboardType: String, Codable, Sendable {
     case text, png, files
+    /// Formatted text (an HTML document, an RTF document): agents with `clipboard.rich` only.
+    case html, rtf
 }
 
 public struct AgentClipboardItem: Codable, Equatable, Sendable {

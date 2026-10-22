@@ -63,10 +63,13 @@ impl Agent {
             Role::Session => {
                 let mut caps = vec![cap::EXEC, cap::REVEAL, cap::DESKTOP];
                 if crate::clipboard::SUPPORTED {
-                    caps.push(cap::CLIPBOARD);
+                    caps.extend([cap::CLIPBOARD, cap::CLIPBOARD_RICH]);
                 }
                 if crate::screen::SUPPORTED {
                     caps.push(cap::SCREEN);
+                }
+                if crate::drag::SUPPORTED {
+                    caps.push(cap::DRAG);
                 }
                 caps
             }
@@ -80,10 +83,13 @@ impl Agent {
                     caps.push(cap::ACK);
                 }
                 if crate::clipboard::SUPPORTED {
-                    caps.push(cap::CLIPBOARD);
+                    caps.extend([cap::CLIPBOARD, cap::CLIPBOARD_RICH]);
                 }
                 if crate::screen::SUPPORTED {
                     caps.push(cap::SCREEN);
+                }
+                if crate::drag::SUPPORTED {
+                    caps.push(cap::DRAG);
                 }
                 caps
             }

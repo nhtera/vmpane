@@ -47,6 +47,9 @@ pub mod method {
     /// Whether the guest shows its login screen, a locked session or a signed-in desktop, answered by the
     /// daemon from what only the system can set ([`cap::SESSION_STATE`]).
     pub const SESSION_STATE: &str = "session.state";
+    /// The files a drag going on in the guest carries, while the person drags out of the VM's window
+    /// ([`cap::DRAG`], served by the session helper).
+    pub const DRAG_PROBE: &str = "drag.probe";
 }
 
 /// Capabilities an agent advertises in `hello`. A method whose cap is missing answers `capUnsupported`.
@@ -57,6 +60,8 @@ pub mod cap {
     pub const CLIPBOARD: &str = "clipboard";
     /// File lists only (Linux, Windows: text and images go through spice-vdagent).
     pub const CLIPBOARD_FILES: &str = "clipboard.files";
+    /// The clipboard also carries formatted text (`html`, `rtf`); older agents refuse those types.
+    pub const CLIPBOARD_RICH: &str = "clipboard.rich";
     pub const TIME: &str = "time";
     pub const POWER: &str = "power";
     pub const NET: &str = "net";
@@ -73,6 +78,8 @@ pub mod cap {
     pub const DESKTOP: &str = "desktop";
     /// `session.state`.
     pub const SESSION_STATE: &str = "session.state";
+    /// `drag.probe` (Windows guests).
+    pub const DRAG: &str = "drag";
 }
 
 /// Who sends a method.
@@ -333,10 +340,14 @@ pub enum ClipboardType {
     Png,
     /// Absolute guest paths, inline.
     Files,
+    /// Formatted text as an HTML document (UTF-8), on a stream; agents with [`cap::CLIPBOARD_RICH`].
+    Html,
+    /// Formatted text as RTF, on a stream; agents with [`cap::CLIPBOARD_RICH`].
+    Rtf,
 }
 
-/// One clipboard representation. `text` and `png` carry `stream` and `size` (≤ 32 MiB); `files` carries
-/// `files`.
+/// One clipboard representation. `text`, `png`, `html` and `rtf` carry `stream` and `size` (≤ 32 MiB); `files`
+/// carries `files`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ClipboardItem {
@@ -543,6 +554,26 @@ pub enum SessionState {
 #[serde(rename_all = "camelCase")]
 pub struct SessionStateResult {
     pub state: SessionState,
+}
+
+// MARK: drag
+
+/// `drag.probe` result: what the guest's drag carries now; empty when there is no drag, or not one of files. The
+/// guest's drag then ends as a cancelled one once its mouse button goes up (nothing is moved or deleted in it).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DragProbeResult {
+    pub items: Vec<DragItem>,
+}
+
+/// One file or folder in a guest drag.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DragItem {
+    /// Absolute guest path.
+    pub path: String,
+    #[serde(default)]
+    pub folder: bool,
 }
 
 // MARK: screen

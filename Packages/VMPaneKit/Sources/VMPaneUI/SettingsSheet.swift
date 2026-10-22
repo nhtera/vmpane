@@ -56,6 +56,12 @@ public struct SettingsSheet: View {
                             Text("Off").tag(ClipboardConfig.Mode.off)
                         }
                     }
+                    if model.draft.clipboard.mode != .off && model.draft.os != .linux {
+                        // Linux guests share their clipboard through SPICE: plain text and images only.
+                        row("clipboard.keepFormatting") {
+                            Toggle("Keep text formatting", isOn: $model.draft.clipboard.keepsFormatting)
+                        }
+                    }
                     row("audio.output") { Toggle("Sound output", isOn: $model.draft.audio.output) }
                     row("audio.input") { Toggle("Microphone", isOn: $model.draft.audio.input) }
                     row("shares") { SharedFoldersEditor(shares: $model.draft.shares) }

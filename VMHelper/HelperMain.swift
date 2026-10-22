@@ -179,7 +179,7 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
         self.prepared = prepared
         let controller = makeController(prepared, runtimeVersion: runtime, paths: paths)
         Task {
-            await controller.setHostPasteboard(GeneralPasteboard())
+            await Self.sharePasteboard(controller)
             await controller.setConfirmationPresenter(
                 { [weak self] question in await self?.askInWindow(question) ?? false },
                 dismiss: { [weak self] in
@@ -304,6 +304,18 @@ struct HelperArguments {
 }
 
 extension HelperDelegate {
+    /// The Mac's pasteboard for the VM's clipboard sharing. Integration-test hook (`VMPANE_TEST_PASTEBOARD`): a named
+    /// pasteboard of the test's instead, shared as while the window is in front (a headless VM has none); the Mac's
+    /// own clipboard is then never shared.
+    fileprivate static func sharePasteboard(_ controller: HelperController) async {
+        if let name = ProcessInfo.processInfo.environment["VMPANE_TEST_PASTEBOARD"] {
+            await controller.setHostPasteboard(GeneralPasteboard(named: name))
+            await controller.windowFocusChanged(true)
+        } else {
+            await controller.setHostPasteboard(GeneralPasteboard())
+        }
+    }
+
     /// Windows VMs: the SPICE display, connected while the VM runs (QEMU restarts on resume and restore), its
     /// window shown at start (unless headless) and on `vm.display.show`. Needs the SPICE client libraries
     /// (weak-linked; they come with the QEMU bundle).
@@ -314,6 +326,9 @@ extension HelperDelegate {
         }
         let size = CGSize(width: max(config.display.widthPx / 2, 640), height: max(config.display.heightPx / 2, 400))
         let display = SpiceDisplay(socket: backend.displaySocket, title: config.name, size: size)
+        display.dragOut = SpiceDragOut(
+            probe: { await controller.dragOutProbe().map { SpiceDragOut.Item(path: $0.path, folder: $0.folder ?? false) } },
+            copy: { try await controller.dragOutCopy($0, to: $1) })
         showWindow = { display.show() }
         Task { await controller.setDisplaySource(display) }
         Task { @MainActor in

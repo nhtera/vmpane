@@ -54,9 +54,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File D:\install.ps1   # D: = the 
 
 It logs to `C:\ProgramData\VMPane\tools-install.log`.
 
-The disc also holds the VMPane guest agent (`vmpane-agent.msi`). It shares the clipboard while the VM's window
-is in front, with someone signed in to Windows: text and images both ways, and files copied in the VM arrive on
-your Mac in `~/Downloads/VMPane/<VM>`. Unlike the drivers it is not code-signed for
+The disc also holds the VMPane guest agent (`vmpane-agent.msi`), which shares the clipboard and files with your
+Mac (see below). Unlike the drivers it is not code-signed for
 Windows (VMPane has no Windows signing certificate), so if you install it by hand Windows names its publisher
 as unknown. Each release's agent is built on GitHub and carries a build attestation:
 `gh attestation verify vmpane-agent.msi --repo nhtera/vmpane` checks yours.
@@ -71,6 +70,25 @@ window and:
   internet* to create a local account.
 - **Windows is installed but has no network or a small screen**: attach the guest tools and run `install.ps1`
   as shown above, then shut Windows down and start the VM again.
+
+## Clipboard and files
+
+With someone signed in to Windows and the VM's window in front, the clipboard goes both ways (Settings › Sharing ›
+**Clipboard**):
+
+- **Text and formatted text.** Plain text always; with **Keep text formatting** (on unless you turn it off),
+  bold, links, colours, fonts and tables too, as HTML and RTF, so Word, Outlook, Excel and browsers paste them
+  formatted.
+- **Images** both ways (PNG on the Mac; PNG and a bitmap in Windows).
+- **Files and folders.** Copied in Finder, ⌘C: in the VM, Ctrl-V in Explorer pastes them into the open folder.
+  Copied in Explorer: on the Mac, ⌘V in Finder pastes them where you are. Each copy carries up to 1000 files and
+  2 GB; for more, drag them onto the VM's window or use a shared folder. A copy waits in a staging folder on the
+  other side (in Windows `%LOCALAPPDATA%\Temp\VMPane Clipboard`, on the Mac in `~/Library/Caches`) until the next
+  copy replaces it; files from the VM are marked as downloaded, so macOS checks them before they first open.
+
+**Dragging files.** Files dropped on the VM's window land in **Desktop › VMPane Drops**. Files dragged in Explorer
+out of the VM's window go on as a drag on the Mac: drop them in Finder, and they are copied there from the VM. A
+drag out never moves anything in Windows.
 
 ## Sound and microphone
 

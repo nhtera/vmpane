@@ -1,4 +1,5 @@
-//! `clipboard.get` / `clipboard.set` / `clipboard.changed` (macOS and Windows guests: text, PNG, file lists).
+//! `clipboard.get` / `clipboard.set` / `clipboard.changed` (macOS and Windows guests: text, formatted text as
+//! HTML and RTF, PNG, file lists).
 //! The user-session helper owns the pasteboard (`os::clipboard`); the daemon relays the requests and their
 //! streams to it, and its `clipboard.changed` to the host. Linux guests have no agent clipboard (spice-vdagent
 //! does text and images).
@@ -146,7 +147,7 @@ mod imp {
                 (_, None) => {
                     return Err(ErrorObject::new(
                         ErrorCode::InvalidParams,
-                        "text and PNG need a stream",
+                        "text, HTML, RTF and PNG need a stream",
                     ));
                 }
             }

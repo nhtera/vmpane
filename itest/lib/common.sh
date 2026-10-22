@@ -155,10 +155,10 @@ it_cancel_install() {
     it_rpc "$socket" vm.install.cancel >/dev/null || { it_fail "vm.install.cancel failed"; return 1; }
 }
 
-# The OCR tool (itest/lib/ocr.swift), compiled once per source version; echoes its path.
-it_ocr_binary() {
-    local src="$VMPANE_ROOT/itest/lib/ocr.swift" bin
-    bin="$HOME/VMPaneItest/bin/ocr-$(shasum -a 256 "$src" | cut -c1-12)"
+# The Swift tool itest/lib/$1.swift, compiled once per source version; echoes its path.
+it_swift_tool() {
+    local src="$VMPANE_ROOT/itest/lib/$1.swift" bin
+    bin="$HOME/VMPaneItest/bin/$1-$(shasum -a 256 "$src" | cut -c1-12)"
     if [[ ! -x $bin ]]; then
         mkdir -p "$(dirname "$bin")"
         swiftc -O "$src" -o "$bin.partial" 2>/dev/null && mv "$bin.partial" "$bin" || return 1
@@ -166,8 +166,13 @@ it_ocr_binary() {
     echo "$bin"
 }
 
+it_ocr_binary() { it_swift_tool ocr; }
+
 # Text on PNG $1: JSON lines {text, x, y, w, h} (image pixels, origin top left).
 it_ocr() { "$(it_ocr_binary)" "$1"; }
+
+# The named pasteboard $1 (itest/lib/pasteboard.swift): get | set-files <path>... | release.
+it_pasteboard() { "$(it_swift_tool pasteboard)" "$@"; }
 
 # Saved VM memory can only be restored while this Mac is unlocked (Virtualization's Secure Enclave key):
 # scenarios that restore skip (77) on a locked screen.

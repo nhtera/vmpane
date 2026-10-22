@@ -12,11 +12,13 @@ use windows::Win32::System::SystemInformation::SetSystemTime;
 use windows::Win32::System::Time::FileTimeToSystemTime;
 
 pub mod clipboard;
+mod drag;
 mod net;
 pub mod serial;
 pub mod service;
 pub mod session;
 mod uia;
+pub use drag::drag_probe;
 pub use net::{interfaces, listening_ports};
 pub use uia::screen_elements;
 

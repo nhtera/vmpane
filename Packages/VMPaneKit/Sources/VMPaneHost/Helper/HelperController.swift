@@ -37,6 +37,8 @@ public actor HelperController {
     /// Clipboard sharing through the guest agent (`HelperController+Clipboard`), and the Mac's pasteboard the
     /// helper app provides for it.
     var clipboardBridge: ClipboardBridge?
+    /// The budget of the drag out of the guest's window under way (`dragOutProbe` starts one).
+    var dragOutBudget: HostFileSink.Budget?
     var hostPasteboard: HostPasteboard?
     /// Whether the VM's window is the key window now (kept for a bridge made later).
     var windowFocused = false

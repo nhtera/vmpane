@@ -97,7 +97,7 @@
       "type": "object"
     },
     "ClipboardItem": {
-      "description": "One clipboard representation. `text` and `png` carry `stream` and `size` (≤ 32 MiB); `files` carries\n`files`.",
+      "description": "One clipboard representation. `text`, `png`, `html` and `rtf` carry `stream` and `size` (≤ 32 MiB); `files`\ncarries `files`.",
       "properties": {
         "files": {
           "default": [],
@@ -149,6 +149,16 @@
           "const": "files",
           "description": "Absolute guest paths, inline.",
           "type": "string"
+        },
+        {
+          "const": "html",
+          "description": "Formatted text as an HTML document (UTF-8), on a stream; agents with [`cap::CLIPBOARD_RICH`].",
+          "type": "string"
+        },
+        {
+          "const": "rtf",
+          "description": "Formatted text as RTF, on a stream; agents with [`cap::CLIPBOARD_RICH`].",
+          "type": "string"
         }
       ]
     },
@@ -194,6 +204,38 @@
       "required": [
         "widthPx",
         "heightPx"
+      ],
+      "type": "object"
+    },
+    "DragItem": {
+      "description": "One file or folder in a guest drag.",
+      "properties": {
+        "folder": {
+          "default": false,
+          "type": "boolean"
+        },
+        "path": {
+          "description": "Absolute guest path.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    },
+    "DragProbeResult": {
+      "description": "`drag.probe` result: what the guest's drag carries now; empty when there is no drag, or not one of files. The\nguest's drag then ends as a cancelled one once its mouse button goes up (nothing is moved or deleted in it).",
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/DragItem"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
       ],
       "type": "object"
     },
@@ -1013,6 +1055,17 @@
       },
       "result": {
         "$ref": "#/$defs/Empty"
+      }
+    },
+    "drag.probe": {
+      "cap": "drag",
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/Empty"
+      },
+      "result": {
+        "$ref": "#/$defs/DragProbeResult"
       }
     },
     "exec.exited": {

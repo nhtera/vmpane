@@ -16,6 +16,7 @@ mod clipboard;
 mod clipformat;
 mod connection;
 mod dispatch;
+mod drag;
 mod exec;
 mod files;
 mod freeze;
@@ -139,6 +140,10 @@ fn main() -> ExitCode {
             .and_then(|n| n.parse().ok())
             .unwrap_or(0);
         return screen::print_elements(max);
+    }
+    #[cfg(windows)]
+    if std::env::args().nth(1).as_deref() == Some("drag-probe") {
+        return drag::print_probe();
     }
     let args = match parse_args() {
         Ok(Some(args)) => args,

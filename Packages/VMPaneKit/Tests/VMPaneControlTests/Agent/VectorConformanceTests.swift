@@ -193,7 +193,7 @@ private func expectation(for result: Result<RPCMessage, AgentCodec.DecodeError>)
         AgentMethod.sessionReveal, AgentMethod.clipboardGet, AgentMethod.clipboardSet, AgentMethod.clipboardChanged,
         AgentMethod.displaySet, AgentMethod.timeSet, AgentMethod.powerShutdown, AgentMethod.netAddrs,
         AgentMethod.portsListening, AgentMethod.fsFreeze, AgentMethod.fsThaw, AgentMethod.screenElements,
-        AgentMethod.sessionState,
+        AgentMethod.sessionState, AgentMethod.dragProbe,
     ]
     #expect(Set(swift) == Set(methods.keys))
     let fromGuest = methods.filter { $0.value["direction"] == "guestToHost" }.map(\.key)

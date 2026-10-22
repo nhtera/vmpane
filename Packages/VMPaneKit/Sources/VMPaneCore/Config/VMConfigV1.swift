@@ -214,13 +214,22 @@ public struct ClipboardConfig: ExtensibleFields {
     public var mode: Mode
     /// Whether agents (MCP, non-interactive CLI) may read or write the clipboard content.
     public var allowWithAgents: Bool
+    /// Formatted text (HTML, RTF) moves with the plain text; nil (configs before 1.0.0-beta.11) means yes.
+    public var keepFormatting: Bool?
 
-    public init(mode: Mode, allowWithAgents: Bool) {
+    public init(mode: Mode, allowWithAgents: Bool, keepFormatting: Bool? = nil) {
         self.mode = mode
         self.allowWithAgents = allowWithAgents
+        self.keepFormatting = keepFormatting
     }
 
-    enum CodingKeys: String, CodingKey, CaseIterable { case mode, allowWithAgents }
+    /// `keepFormatting`, its default applied.
+    public var keepsFormatting: Bool {
+        get { keepFormatting ?? true }
+        set { keepFormatting = newValue }
+    }
+
+    enum CodingKeys: String, CodingKey, CaseIterable { case mode, allowWithAgents, keepFormatting }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
 

@@ -1,6 +1,7 @@
-//! The Windows clipboard (the user-session helper's window station): text, PNG and file lists. Images are read
-//! as the "PNG" format when the copying app put one there, else from the bitmap (CF_DIB) Windows offers for
-//! every image; they are written as both, for apps that paste only bitmaps (`clipformat` converts).
+//! The Windows clipboard (the user-session helper's window station): text, formatted text (HTML and RTF), PNG
+//! and file lists. Images are read as the "PNG" format when the copying app put one there, else from the bitmap
+//! (CF_DIB) Windows offers for every image; they are written as both, for apps that paste only bitmaps
+//! (`clipformat` converts). Files are written with "Preferred DropEffect" copy, so Explorer copies them.
 
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -37,6 +38,29 @@ fn png_format() -> u32 {
     *FORMAT.get_or_init(|| unsafe { RegisterClipboardFormatW(w!("PNG")) })
 }
 
+/// CF_HTML, as browsers and Office copy formatted text.
+fn html_format() -> u32 {
+    static FORMAT: OnceLock<u32> = OnceLock::new();
+    // SAFETY: as above.
+    *FORMAT.get_or_init(|| unsafe { RegisterClipboardFormatW(w!("HTML Format")) })
+}
+
+/// RTF, as WordPad, Word and Outlook copy formatted text.
+fn rtf_format() -> u32 {
+    static FORMAT: OnceLock<u32> = OnceLock::new();
+    // SAFETY: as above.
+    *FORMAT.get_or_init(|| unsafe { RegisterClipboardFormatW(w!("Rich Text Format")) })
+}
+
+/// Whether a paste of CF_HDROP copies or moves (a DWORD DROPEFFECT).
+fn drop_effect_format() -> u32 {
+    static FORMAT: OnceLock<u32> = OnceLock::new();
+    // SAFETY: as above.
+    *FORMAT.get_or_init(|| unsafe { RegisterClipboardFormatW(w!("Preferred DropEffect")) })
+}
+
+const DROPEFFECT_COPY: u32 = 1;
+
 /// Bumped by every change to the clipboard, by anyone.
 pub fn change_count() -> isize {
     // SAFETY: no arguments.
@@ -59,6 +83,12 @@ pub fn available() -> Vec<ClipboardType> {
     }
     if has(CF_UNICODETEXT) {
         types.push(ClipboardType::Text);
+    }
+    if has(html_format()) {
+        types.push(ClipboardType::Html);
+    }
+    if has(rtf_format()) {
+        types.push(ClipboardType::Rtf);
     }
     types
 }
@@ -153,6 +183,13 @@ pub fn read(kind: ClipboardType) -> Option<Content> {
             .map(|bytes| clipformat::paths_from_dropfiles(&bytes))
             .filter(|files| !files.is_empty())
             .map(Content::Files),
+        ClipboardType::Html => clipboard
+            .data(html_format())
+            .and_then(|bytes| clipformat::html_from_cf(&bytes))
+            .map(|html| Content::Bytes(html.into_bytes())),
+        ClipboardType::Rtf => clipboard
+            .data(rtf_format())
+            .map(|bytes| Content::Bytes(clipformat::rtf_from_cf(&bytes))),
     }
 }
 
@@ -175,6 +212,16 @@ pub fn write(items: Vec<(ClipboardType, Content)>) -> std::io::Result<()> {
             }
             (ClipboardType::Files, Content::Files(paths)) => {
                 formats.push((CF_HDROP, clipformat::dropfiles(&paths)));
+                formats.push((drop_effect_format(), DROPEFFECT_COPY.to_le_bytes().to_vec()));
+            }
+            (ClipboardType::Html, Content::Bytes(bytes)) => {
+                let html = String::from_utf8(bytes)
+                    .map_err(|_| std::io::Error::other("clipboard HTML is not UTF-8"))?;
+                formats.push((html_format(), clipformat::html_to_cf(&html)));
+            }
+            (ClipboardType::Rtf, Content::Bytes(mut bytes)) => {
+                bytes.push(0);
+                formats.push((rtf_format(), bytes));
             }
             _ => return Err(std::io::Error::other("the clipboard refused the contents")),
         }
