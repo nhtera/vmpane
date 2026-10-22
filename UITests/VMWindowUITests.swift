@@ -144,6 +144,23 @@ final class VMWindowUITests: XCTestCase {
         XCTAssertTrue(window.exists, "Cancel keeps the VM's app")
     }
 
+    /// While an agent types in the VM (the scenario's agent, `VMPANE_ITEST_AGENT_HUD=1`), the window's HUD offers Take
+    /// Over: pressed, it turns to Resume (the agent's calls are refused meanwhile, which the scenario checks); Resume
+    /// hands the VM back.
+    @MainActor
+    func testAgentHUDTakesOverAndResumes() throws {
+        guard AppUnderTest.environment["VMPANE_ITEST_AGENT_HUD"] == "1" else { throw XCTSkip("run by an itest scenario") }
+        let (vm, _) = try vmWindow()
+        let takeOver = vm.buttons["Take Over"]
+        XCTAssertTrue(takeOver.waitForExistence(timeout: 30), "the HUD shows while the agent acts")
+        takeOver.click()
+        let resume = vm.buttons["Resume"]
+        XCTAssertTrue(resume.waitForExistence(timeout: 5), "taken over")
+        Thread.sleep(forTimeInterval: 4)  // the agent's next calls are refused meanwhile
+        resume.click()
+        XCTAssertTrue(takeOver.waitForExistence(timeout: 5), "handed back")
+    }
+
     /// With the Mac nearly out of memory (the scenario fakes it, `VMPANE_ITEST_LOW_MEMORY=1`), the running VM's window
     /// warns; shut down from its toolbar, the VM's Start asks first: Cancel keeps it off, Start Anyway starts it.
     @MainActor

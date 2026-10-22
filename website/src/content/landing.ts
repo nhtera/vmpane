@@ -94,6 +94,11 @@ export const landing = {
     ],
     defaultLevel: 3,
     hand: "Try a level, watch the log",
+    // A real session (itest/scenarios/mcp-demo.sh; src/content/demo-transcript.txt is its unedited transcript).
+    transcript: {
+      summary: "A real session: Claude Code tests three VMs, one after another",
+      note: "Claude Code was asked in plain words to start macOS, Ubuntu and Windows 11 in turn, snapshot Windows, run a small test in each, read the screen and stop it. Unedited, its recoveries included; answers are cut at 400 characters.",
+    },
     // One agent session, as the MCP tools VMPane ships do it (docs/mcp.md).
     stepsLabel: "An agent session, step by step",
     steps: [

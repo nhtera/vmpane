@@ -1,6 +1,7 @@
 # The real AI clients (Claude Code, Codex CLI, Gemini CLI) against a running Linux VZ guest through `vmpane mcp`:
-# each one, told in plain words, lists the VMs, takes a screenshot, clicks, types (the text arrives in the guest)
-# and runs `uname -s` (its output comes back); the audit log records each call, with the name the client gave.
+# each one, told in plain words, lists the VMs, takes a screenshot, clicks, types with vm_actions (the text arrives in
+# the guest), reads the screen with vm_read_screen and runs `uname -s` (its output comes back); the audit log records
+# each call (a batch and each of its actions), with the name the client gave.
 # `vmpane mcp config <client> --apply` is checked in a temporary home (the real one is compared before and after).
 # The clients run with their own sign-in but get VMPane only for this run (command-line options and a config in
 # a temporary folder): no client config of the person's changes. Each client costs a few model calls, so the
@@ -32,9 +33,10 @@ Use only the tools of the MCP server vmpane_itest. Do these steps in order, with
 1. vm_list, and take the id of the running VM.
 2. vm_screenshot of that VM.
 3. vm_click on that VM at x=10, y=10.
-4. vm_type into that VM the text "hello from $1" followed by a newline (\\n).
-5. vm_exec in that VM with argv ["uname", "-s"] and as "admin".
-Then reply with one line: RESULT: followed by the stdout of step 5.
+4. vm_actions on that VM with one action: type the text "hello from $1", with submit true.
+5. vm_read_screen of that VM.
+6. vm_exec in that VM with argv ["uname", "-s"] and as "admin".
+Then reply with one line: RESULT: followed by the stdout of step 6.
 EOF
 }
 
@@ -81,13 +83,14 @@ mc_check_client() {
         || { it_fail "$client did not report uname (build/itest-logs/mcp-clients-$client.out)"; return 1; }
     it_wait_for 10 grep -qa "VMPANE-TYPED hello from $client" "$bundle/logs/serial.log" \
         || { it_fail "the text $client typed did not arrive in the guest"; return 1; }
-    # (the helper audits its own methods: vm_screenshot, vm_click, vm_type and vm_exec call these)
+    # (the helper audits its own methods: vm_screenshot, vm_click, vm_actions (the batch and its text), vm_read_screen
+    # and vm_exec call these)
     calls=$(jq -r --arg after "$2" 'select(.ts > $after and .kind == "mcp" and .result == "ok") | .method' \
         "$bundle/logs/mcp-audit.jsonl" 2>/dev/null | sort -u | tr '\n' ' ')
-    for method in vm.screenshot vm.input.pointer vm.input.text agent.exec; do
+    for method in vm.screenshot vm.input.pointer vm.input.batch vm.input.text vm.screen.read agent.exec; do
         [[ " $calls" == *" $method "* ]] || { it_fail "$client: no successful $method in the audit log (saw: $calls)"; return 1; }
     done
-    echo "mcp-clients: $client listed, took a screenshot, clicked, typed (arrived) and ran uname ($(jq -r --arg after "$2" \
+    echo "mcp-clients: $client listed, took a screenshot, clicked, typed in a batch (arrived), read the screen and ran uname ($(jq -r --arg after "$2" \
         'select(.ts > $after and .kind == "mcp") | .client' "$bundle/logs/mcp-audit.jsonl" | sort -u | tr '\n' ' '))"
 }
 

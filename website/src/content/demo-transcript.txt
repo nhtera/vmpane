@@ -1,0 +1,107 @@
+→ ToolSearch {"query": "select:mcp__vmpane__vm_list,mcp__vmpane__vm_power,mcp__vmpane__vm_wait,mcp__vmpane__vm_status,mcp__vmpane__vm_exec,mcp__vmpane__vm_read_screen,mcp__vmpane__vm_snapshot_create", "max_results": 7}
+← 
+→ vm_list {}
+← {"vms":[{"id":"7039e2fd","name":"Ubuntu","os":"linux","state":"stopped"},{"id":"41ef6e2f","name":"Windows 11","os":"windows","state":"stopped"},{"id":"ea00458c","name":"macOS","os":"macos","state":"stopped"}]}
+→ vm_power {"vm": "macOS", "action": "start", "wait_for": "guest_tools", "timeout_s": 300}
+← {"guest":{"os":"macos","osVersion":"15.6.1","toolsVersion":"1.0.0-beta.10"},"state":"running"}
+→ vm_exec {"vm": "macOS", "argv": ["/bin/zsh", "-c", "if (( 6 * 7 == 42 )); then echo PASS; else echo FAIL; fi"]}
+← no user session helper is connected
+→ vm_read_screen {"vm": "macOS", "max_items": 60}
+← {"screen":{"h":980,"scale":1.3061224489795917,"w":1568},"source":"ocr","truncated":false,"untrusted_guest_text":{"ocr":[{"id":"t1","rect":[83,8,304,18],"text":"Terminal Shell Edit View"},{"id":"t2","rect":[80,8,92,22],"text":"Terminal"},{"id":"t3","rect":[198,8,49,21],"text":"Shell"},{"id":"t4","rect":[273,8,41,21],"text":"Edit"},{"id":"t5","rect":[339,8,51,21],"text":"View"},{"id":"t6","rect":[41 …
+→ vm_status {"vm": "macOS"}
+← {"agent":{"caps":["exec","file","time","power","net","ports","freeze","reveal","desktop","session.state","ack","clipboard","screen"],"connected":true,"os":"macos","osVersion":"15.6.1","proto":1,"session":true,"version":"1.0.0-beta.10"},"info":{"allowedRequests":["pause","suspend","stop"],"backend":"vz","capabilities":["pause","suspend","liveSnapshot","screenshot","input"],"id":"EA00458C-F357-4407- …
+→ vm_wait {"vm": "macOS", "ms": 10000}
+← waited
+Claude: macOS is up; the first exec failed because the user session helper wasn't connected yet — status now shows a session, retrying.
+→ vm_exec {"vm": "macOS", "argv": ["/bin/zsh", "-c", "if (( 6 * 7 == 42 )); then echo PASS; else echo FAIL; fi"]}
+← {"exitCode":0,"stderr":"","stdout":"PASS\n","timedOut":false,"truncated":false}
+→ vm_read_screen {"vm": "macOS", "max_items": 40, "source": "ocr"}
+← {"screen":{"h":980,"scale":1.3061224489795917,"w":1568},"source":"ocr","truncated":false,"untrusted_guest_text":{"ocr":[{"id":"t25","rect":[83,8,304,18],"text":"Terminal Shell Edit View"},{"id":"t26","rect":[80,8,92,22],"text":"Terminal"},{"id":"t27","rect":[198,8,49,21],"text":"Shell"},{"id":"t28","rect":[273,8,41,21],"text":"Edit"},{"id":"t29","rect":[339,8,51,21],"text":"View"},{"id":"t30","rec …
+→ vm_power {"vm": "macOS", "action": "stop"}
+← {"state":"stopping"}
+→ vm_wait {"vm": "macOS", "ms": 15000}
+← waited
+→ vm_status {"vm": "macOS"}
+← {"agent":{"caps":["exec","file","time","power","net","ports","freeze","reveal","desktop","session.state","ack","clipboard","screen"],"connected":true,"os":"macos","osVersion":"15.6.1","proto":1,"session":true,"version":"1.0.0-beta.10"},"info":{"allowedRequests":["stop"],"backend":"vz","capabilities":["pause","suspend","liveSnapshot","screenshot","input"],"id":"EA00458C-F357-4407-8173-AA3DDDA2FA0A" …
+→ vm_wait {"vm": "macOS", "ms": 30000}
+← waited
+Claude: The macOS test passed. Now I'm waiting for the VM to finish shutting down.
+→ vm_status {"vm": "macOS"}
+← {"agent":{"caps":["exec","file","time","power","net","ports","freeze","reveal","desktop","session.state","ack","clipboard","screen"],"connected":true,"os":"macos","osVersion":"15.6.1","proto":1,"session":true,"version":"1.0.0-beta.10"},"info":{"allowedRequests":["stop"],"backend":"vz","capabilities":["pause","suspend","liveSnapshot","screenshot","input"],"id":"EA00458C-F357-4407-8173-AA3DDDA2FA0A" …
+→ vm_read_screen {"vm": "macOS", "max_items": 60}
+← the VM is stopping
+→ vm_wait {"vm": "macOS", "ms": 60000}
+← waited
+→ vm_status {"vm": "macOS"}
+← {"agent":{"caps":["exec","file","time","power","net","ports","freeze","reveal","desktop","session.state","ack","clipboard","screen"],"connected":true,"os":"macos","osVersion":"15.6.1","proto":1,"session":true,"version":"1.0.0-beta.10"},"info":{"allowedRequests":["stop"],"backend":"vz","capabilities":["pause","suspend","liveSnapshot","screenshot","input"],"id":"EA00458C-F357-4407-8173-AA3DDDA2FA0A" …
+Claude: The guest ignored the power-button stop for over 2 minutes; its tools are still connected. I'll ask macOS to shut down from inside instead.
+→ vm_exec {"vm": "macOS", "command": "shutdown -h now", "as": "admin", "timeout_s": 30}
+← {"exitCode":0,"stderr":"","stdout":"Shutdown NOW!\n\r\nSystem shutdown time has arrived\u0007\u0007\r\n","timedOut":false,"truncated":false}
+→ vm_wait {"vm": "macOS", "ms": 20000}
+← waited
+→ vm_status {"vm": "macOS"}
+← {"agent":{"connected":false},"info":{"allowedRequests":["start"],"backend":"vz","capabilities":["pause","suspend","liveSnapshot","screenshot","input"],"id":"EA00458C-F357-4407-8173-AA3DDDA2FA0A","name":"macOS","os":"macos","pendingRestart":false,"policy":"admin","policyTampered":false,"state":"stopped","suspended":false}}
+Claude: macOS is stopped. Starting Ubuntu.
+→ vm_power {"vm": "Ubuntu", "action": "start", "wait_for": "guest_tools", "timeout_s": 300}
+← {"guest":{"os":"linux","osVersion":"Ubuntu 24.04.5 LTS","toolsVersion":"1.0.0-beta.10"},"state":"running"}
+→ vm_exec {"vm": "Ubuntu", "argv": ["/bin/sh", "-c", "if [ $((6 * 7)) -eq 42 ]; then echo PASS; else echo FAIL; fi"]}
+← no user session helper is connected
+→ vm_wait {"vm": "Ubuntu", "ms": 10000}
+→ vm_exec {"vm": "Ubuntu", "argv": ["/bin/sh", "-c", "if [ $((6 * 7)) -eq 42 ]; then echo PASS; else echo FAIL; fi"]}
+← waited
+← no user session helper is connected
+→ vm_read_screen {"vm": "Ubuntu", "max_items": 60}
+→ vm_status {"vm": "Ubuntu"}
+← {"agent":{"caps":["exec","file","time","power","net","ports","freeze","reveal","desktop","session.state"],"connected":true,"os":"linux","osVersion":"Ubuntu 24.04.5 LTS","proto":1,"session":false,"version":"1.0.0-beta.10"},"info":{"allowedRequests":["pause","suspend","stop"],"backend":"vz","capabilities":["pause","suspend","liveSnapshot","screenshot","input"],"id":"7039E2FD-1CFC-4DB4-B97E-130FF8030 …
+← {"screen":{"h":983,"scale":1.3673469387755102,"w":1568},"source":"ocr","truncated":true,"untrusted_guest_text":{"ocr":[{"id":"t1","rect":[39,1,412,12],"text":"] Started fstrim.timer - Discard unused filesystem blocks once a week."},{"id":"t2","rect":[3,2,166,10],"text":"I OK I Started fstrim.timer"},{"id":"t3","rect":[17,2,12,10],"text":"OK"},{"id":"t4","rect":[50,13,372,12],"text":"Started fwupd- …
+Claude: Ubuntu is still booting (systemd log on screen, no user session yet). Waiting a bit longer.
+→ vm_wait {"vm": "Ubuntu", "ms": 30000}
+→ vm_status {"vm": "Ubuntu"}
+← {"agent":{"caps":["exec","file","time","power","net","ports","freeze","reveal","desktop","session.state"],"connected":true,"os":"linux","osVersion":"Ubuntu 24.04.5 LTS","proto":1,"session":false,"version":"1.0.0-beta.10"},"info":{"allowedRequests":["pause","suspend","stop"],"backend":"vz","capabilities":["pause","suspend","liveSnapshot","screenshot","input"],"id":"7039E2FD-1CFC-4DB4-B97E-130FF8030 …
+← waited
+Claude: Still no user session — this Ubuntu may never get a graphical login without someone signing in. I'll run the test as admin, which doesn't need one.
+→ vm_exec {"vm": "Ubuntu", "argv": ["/bin/sh", "-c", "if [ $((6 * 7)) -eq 42 ]; then echo PASS; else echo FAIL; fi"], "as": "admin"}
+← {"exitCode":0,"stderr":"","stdout":"PASS\n","timedOut":false,"truncated":false}
+→ vm_read_screen {"vm": "Ubuntu", "max_items": 40, "region": {"x": 0, "y": 600, "width": 1568, "height": 383}}
+← {"screen":{"h":983,"scale":1.3673469387755102,"w":1568},"source":"ocr","truncated":true,"untrusted_guest_text":{"ocr":[{"id":"t61","rect":[18,600,13,8],"text":"OK"},{"id":"t62","rect":[49,600,183,10],"text":"Finished plymouth-quit.service"},{"id":"t63","rect":[246,600,183,10],"text":"Terminate Plymouth Boot Screen."},{"id":"t64","rect":[50,610,290,12],"text":"Starting setvtrgb.service - Set consol …
+→ vm_power {"vm": "Ubuntu", "action": "stop"}
+← {"state":"stopping"}
+→ vm_wait {"vm": "Ubuntu", "ms": 20000}
+→ vm_status {"vm": "Ubuntu"}
+← {"agent":{"connected":false},"info":{"allowedRequests":["start"],"backend":"vz","capabilities":["pause","suspend","liveSnapshot","screenshot","input"],"id":"7039E2FD-1CFC-4DB4-B97E-130FF803011B","name":"Ubuntu","os":"linux","pendingRestart":false,"policy":"admin","policyTampered":false,"state":"stopped","suspended":false}}
+← waited
+Claude: Ubuntu is stopped. Starting Windows 11.
+→ vm_power {"vm": "Windows 11", "action": "start", "wait_for": "guest_tools", "timeout_s": 400}
+← {"guest":{"os":"windows","osVersion":"10.0.26300.9457","toolsVersion":"1.0.0-beta.1"},"state":"running"}
+→ vm_snapshot_create {"vm": "Windows 11", "name": "before tests"}
+← {"backendVersion":"1.0.0-beta.10","crashConsistent":false,"createdAt":"2026-10-22T12:27:23Z","deviceSetHash":"7f40d285c474199e0f16d1738f591e0232627c089ce98c8a94f4f1409755a871","generationId":"5FE278DB-EF0C-4438-B49D-41ECD0CEC597","hostBuild":"24G419","id":"41EA6E20-DC57-4348-9534-819FBB174FC8","includesMemory":true,"kind":"live","name":"before tests","origin":"user","schemaVersion":1,"sizeBytes":1 …
+→ vm_exec {"vm": "Windows 11", "argv": ["powershell.exe", "-NoProfile", "-Command", "if (6 * 7 -eq 42) { 'PASS' } else { 'FAIL' }"]}
+← no user session helper is connected
+→ vm_wait {"vm": "Windows 11", "ms": 15000}
+→ vm_status {"vm": "Windows 11"}
+← {"agent":{"caps":["exec","file","time","power","net","ports","freeze","reveal"],"connected":true,"os":"windows","osVersion":"10.0.26300.9457","proto":1,"session":false,"version":"1.0.0-beta.1"},"info":{"allowedRequests":["pause","suspend","stop"],"backend":"qemu","capabilities":["pause","suspend","liveSnapshot","screenshot","input"],"id":"41EF6E2F-59F9-4F09-87BB-DD9C44BF78A2","name":"Windows 11"," …
+← waited
+Claude: No user session on Windows either (probably at the sign-in screen), so I'm running the test as admin, same as on Ubuntu.
+→ vm_exec {"vm": "Windows 11", "argv": ["powershell.exe", "-NoProfile", "-Command", "if (6 * 7 -eq 42) { 'PASS' } else { 'FAIL' }"], "as": "admin"}
+← {"exitCode":0,"stderr":"","stdout":"PASS\r\n","timedOut":false,"truncated":false}
+→ vm_read_screen {"vm": "Windows 11", "max_items": 60}
+← {"screen":{"h":800,"scale":1,"w":1280},"source":"ocr","truncated":false,"untrusted_guest_text":{"ocr":[{"id":"t1","rect":[521,146,234,76],"text":"12:27"},{"id":"t2","rect":[542,249,199,23],"text":"Thursday, October 22"}]}}
+→ vm_power {"vm": "Windows 11", "action": "stop"}
+← {"state":"stopping"}
+→ vm_wait {"vm": "Windows 11", "ms": 30000}
+→ vm_status {"vm": "Windows 11"}
+← {"agent":{"connected":false},"info":{"allowedRequests":["start"],"backend":"qemu","capabilities":["pause","suspend","liveSnapshot","screenshot","input"],"id":"41EF6E2F-59F9-4F09-87BB-DD9C44BF78A2","name":"Windows 11","os":"windows","pendingRestart":false,"policy":"admin","policyTampered":false,"state":"stopped","suspended":false}}
+← waited
+Claude: All three VMs ran in order, all three tests printed PASS, and all three VMs are stopped again.
+
+| VM | Test output | What was on the screen |
+|---|---|---|
+| macOS | `PASS` | A Terminal window with an idle zsh prompt and a "Restored session" message above it. |
+| Ubuntu | `PASS` | The text console showing systemd boot messages, ending with VMPane's test services starting; there was no desktop or login prompt. |
+| Windows 11 | `PASS` | The lock screen showing the time (12:27) and "Thursday, October 22". |
+
+Things that didn't go as planned:
+- **macOS shutdown:** the normal stop request did nothing; the VM stayed in "stopping" for over two minutes. I then ran `shutdown -h now` inside macOS as admin, and it shut down cleanly.
+- **Ubuntu and Windows tests ran as admin:** nobody was logged in on either VM, so a command can't run as the logged-in user. I ran the same test as admin instead.
+- **Windows snapshot:** "before tests" was taken right after Windows started, while it was at the lock screen. It includes memory and is about 13.5 GB.
+[done: 44 turns, 390 s]

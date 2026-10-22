@@ -237,6 +237,15 @@
     font: 600 13px/1 var(--f-sans); color: var(--t-orange); background: color-mix(in srgb, var(--orange) 18%, transparent);
   }
   .agent-steps b { font-size: 16px; }
+  .transcript { max-width: 960px; margin: 32px auto 0; }
+  .transcript summary { cursor: pointer; font-weight: 600; color: var(--text); }
+  .transcript p { color: var(--text-2); font-size: 15px; margin: 10px 0; }
+  .transcript pre {
+    font: 400 12.5px/1.55 var(--f-mono); background: var(--band); border-radius: 12px; padding: 14px 16px; margin: 0;
+    max-height: 520px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-2);
+  }
+  .transcript .call { color: var(--text); }
+  .transcript .said { color: var(--text); font-weight: 600; }
   .agent-steps span { grid-column: 2; color: var(--text-2); font-size: 15px; }
 
   /* ---------- safety bento ---------- */

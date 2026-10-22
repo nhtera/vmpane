@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useState } from "react";
 import { landing } from "@/content/landing";
+import transcript from "@/content/demo-transcript.txt?raw";
 import { RichText } from "./rich-text";
 import { ActivityMock, SettingsMock } from "./mocks";
 
@@ -65,6 +66,18 @@ export function AgentsDemo() {
             </li>
           ))}
         </ol>
+        <details className="transcript">
+          <summary>{t.transcript.summary}</summary>
+          <p>{t.transcript.note}</p>
+          <pre tabIndex={0} role="region" aria-label={t.transcript.summary}>
+            {transcript.split("\n").map((line, i) => (
+              <span key={i} className={line.startsWith("→") ? "call" : line.startsWith("←") ? "reply" : line.startsWith("Claude:") ? "said" : undefined}>
+                {line}
+                {"\n"}
+              </span>
+            ))}
+          </pre>
+        </details>
       </div>
     </section>
   );

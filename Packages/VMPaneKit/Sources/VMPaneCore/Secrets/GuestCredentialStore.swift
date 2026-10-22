@@ -1,3 +1,4 @@
+import CoreServices
 import Foundation
 import Security
 
@@ -64,20 +65,31 @@ struct KeychainGuestCredentials: GuestCredentialStore {
         return String(data: data, encoding: .utf8)
     }
 
-    /// Written by the app: trusted are the app and the VM helper inside it.
+    /// Written by the app (a new VM) or by a VM's helper (its settings): trusted are VMPane and the VM helper inside
+    /// it, whichever writes (the helper runs from a runtime copy, so it finds the app by its bundle id), and the writer.
     func save(_ password: String, for vm: UUID, name: String) throws {
         try delete(for: vm)
-        let app = Bundle.main.bundleURL
-        let helper = app.appendingPathComponent("Contents/Helpers/VMPaneVM.app", isDirectory: true)
         var item = query(vm)
         item[kSecValueData as String] = Data(password.utf8)
         item[kSecAttrLabel as String] = "VMPane sign-in: \(name)"
         item[kSecAttrDescription as String] = "Password VMPane types to sign in to the VM"
-        if let access = (LegacyKeychain.self as TrustedAccess.Type).access(label: "VMPane sign-in", trusting: [app, helper]) {
+        if let access = (LegacyKeychain.self as TrustedAccess.Type).access(label: "VMPane sign-in", trusting: Self.trustedApps()) {
             item[kSecAttrAccess as String] = access
         }
         let status = SecItemAdd(item as CFDictionary, nil)
         guard status == errSecSuccess else { throw Self.error("save", status) }
+    }
+
+    /// VMPane, its VM helper, and the writing process's own bundle (an entry holds each one's designated requirement).
+    static func trustedApps(main: Bundle = .main) -> [URL] {
+        let installed = LSCopyApplicationURLsForBundleIdentifier(VMPane.SigningIdentifier.app as CFString, nil)?.takeRetainedValue()
+        let app = main.bundleIdentifier == VMPane.SigningIdentifier.app ? main.bundleURL : (installed as? [URL])?.first
+        var apps = [main.bundleURL]
+        if let app {
+            apps += [app, app.appendingPathComponent("Contents/Helpers/VMPaneVM.app", isDirectory: true)]
+        }
+        var seen = Set<String>()
+        return apps.filter { FileManager.default.fileExists(atPath: $0.path) && seen.insert($0.standardizedFileURL.path).inserted }
     }
 
     func has(_ vm: UUID) -> Bool {

@@ -9,10 +9,12 @@ only the rest is done by hand.
       *Tested:* notarization and Gatekeeper (`release.sh build-candidate`, release-verify), the welcome on a first
       launch (ui-smoke), `install-cli --user` (cli-e2e). *By hand:* the new account's first-run prompts, and
       `install-cli` with its administrator prompt.
-- [ ] Wizard, each guest OS: macOS (IPSW), Ubuntu (ISO), Windows 11 (ISO, unattended): installs to a desktop;
-      the guest tools install; the VM restarts cleanly.
-      *Tested:* the installs themselves (macos-install, linux-iso-install, win-install). *By hand:* the wizard's
-      screens up to the start of each install.
+- [ ] New VM, each card: macOS (IPSW), Ubuntu, Debian and Fedora (cloud images, nothing typed), Windows 11 (ISO,
+      unattended, from Customize); a dropped .iso/.ipsw opens the sheet with its system. Each is made in the background
+      and installs to a desktop or a login prompt with the guest tools.
+      *Tested:* the cards and Customize (ui-smoke's LibraryUITests), cloud images (linux-cloud), the installs
+      (macos-install, linux-iso-install, win-install), dropped ISOs read in place (unit tests). *By hand:* a card's
+      Create through to the running VM, and a drop on the Dock icon.
 - [ ] Dock: each running VM has its own Dock tile with its icon; the Dock menu acts on it.
       *Tested:* the VM's own app has a menu bar, and its Quit asks while the VM runs (ui-smoke).
       *By hand:* the tile's icon and its menu (UITests' testDockMenuActsOnTheVM, when the Dock is not auto-hidden).
@@ -27,9 +29,17 @@ only the rest is done by hand.
 - [ ] AI agents with the real clients: Claude Code, Codex CLI and Gemini CLI each, after `vmpane mcp config
       <client> --apply` on a clean account: list → screenshot → click → type → exec (the confirmation shows) →
       undo the session. Stop All AI Agents ends a running command.
-      *Tested:* each installed client drives a VM through list, screenshot, click, type and exec, and `mcp config
-      --apply` in a temporary home (`VMPANE_ITEST_AI_CLIENTS=1 scripts/itest.sh mcp-clients`; it uses the clients'
-      model quota); the kill switch (mcp-killswitch). *By hand:* the exec confirmation and the undo, in the app.
+      *Tested:* each installed client drives a VM through list, screenshot, click, a vm_actions batch, vm_read_screen
+      and exec, and `mcp config --apply` in a temporary home (`VMPANE_ITEST_AI_CLIENTS=1 scripts/itest.sh
+      mcp-clients`; it uses the clients' model quota); the kill switch (mcp-killswitch); the HUD's Take Over and
+      Resume while an agent types (agent-hud). *By hand:* the exec confirmation (now a sheet in the VM's window) and
+      the undo, in the app.
+- [ ] Agent sign-in on the Developer ID build: turn on "Let agents sign in" for a Windows or macOS VM, keep its
+      password, lock the guest, `vm_sign_in` from a client: it signs in with no Keychain question; the inspector's
+      Copy Password gives the same password.
+      *Tested:* unsigned builds, with the development store (desktop-sign-in); the Keychain item's access list (the
+      app and its VM helper by designated requirement) and the app's read (by hand on 2026-10-22). *By hand:* the
+      helper's read on the candidate.
 - [ ] `vmpane doctor --diagnostics ~/Desktop/d.zip`: the zip has no passwords, keys, disks, ISOs or memory.
       *Tested:* with a running VM (cli-e2e).
 - [ ] The website's download link and the Homebrew cask point at this release's DMG; `SHA256SUMS` matches.
