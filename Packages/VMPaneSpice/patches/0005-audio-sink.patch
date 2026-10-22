@@ -1,0 +1,239 @@
+diff --git a/CocoaSpice/CSConnection.m b/CocoaSpice/CSConnection.m
+index 936842d..f0732ad 100644
+--- a/CocoaSpice/CSConnection.m
++++ b/CocoaSpice/CSConnection.m
+@@ -38,6 +38,8 @@
+ @property (nonatomic, readwrite) SpiceSession *spiceSession;
+ @property (nonatomic, readwrite) SpiceMainChannel *spiceMain;
+ @property (nonatomic, readwrite) SpiceAudio *spiceAudio;
++@property (nonatomic, readwrite, nullable) SpicePlaybackChannel *spicePlayback;
++@property (nonatomic, readwrite, nullable) SpiceRecordChannel *spiceRecord;
+ 
+ @end
+ 
+@@ -171,6 +173,68 @@ static void cs_port_opened(SpiceChannel *channel, GParamSpec *pspec,
+     }
+ }
+ 
++// VMPane: the playback and record channels for the audio sink (CSAudioSink).
++#define CS_VOLUME_NORMAL 65535.0f
++
++static void cs_playback_start(SpicePlaybackChannel *channel, gint format, gint channels, gint rate, gpointer data)
++{
++    CSConnection *self = (__bridge CSConnection *)data;
++    if (format == SPICE_AUDIO_FMT_S16) {
++        [self.audioSink playbackStartWithChannels:channels rate:rate];
++    }
++}
++
++static void cs_playback_data(SpicePlaybackChannel *channel, gpointer audio, gint size, gpointer data)
++{
++    CSConnection *self = (__bridge CSConnection *)data;
++    [self.audioSink playbackData:audio size:size];
++}
++
++static void cs_playback_stop(SpicePlaybackChannel *channel, gpointer data)
++{
++    CSConnection *self = (__bridge CSConnection *)data;
++    [self.audioSink playbackStop];
++}
++
++static float cs_volume(GObject *channel, gboolean *mute)
++{
++    guint16 *volume = NULL;
++    guint nchannels = 0;
++    g_object_get(channel, "volume", &volume, "nchannels", &nchannels, "mute", mute, NULL);
++    // "volume" is a pointer property: the channel's own array, not a copy (never freed here).
++    return (volume != NULL && nchannels > 0) ? volume[0] / CS_VOLUME_NORMAL : 1.0f;
++}
++
++static void cs_playback_volume(GObject *channel, GParamSpec *pspec, gpointer data)
++{
++    CSConnection *self = (__bridge CSConnection *)data;
++    gboolean mute = FALSE;
++    float volume = cs_volume(channel, &mute);
++    [self.audioSink playbackVolume:volume muted:mute];
++}
++
++static void cs_record_start(SpiceRecordChannel *channel, gint format, gint channels, gint rate, gpointer data)
++{
++    CSConnection *self = (__bridge CSConnection *)data;
++    if (format == SPICE_AUDIO_FMT_S16) {
++        [self.audioSink recordStartWithChannels:channels rate:rate];
++    }
++}
++
++static void cs_record_stop(SpiceRecordChannel *channel, gpointer data)
++{
++    CSConnection *self = (__bridge CSConnection *)data;
++    [self.audioSink recordStop];
++}
++
++static void cs_record_volume(GObject *channel, GParamSpec *pspec, gpointer data)
++{
++    CSConnection *self = (__bridge CSConnection *)data;
++    gboolean mute = FALSE;
++    float volume = cs_volume(channel, &mute);
++    [self.audioSink recordVolume:volume muted:mute];
++}
++
+ static void cs_channel_new(SpiceSession *s, SpiceChannel *channel, gpointer data)
+ {
+     CSConnection *self = (__bridge CSConnection *)data;
+@@ -239,11 +303,28 @@ static void cs_channel_new(SpiceSession *s, SpiceChannel *channel, gpointer data
+         if (self.audioEnabled) {
+             self.spiceAudio = spice_audio_get(s, [CSMain sharedInstance].glibMainContext);
+             spice_channel_connect(channel);
++        } else if (self.audioSink) {
++            self.spicePlayback = SPICE_PLAYBACK_CHANNEL(channel);
++            g_signal_connect(channel, "playback-start", G_CALLBACK(cs_playback_start), data);
++            g_signal_connect(channel, "playback-data", G_CALLBACK(cs_playback_data), data);
++            g_signal_connect(channel, "playback-stop", G_CALLBACK(cs_playback_stop), data);
++            g_signal_connect(channel, "notify::volume", G_CALLBACK(cs_playback_volume), data);
++            g_signal_connect(channel, "notify::mute", G_CALLBACK(cs_playback_volume), data);
++            spice_channel_connect(channel);
+         } else {
+             SPICE_DEBUG("audio disabled");
+         }
+     }
+ 
++    if (SPICE_IS_RECORD_CHANNEL(channel) && !self.audioEnabled && self.audioSink) {
++        self.spiceRecord = SPICE_RECORD_CHANNEL(channel);
++        g_signal_connect(channel, "record-start", G_CALLBACK(cs_record_start), data);
++        g_signal_connect(channel, "record-stop", G_CALLBACK(cs_record_stop), data);
++        g_signal_connect(channel, "notify::volume", G_CALLBACK(cs_record_volume), data);
++        g_signal_connect(channel, "notify::mute", G_CALLBACK(cs_record_volume), data);
++        spice_channel_connect(channel);
++    }
++
+     if (SPICE_IS_PORT_CHANNEL(channel)) {
+         SPICE_DEBUG("new port channel");
+         CSPort *port = [[CSPort alloc] initWithChannel:SPICE_PORT_CHANNEL(channel)];
+@@ -282,6 +363,17 @@ static void cs_channel_destroy(SpiceSession *s, SpiceChannel *channel, gpointer
+     if (SPICE_IS_PLAYBACK_CHANNEL(channel)) {
+         SPICE_DEBUG("zap audio channel");
+         self.spiceAudio = NULL;
++        if ((SpiceChannel *)self.spicePlayback == channel) {
++            g_signal_handlers_disconnect_by_data(channel, data);
++            self.spicePlayback = NULL;
++            [self.audioSink playbackStop];
++        }
++    }
++
++    if (SPICE_IS_RECORD_CHANNEL(channel) && (SpiceChannel *)self.spiceRecord == channel) {
++        g_signal_handlers_disconnect_by_data(channel, data);
++        self.spiceRecord = NULL;
++        [self.audioSink recordStop];
+     }
+     
+     if (SPICE_IS_PORT_CHANNEL(channel)) {
+@@ -412,6 +504,12 @@ end:
+         if (self.spiceMain) {
+             cs_channel_destroy(spiceSession, SPICE_CHANNEL(self.spiceMain), data);
+         }
++        if (self.spicePlayback) {
++            g_signal_handlers_disconnect_by_data(self.spicePlayback, data);
++        }
++        if (self.spiceRecord) {
++            g_signal_handlers_disconnect_by_data(self.spiceRecord, data);
++        }
+         g_object_unref(spiceSession);
+     }];
+ }
+@@ -476,4 +574,13 @@ end:
+     spice_session_disconnect(self.spiceSession);
+ }
+ 
++- (void)sendRecordedAudio:(NSData *)data {
++    [CSMain.sharedInstance asyncWith:^{
++        if (self.spiceRecord) {
++            // The time stamp is not used by the server (spice-gtk's own audio sends 0 too).
++            spice_record_channel_send_data(self.spiceRecord, (gpointer)data.bytes, data.length, 0);
++        }
++    }];
++}
++
+ @end
+diff --git a/CocoaSpice/CSMain.m b/CocoaSpice/CSMain.m
+index 6fecd09..295cdce 100644
+--- a/CocoaSpice/CSMain.m
++++ b/CocoaSpice/CSMain.m
+@@ -90,7 +90,7 @@ void *spice_main_loop(void *args) {
+     CSMain *self = (__bridge_transfer CSMain *)args;
+     
+     pthread_setname_np("SPICE Main Loop");
+-    // VMPane: no GStreamer initialisation. Audio goes through QEMU and the server never streams video
++    // VMPane: no GStreamer initialisation. Audio goes to the app's own sink (CSAudioSink) and the server never streams video
+     // (streaming-video=off), and gst_ios_init would override HOME, TMPDIR and XDG_* process-wide.
+     
+     g_main_context_ref(self->_main_context);
+diff --git a/CocoaSpice/include/CSAudioSink.h b/CocoaSpice/include/CSAudioSink.h
+new file mode 100644
+index 0000000..1513dbb
+--- /dev/null
++++ b/CocoaSpice/include/CSAudioSink.h
+@@ -0,0 +1,27 @@
++//
++// Copyright © 2026 VMPane. Apache-2.0.
++//
++
++#import <Foundation/Foundation.h>
++
++NS_ASSUME_NONNULL_BEGIN
++
++/// Receives a session's sound when CocoaSpice's own (GStreamer) audio is off: the guest's playback, and requests
++/// for recorded sound (answered with `-[CSConnection sendRecordedAudio:]`). Samples are signed 16-bit, interleaved.
++/// Every method is called on the SPICE main loop thread.
++@protocol CSAudioSink <NSObject>
++
++- (void)playbackStartWithChannels:(int)channels rate:(int)rate;
++- (void)playbackData:(const void *)data size:(int)size;
++- (void)playbackStop;
++/// The guest's volume (0 to 1) and mute for its playback.
++- (void)playbackVolume:(float)volume muted:(BOOL)muted;
++
++- (void)recordStartWithChannels:(int)channels rate:(int)rate;
++- (void)recordStop;
++/// The guest's volume (0 to 1) and mute for its recording.
++- (void)recordVolume:(float)volume muted:(BOOL)muted;
++
++@end
++
++NS_ASSUME_NONNULL_END
+diff --git a/CocoaSpice/include/CSConnection.h b/CocoaSpice/include/CSConnection.h
+index 0fee1bd..5081371 100644
+--- a/CocoaSpice/include/CSConnection.h
++++ b/CocoaSpice/include/CSConnection.h
+@@ -20,6 +20,7 @@
+ 
+ @class CSDisplay;
+ @class CSUSBManager;
++@protocol CSAudioSink;
+ 
+ NS_ASSUME_NONNULL_BEGIN
+ 
+@@ -61,6 +62,12 @@ NS_ASSUME_NONNULL_BEGIN
+ /// When enabled, gstreamer is used to provide audio input/output. Defaults to disabled
+ @property (nonatomic, assign) BOOL audioEnabled;
+ 
++/// With `audioEnabled` off: receives the playback and record channels' sound instead (set before `connect`).
++@property (nonatomic, weak, nullable) id<CSAudioSink> audioSink;
++
++/// Sends recorded sound (signed 16-bit, interleaved, as the sink's `recordStart` asked) to the record channel.
++- (void)sendRecordedAudio:(NSData *)data;
++
+ - (instancetype)init NS_UNAVAILABLE;
+ 
+ /// Create a new TCP connection
+diff --git a/CocoaSpice/include/CocoaSpice.h b/CocoaSpice/include/CocoaSpice.h
+index acc837b..b024fbc 100644
+--- a/CocoaSpice/include/CocoaSpice.h
++++ b/CocoaSpice/include/CocoaSpice.h
+@@ -17,6 +17,7 @@
+ #ifndef CocoaSpice_h
+ #define CocoaSpice_h
+ 
++#include "CSAudioSink.h"
+ #include "CSChannel.h"
+ #include "CSConnection.h"
+ #include "CSConnectionDelegate.h"

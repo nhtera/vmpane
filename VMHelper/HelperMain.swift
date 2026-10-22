@@ -331,7 +331,8 @@ extension HelperDelegate {
                 case .running, .paused:
                     if state == .running {
                         let current = await controller.currentConfig
-                        display.configure(display: current.display.fields, clipboard: current.clipboard.fields.mode)
+                        display.configure(
+                            display: current.display.fields, clipboard: current.clipboard.fields.mode, audio: current.audio.fields)
                     }
                     display.connect(afterStart: state == .running)
                     if state == .running, !(await controller.startedHeadless), !shown {

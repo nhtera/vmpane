@@ -20,7 +20,7 @@ back to software emulation, and the TCG code (the largest single part of QEMU) i
 | `VIRTIO_GPU` | display after viogpudo is installed (ramfb before) |
 | `USB_XHCI_PCI`, `USB_HID` | keyboard and absolute pointer |
 | `USB_NETWORK` | networking without drivers during Windows setup (optional profile) |
-| `USB_AUDIO`, `HDA` | sound (intel-hda + hda-output/hda-duplex: inbox Windows driver) |
+| `USB_AUDIO`, `HDA` | sound (intel-hda + hda-output, or hda-micro with the microphone on: inbox Windows driver), over SPICE |
 | `TPM_TIS_SYSBUS`, `TPM_EMULATOR` | TPM 2.0 for Windows 11, backed by swtpm |
 | `PVPANIC_PCI` | guest crash reporting |
 

@@ -24,6 +24,10 @@ public enum QEMUDeviceProfile: Sendable, Equatable {
     /// (usb-storage) share its USB 2 ports: the default 4 leave room for two discs, an install needs three.
     var inputDevices: [String] { ["qemu-xhci,id=xhci,p2=8,p3=8", "usb-kbd,bus=xhci.0", "usb-tablet,bus=xhci.0"] }
 
-    /// HDA with the inbox Windows driver (S2). QEMU's CoreAudio backend only plays sound, so output only.
-    var audioDevices: [String] { ["intel-hda,id=hda", "hda-output,bus=hda.0,audiodev=snd0"] }
+    /// HDA with the inbox Windows driver (S2), on the `spice` audiodev: the helper plays and records through SPICE
+    /// (QEMU's CoreAudio backend cannot record). A speaker, plus a microphone (`hda-micro`, which Windows names
+    /// "Microphone") when the VM's microphone setting is on.
+    func audioDevices(microphone: Bool) -> [String] {
+        ["intel-hda,id=hda", microphone ? "hda-micro,bus=hda.0,audiodev=snd0" : "hda-output,bus=hda.0,audiodev=snd0"]
+    }
 }

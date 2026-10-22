@@ -121,7 +121,7 @@ Choices that are not obvious from the recipes (`scripts/lib/recipes.sh`):
 - **swtpm:** only `swtpm` is built. It creates a fresh TPM state on first start; Windows 11 needs no EK
   certificate, so `swtpm_setup` and the certificate tools (which need GnuTLS and GMP) are not shipped.
 - **GStreamer:** core and base libraries only, no plugins and no pipeline-string parser. spice-gtk cannot
-  link without them; VMPane plays guest audio through QEMU's CoreAudio backend, not SPICE.
+  link without them; VMPane does not use them for sound either: it goes over SPICE to the helper's own CoreAudio code.
 - **spice-gtk** carries UTM's patch set (Apache-2.0, see `LICENSES/UTM`), which CocoaSpice needs.
 - **pcre2** has no JIT: QEMU's hardened runtime has no `allow-jit` entitlement.
 - **dtc** (libfdt) is built separately because QEMU's copy is a download-only subproject.
@@ -135,8 +135,9 @@ Choices that are not obvious from the recipes (`scripts/lib/recipes.sh`):
   only its VM's bundle and run directory; QEMU may also open HVF and use slirp networking. The
   `qemu-sandbox` itest boots the firmware with both sandboxed, checks that each is denied a file outside its
   VM, and with `VMPANE_SIGN_IDENTITY` set does so with release-signed (hardened runtime) binaries.
-- **Sound** is QEMU's CoreAudio backend, which only plays: guest microphone input has to come through SPICE
-  in the helper. QEMU therefore has no `audio-input` entitlement.
+- **Sound** goes over SPICE (`-audiodev spice`): the helper plays the guest's sound and, with the VM's microphone
+  on, records the Mac's microphone for it (QEMU's CoreAudio backend cannot record, issue #7). QEMU has no
+  `audio-input` entitlement, and its sandbox no access to the audio daemons.
 
 ## CI and provenance
 

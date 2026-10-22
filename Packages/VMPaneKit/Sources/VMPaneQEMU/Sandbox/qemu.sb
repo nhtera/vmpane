@@ -27,14 +27,7 @@
 (allow ipc-posix-shm-read-data ipc-posix-shm-read-metadata
   (ipc-posix-name-prefix "apple.shm.notification_center"))
 
-;; Guest sound through CoreAudio (-audiodev coreaudio): the audio daemons and their shared-memory buffers
-(allow mach-lookup
-  (global-name "com.apple.audio.coreaudiod")
-  (global-name "com.apple.audio.audiohald")
-  (global-name "com.apple.audio.AudioComponentRegistrar"))
-(allow ipc-posix-shm-read-data ipc-posix-shm-read-metadata ipc-posix-shm-write-data
-  (ipc-posix-name-regex #"^AudioIO"))
-(allow file-read* (subpath "/Library/Audio") (subpath "/Library/Preferences/Audio"))
+;; No CoreAudio: guest sound goes over SPICE (-audiodev spice) to the helper, which plays and records it.
 
 ;; Hypervisor.framework (the binary also carries the hypervisor entitlement)
 (allow iokit-open (iokit-user-client-class "AppleHVUserClient"))

@@ -33,6 +33,11 @@ the library and the new-VM sheet are rebuilt.
 - Keys or mouse buttons an agent left held down are let go when you take over or the agent leaves.
 
 ### Fixed
+- Windows VMs had no microphone: QEMU's CoreAudio backend only plays sound, so Windows got a speaker and nothing to
+  record from. Their sound now goes over SPICE to the VM's own window process, which plays it and, with Microphone
+  on, gives Windows a microphone fed by the Mac's; QEMU no longer reaches the Mac's audio at all (#7). macOS asks
+  once whether "VMPane VM" may use the microphone, the first time Windows records. A Windows VM suspended or
+  snapshotted before this version with Microphone on may show its microphone only after Windows restarts.
 - Cancelling a Parallels import or a cloud-image create just before its conversion started could crash VMPane.
 
 ## [1.0.0-beta.10]

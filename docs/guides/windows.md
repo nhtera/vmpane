@@ -72,6 +72,15 @@ window and:
 - **Windows is installed but has no network or a small screen**: attach the guest tools and run `install.ps1`
   as shown above, then shut Windows down and start the VM again.
 
+## Sound and microphone
+
+Windows plays through the Mac's output (Settings › Sharing › **Sound output**), and with **Microphone** on it gets a
+microphone fed by the Mac's: the VM's window process plays and records it over SPICE, and QEMU never touches the Mac's
+audio. The Mac's microphone is open only while something in Windows records (its menu bar shows it then). The first
+time that happens, macOS asks whether "VMPane VM" may use the microphone; it can be a VM running without its window,
+or one an agent uses, so the question may come while you are not looking at it. Until you allow it (System Settings ›
+Privacy & Security › Microphone), Windows records silence.
+
 ## Limits
 
 - No 3D acceleration (the display is a 2D virtio GPU).

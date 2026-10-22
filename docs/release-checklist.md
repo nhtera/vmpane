@@ -34,6 +34,10 @@ only the rest is done by hand.
       mcp-clients`; it uses the clients' model quota); the kill switch (mcp-killswitch); the HUD's Take Over and
       Resume while an agent types (agent-hud). *By hand:* the exec confirmation (now a sheet in the VM's window) and
       the undo, in the app.
+- [ ] Windows microphone: with Microphone on, a microphone test in the guest (e.g. a browser's) hears the Mac's
+      microphone, after macOS asks once whether "VMPane VM" may use it; with it off, Windows has no microphone.
+      *Tested:* Windows lists a speaker and a microphone, its sound and its recording reach the helper over SPICE
+      (win-audio; the Mac's microphone is not opened there). *By hand:* the sound itself, both ways.
 - [ ] Agent sign-in on the Developer ID build: turn on "Let agents sign in" for a Windows or macOS VM, keep its
       password, lock the guest, `vm_sign_in` from a client: it signs in with no Keychain question; the inspector's
       Copy Password gives the same password.

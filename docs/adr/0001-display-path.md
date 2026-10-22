@@ -38,8 +38,9 @@ A prototype built this stack (spice-protocol 0.14.5, spice-server 0.16.0, QEMU 1
     worth sending upstream);
   - compile against our build's headers instead of its bundled ones (spice-gtk 0.40, GStreamer 1.19).
 - GStreamer: spice-gtk requires its core libraries (about 3.6 MB, LGPL, linked dynamically). We ship no
-  plugins and never use SPICE audio or video streaming: audio goes through QEMU's CoreAudio backend, and
-  QEMU's SPICE video streaming stays off. Plugin scanning is disabled at start-up; with it on, the first
+  plugins and never use its audio or SPICE video streaming: sound goes over SPICE's playback and record channels
+  to the helper's own CoreAudio code (`SpiceAudio`, through a CocoaSpice audio sink, patch 0005), since QEMU's
+  CoreAudio backend cannot record (issue #7); QEMU's SPICE video streaming stays off. Plugin scanning is disabled at start-up; with it on, the first
   connection stalled for over a minute.
 
 ## Consequences

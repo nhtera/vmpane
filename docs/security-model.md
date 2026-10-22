@@ -46,7 +46,7 @@ What it can reach then:
 
 | process | runs as | sandbox | can reach |
 |---|---|---|---|
-| `qemu-system-aarch64` | the user | `VMPaneQEMU/Sandbox/qemu.sb` (deny by default) | its VM bundle (read; write only `current/`: disks, UEFI variables, saved state) and run directory, the QEMU runtime copy (read), HVF, CoreAudio output, outbound IP (slirp NAT), listening sockets for the VM's port forwards, the host's DNS configuration |
+| `qemu-system-aarch64` | the user | `VMPaneQEMU/Sandbox/qemu.sb` (deny by default) | its VM bundle (read; write only `current/`: disks, UEFI variables, saved state) and run directory, the QEMU runtime copy (read), HVF, outbound IP (slirp NAT), listening sockets for the VM's port forwards, the host's DNS configuration |
 | `swtpm` | the user | `VMPaneQEMU/Sandbox/swtpm.sb` | its VM bundle (read; write only `current/aux/tpm`) and run directory; no network, no hypervisor |
 | helper (`VMPaneVM`) | the user | none (v2 hardening item) | everything the user can |
 

@@ -2,7 +2,7 @@
   "core": [
     "smoke", "helper-lifecycle", "linux-boot", "linux-snapshot", "vz-suspend", "macos-boot", "qemu-smoke",
     "win-boot", "win-snapshot", "win-crash", "agent-linux", "agent-windows", "cli-e2e", "mcp-e2e", "mcp-actions", "screen-read",
-    "mcp-killswitch", "agent-hud", "linux-cloud", "security", "update-under-load"
+    "mcp-killswitch", "agent-hud", "linux-cloud", "win-audio", "security", "update-under-load"
   ],
   "full": [
     "vz-capture", "vz-devices", "win-display", "win-install", "win-install-resume", "disk-full", "ports-linux",

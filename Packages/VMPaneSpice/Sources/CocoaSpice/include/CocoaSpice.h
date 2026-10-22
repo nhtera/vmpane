@@ -17,6 +17,7 @@
 #ifndef CocoaSpice_h
 #define CocoaSpice_h
 
+#include "CSAudioSink.h"
 #include "CSChannel.h"
 #include "CSConnection.h"
 #include "CSConnectionDelegate.h"

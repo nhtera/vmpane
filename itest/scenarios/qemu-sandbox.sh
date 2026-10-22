@@ -1,7 +1,7 @@
 # QEMU and swtpm under their sandbox profiles (the helper's VMPaneQEMU resources, applied with sandbox-exec), from a
 # runtime copy laid out like runtime/<version>/qemu: QEMU's libraries read the Mac's name servers (slirp's DNS
 # proxy) and iconv tables like an unsandboxed process; swtpm keeps its TPM state in the VM bundle and listens
-# in the run directory; QEMU boots the shipped firmware to the UEFI shell with HVF, the TPM, CoreAudio sound,
+# in the run directory; QEMU boots the shipped firmware to the UEFI shell with HVF, the TPM, sound over SPICE,
 # a SPICE socket and a port forward, and reports no device it could not start; each is
 # denied a file outside its bundle and run directory. With VMPANE_SIGN_IDENTITY set to a real identity the
 # copy is first signed like a release (hardened runtime, scripts/sign.sh --qemu-only), proving the profiles
@@ -85,7 +85,7 @@ scenario_run() {
         -drive if=pflash,format=raw,readonly=on,file="$run/efi_code.fd" -drive if=pflash,format=raw,file="$aux/efi_vars.fd" \
         -chardev socket,id=chrtpm,path="$run/tpm.sock" -tpmdev emulator,id=tpm0,chardev=chrtpm \
         -device tpm-tis-device,tpmdev=tpm0,ppi=off -device ramfb -netdev user,id=n0,hostfwd=tcp:127.0.0.1:47301-:22 -device virtio-net-pci,netdev=n0 \
-        -audiodev coreaudio,id=snd0 -device intel-hda -device hda-duplex,audiodev=snd0 \
+        -audiodev spice,id=snd0 -device intel-hda -device hda-micro,audiodev=snd0 \
         -spice unix=on,addr="$run/spice.sock",disable-ticketing=on 2>"$run/qemu.err" &
     qemu_pid=$!
     it_wait_for 60 grep -aqs "UEFI Interactive Shell" "$run/serial.log" ||

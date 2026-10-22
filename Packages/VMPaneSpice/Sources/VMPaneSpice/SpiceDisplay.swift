@@ -10,7 +10,8 @@ import os
 /// sending keyboard and mouse input. QEMU is restarted by resume and snapshot restores, so the session
 /// reconnects whenever the helper says the VM is running. With spice-vdagent in the guest, the guest resolution
 /// follows the window (`display.autoResize`) and text is shared through the clipboard (`clipboard.mode`, only while
-/// the window is key).
+/// the window is key). Sound goes through the session too (`SpiceAudio`: playback, and the microphone when `audio.input`
+/// is on).
 /// Only create one when `SpiceLibraries.available`.
 @MainActor
 public final class SpiceDisplay: NSObject, GuestDisplaySource {
@@ -31,6 +32,7 @@ public final class SpiceDisplay: NSObject, GuestDisplaySource {
     private var agent: CSConnectionAgentFeature?
     private var settings: (display: DisplayConfig, clipboard: ClipboardConfig.Mode)?
     private let pasteboard = SpicePasteboard()
+    private let audio = SpiceAudio()
     private var resizeTask: Task<Void, Never>?
     private var clipboardTimer: Timer?
 
@@ -54,9 +56,10 @@ public final class SpiceDisplay: NSObject, GuestDisplaySource {
         center.addObserver(self, selector: #selector(focusChanged), name: NSWindow.didResignKeyNotification, object: window)
     }
 
-    /// The VM's display and clipboard settings (read at each start: neither changes while QEMU runs).
-    public func configure(display: DisplayConfig, clipboard: ClipboardConfig.Mode) {
+    /// The VM's display, clipboard and sound settings (read at each start: none changes while QEMU runs).
+    public func configure(display: DisplayConfig, clipboard: ClipboardConfig.Mode, audio: AudioConfig) {
         settings = (display, clipboard)
+        self.audio.configure(output: audio.output, input: audio.input)
         focusChanged()
     }
 
@@ -111,6 +114,8 @@ public final class SpiceDisplay: NSObject, GuestDisplaySource {
         let connection = CSConnection(unixSocketFile: socket)
         connection.delegate = self
         connection.session.pasteboardDelegate = pasteboard
+        connection.audioSink = audio
+        audio.connection = connection
         self.connection = connection
         if !connection.connect() { retryLater() }
     }
@@ -160,6 +165,9 @@ public final class SpiceDisplay: NSObject, GuestDisplaySource {
         }
         connection?.disconnect()
         connection = nil
+        // The connection's channels may go without a word to the sink (its handlers are unhooked first): the sound and
+        // the Mac's microphone stop here.
+        audio.sessionEnded()
     }
 
     private func retryLater() {

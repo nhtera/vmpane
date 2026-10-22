@@ -90,9 +90,10 @@ public enum QEMUArgvBuilder {
             "-device", "virtserialport,bus=vser.0,chardev=agent,name=app.vmpane.agent.0",
         ]
 
-        if config.audio.output {
-            args += ["-audiodev", "coreaudio,id=snd0"]
-            for device in profile.audioDevices { args += ["-device", device] }
+        // Sound goes over SPICE to the helper (SpiceAudio), which plays it and, with the microphone on, records.
+        if config.audio.output || config.audio.input {
+            args += ["-audiodev", "spice,id=snd0"]
+            for device in profile.audioDevices(microphone: config.audio.input) { args += ["-device", device] }
         }
         args += ["-device", "virtio-rng-pci"]
         if config.memory.balloon { args += ["-device", "virtio-balloon-pci"] }

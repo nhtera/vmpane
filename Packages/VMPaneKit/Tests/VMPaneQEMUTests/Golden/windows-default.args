@@ -60,7 +60,7 @@ socket,id=agent,path=/run/abcd1234/agent.sock,server=on,wait=off
 -device
 virtserialport,bus=vser.0,chardev=agent,name=app.vmpane.agent.0
 -audiodev
-coreaudio,id=snd0
+spice,id=snd0
 -device
 intel-hda,id=hda
 -device

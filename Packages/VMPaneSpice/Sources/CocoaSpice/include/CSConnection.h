@@ -20,6 +20,7 @@
 
 @class CSDisplay;
 @class CSUSBManager;
+@protocol CSAudioSink;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -60,6 +61,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// When enabled, gstreamer is used to provide audio input/output. Defaults to disabled
 @property (nonatomic, assign) BOOL audioEnabled;
+
+/// With `audioEnabled` off: receives the playback and record channels' sound instead (set before `connect`).
+@property (nonatomic, weak, nullable) id<CSAudioSink> audioSink;
+
+/// Sends recorded sound (signed 16-bit, interleaved, as the sink's `recordStart` asked) to the record channel.
+- (void)sendRecordedAudio:(NSData *)data;
 
 - (instancetype)init NS_UNAVAILABLE;
 

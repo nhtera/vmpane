@@ -54,6 +54,26 @@ private func expectGolden(_ name: String, _ args: [String], layout: QEMULayout, 
     }
 }
 
+/// Sound goes over SPICE to the helper (issue #7: QEMU's CoreAudio backend cannot record): a speaker, and with the
+/// microphone on a microphone too, also when output is off; with neither, no sound device at all.
+@Test func soundGoesOverSpiceWithAMicrophoneWhenAsked() throws {
+    var config = try windowsConfig()
+    config.audio.input = true
+    try withBundle(config) { layout in
+        let args = try QEMUArgvBuilder.arguments(config, layout: layout, fileExists: allExist)
+        try expectGolden("windows-microphone", args, layout: layout)
+        #expect(
+            args.contains("spice,id=snd0") && args.contains("hda-micro,bus=hda.0,audiodev=snd0")
+                && !args.contains { $0.contains("coreaudio") })
+        config.audio.output = false
+        let micOnly = try QEMUArgvBuilder.arguments(config, layout: layout, fileExists: allExist)
+        #expect(micOnly.contains("hda-micro,bus=hda.0,audiodev=snd0"))
+        config.audio.input = false
+        let silent = try QEMUArgvBuilder.arguments(config, layout: layout, fileExists: allExist)
+        #expect(!silent.contains("-audiodev") && !silent.contains { $0.hasPrefix("intel-hda") })
+    }
+}
+
 /// Install: the Windows ISO (copied into install/) boots first from USB, the unattend ISO next to it, the
 /// guest tools from the runtime; no NIC even though the config has one (an argv-builder invariant).
 @Test func installFromISOWithoutNetwork() throws {

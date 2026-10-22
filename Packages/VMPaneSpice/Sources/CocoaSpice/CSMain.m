@@ -90,7 +90,7 @@ void *spice_main_loop(void *args) {
     CSMain *self = (__bridge_transfer CSMain *)args;
     
     pthread_setname_np("SPICE Main Loop");
-    // VMPane: no GStreamer initialisation. Audio goes through QEMU and the server never streams video
+    // VMPane: no GStreamer initialisation. Audio goes to the app's own sink (CSAudioSink) and the server never streams video
     // (streaming-video=off), and gst_ios_init would override HOME, TMPDIR and XDG_* process-wide.
     
     g_main_context_ref(self->_main_context);
