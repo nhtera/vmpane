@@ -127,6 +127,15 @@ public struct SnapshotStore: Sendable {
         return metas.sorted { ($0.createdAt, $0.id.uuidString) < ($1.createdAt, $1.id.uuidString) }
     }
 
+    /// Renames snapshot `id` (its meta.json, rewritten durably).
+    public func setName(_ name: String, of id: UUID) throws {
+        let metaURL = directory(id).appendingPathComponent("meta.json")
+        guard let data = try? Data(contentsOf: metaURL), var meta = try? CanonicalJSON.decoder().decode(SnapshotMeta.self, from: data)
+        else { throw SnapshotError.notFound(id) }
+        meta.name = name
+        try DurableWrite.write(try CanonicalJSON.encode(meta), to: metaURL)
+    }
+
     public func delete(_ id: UUID) throws {
         let dir = directory(id)
         guard fm.fileExists(atPath: dir.path) else { throw SnapshotError.notFound(id) }

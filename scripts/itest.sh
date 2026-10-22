@@ -32,7 +32,9 @@ fi
 export VMPANE_ITEST_BRIDGE=$root/$bridge
 # Helpers signed with a Developer ID never honour the bridge: against such an app the tests act as an agent, within
 # a policy set the way the app sets it (itest/policy; common.sh it_signed).
-swift build -q -c release --package-path itest/policy --scratch-path build/itest-policy
+# SwiftPM's incremental build of a path dependency can miss files added to it: on a failure, once from scratch.
+swift build -q -c release --package-path itest/policy --scratch-path build/itest-policy \
+    || { rm -rf build/itest-policy && swift build -q -c release --package-path itest/policy --scratch-path build/itest-policy; }
 export VMPANE_ITEST_POLICY=$root/build/itest-policy/release/vmpane-itest-policy
 
 if [[ "$(uname -m)" != arm64 ]]; then

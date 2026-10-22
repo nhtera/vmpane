@@ -209,7 +209,7 @@ public actor HelperController {
         case .vmSettingsApply?: return await applySettings(request.params, byApp: identity(of: connection).identity == .ui)
         case .vmStart?, .vmPause?, .vmResume?, .vmSuspend?, .vmStop?:
             return await lifecycle(request.method, request.params)
-        case .vmSnapshotList?, .vmSnapshotCreate?, .vmSnapshotDelete?, .vmSnapshotRestore?:
+        case .vmSnapshotList?, .vmSnapshotCreate?, .vmSnapshotDelete?, .vmSnapshotRestore?, .vmSnapshotRename?:
             return await snapshotRequest(request.method, request.params, byApp: identity(of: connection).identity == .ui)
         default:
             return .failure(RPCError(.methodNotFound, "\(request.method) is not available in this helper"))

@@ -52,6 +52,7 @@ with end-of-file after it starts; when the VM asks before agents run commands, t
 | `vm.snapshot.create` | `{name, kind: live\|disk, origin}` (disk: VM stopped; live: VM running, paused briefly) | `SnapshotMeta` | control |
 | `vm.snapshot.restore` | `{id}` (a running VM is powered off first, then started again) | `{generationId, state, resumed?, message?}` | control |
 | `vm.snapshot.delete` | `{id}` | `{}` | admin |
+| `vm.snapshot.rename` | `{id, name}` (1-200 characters; an agent session's undo snapshot only by the app) | `{}` | control |
 | `vm.screenshot` | `{maxEdge, format}` | `{dataB64, width, height}` | observe |
 | `vm.input.key` | `{usage, down}` | `{}` | control |
 | `vm.input.text` | `{text}` | `{}` | control |

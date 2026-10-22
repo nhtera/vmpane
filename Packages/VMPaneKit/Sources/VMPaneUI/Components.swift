@@ -88,3 +88,75 @@ public struct ByteSizeText: View {
             .monospacedDigit()
     }
 }
+
+// MARK: - Agent levels, one vocabulary
+
+extension PolicyLevel {
+    /// What the app, the docs and the site call the level.
+    public var title: String {
+        switch self {
+        case .off: "Off"
+        case .observe: "Look only"
+        case .control: "Use the screen and keyboard"
+        case .exec: "Run commands"
+        case .admin: "Full control"
+        }
+    }
+
+    public var explanation: String {
+        switch self {
+        case .off: "Agents cannot see this VM."
+        case .observe: "Agents can see its state and screenshots."
+        case .control: "Agents can also click, type, start, pause and snapshot it."
+        case .exec: "Agents can also run commands as the logged-in user and copy files in and out."
+        case .admin: "Agents can also run commands as administrator, shut it down and delete snapshots."
+        }
+    }
+}
+
+// MARK: - Surfaces
+
+extension View {
+    /// The surface of controls that float over a VM's screen or the library (the agent HUD, overlays): Liquid Glass on
+    /// macOS 26, a material before it; opaque with Reduce Transparency or Increase Contrast.
+    public func vmGlass(cornerRadius: CGFloat = 12) -> some View {
+        modifier(VMGlass(cornerRadius: cornerRadius))
+    }
+}
+
+struct VMGlass: ViewModifier {
+    let cornerRadius: CGFloat
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if reduceTransparency || contrast == .increased {
+            content.background(Color(nsColor: .windowBackgroundColor), in: shape).overlay(shape.strokeBorder(.separator))
+        } else if #available(macOS 26, *) {
+            content.glassEffect(.regular, in: shape)
+        } else {
+            content.background(.regularMaterial, in: shape).overlay(shape.strokeBorder(.separator.opacity(0.5)))
+        }
+    }
+}
+
+/// An AI agent at work on a VM: who, written out (never colour alone).
+public struct AgentBadge: View {
+    let client: String
+    let acting: Bool
+
+    public init(client: String, acting: Bool = true) {
+        self.client = client
+        self.acting = acting
+    }
+
+    public var body: some View {
+        Label(acting ? "\(client) · acting" : client, systemImage: "sparkles")
+            .font(.caption)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(.tint.opacity(0.15), in: Capsule())
+            .accessibilityLabel(acting ? "\(client) is acting" : "\(client)")
+    }
+}

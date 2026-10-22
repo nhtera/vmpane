@@ -31,15 +31,13 @@ struct AgentActivityView: View {
         .task(id: bundle) {
             while !Task.isCancelled {
                 let log = AuditLog(url: bundle.appendingPathComponent("logs/mcp-audit.jsonl"))
-                entries = await Task.detached { log.recent(limit: 30) }.value
+                entries = await Task.detached { log.recent(limit: 50) }.value
                 try? await Task.sleep(for: .seconds(5))
             }
         }
     }
 
     static func time(_ timestamp: String) -> String? {
-        let parser = ISO8601DateFormatter()
-        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return parser.date(from: timestamp)?.formatted(date: .abbreviated, time: .standard)
+        AuditEntry.date(timestamp)?.formatted(date: .abbreviated, time: .standard)
     }
 }

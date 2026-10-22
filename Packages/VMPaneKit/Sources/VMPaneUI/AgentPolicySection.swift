@@ -22,9 +22,9 @@ struct AgentPolicySection: View {
                 .foregroundStyle(.orange)
             }
             Picker("Access", selection: $mcp.policy) {
-                ForEach(PolicyLevel.allCases, id: \.self) { level in Text(Self.title(level)).tag(level) }
+                ForEach(PolicyLevel.allCases, id: \.self) { level in Text(level.title).tag(level) }
             }
-            Text(Self.explanation(mcp.policy)).font(.caption).foregroundStyle(.secondary)
+            Text(mcp.policy.explanation).font(.caption).foregroundStyle(.secondary)
             if mcp.policy != .off {
                 Toggle("Ask before an agent runs a command", isOn: $mcp.confirmExec)
                 Toggle("Snapshot before each agent session", isOn: $mcp.autoSnapshot)
@@ -44,26 +44,6 @@ struct AgentPolicySection: View {
 
     private var signIn: Binding<Bool> {
         Binding(get: { mcp.signIn == true }, set: { mcp.signIn = $0 ? true : nil })
-    }
-
-    static func title(_ level: PolicyLevel) -> String {
-        switch level {
-        case .off: "Off"
-        case .observe: "Look only"
-        case .control: "Use the screen and keyboard"
-        case .exec: "Run commands"
-        case .admin: "Full control"
-        }
-    }
-
-    static func explanation(_ level: PolicyLevel) -> String {
-        switch level {
-        case .off: "Agents cannot see this VM."
-        case .observe: "Agents can see its state and screenshots."
-        case .control: "Agents can also click, type, start, pause and snapshot it."
-        case .exec: "Agents can also run commands as the logged-in user and copy files in and out."
-        case .admin: "Agents can also run commands as administrator, shut it down and delete snapshots."
-        }
     }
 }
 

@@ -12,6 +12,7 @@ public enum ControlMethod: String, CaseIterable, Sendable {
     case vmSnapshotCreate = "vm.snapshot.create"
     case vmSnapshotRestore = "vm.snapshot.restore"
     case vmSnapshotDelete = "vm.snapshot.delete"
+    case vmSnapshotRename = "vm.snapshot.rename"
     case vmScreenshot = "vm.screenshot"
     case vmInputKey = "vm.input.key"
     case vmInputText = "vm.input.text"

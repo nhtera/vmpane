@@ -2,7 +2,7 @@ import SwiftUI
 import VMPaneCore
 import VMPaneUI
 
-/// The VM library: running and stopped VMs on the left, the selected one's details and actions on the right.
+/// The VM library: every VM in the sidebar (list or grid, filtered), the selected one on the stage, and its inspector.
 struct LibraryWindow: View {
     @Bindable var store: LibraryStore
     @State private var showingWizard = false
@@ -10,35 +10,42 @@ struct LibraryWindow: View {
     @State private var cloneName = ""
     @State private var deleting: LibraryStore.Row?
     @State private var importing: URL?
+    @State private var filter = LibraryFilter.all
+    @State private var showInspector = true
+    @State private var inspectorSection = VMInspector.Section.system
     @AppStorage("onboarded") private var onboarded = false
+    @AppStorage("libraryGrid") private var grid = false
 
     var body: some View {
         NavigationSplitView {
-            List(store.rows, selection: $store.selection) { row in
-                VMRowView(row: row)
-                    .tag(row.id)
-                    .contextMenu {
-                        VMActionMenu(store: store, row: row)
-                        if !row.isRunning {
-                            Divider()
-                            Button("Clone…") {
-                                cloneName = "\(row.name) copy"
-                                cloning = row
-                            }
-                            Button("Delete…", role: .destructive) { deleting = row }
-                        }
-                    }
+            LibrarySidebar(store: store, filter: $filter, grid: grid) { row, action in
+                switch action {
+                case .clone:
+                    cloneName = "\(row.name) copy"
+                    cloning = row
+                case .delete: deleting = row
+                case .primary: Task { await store.perform(row.isRunning ? .showWindow : .start(headless: false), on: row.id) }
+                }
             }
-            .navigationSplitViewColumnWidth(min: 220, ideal: 260)
+            .navigationSplitViewColumnWidth(min: 240, ideal: 280)
             .dropDestination(for: URL.self) { urls, _ in
                 let bundles = urls.filter { $0.pathExtension == VMPane.bundleExtension }
                 guard !bundles.isEmpty else { return false }
                 Task { await store.importBundles(bundles) }
                 return true
             }
+            .onDeleteCommand {
+                if let id = store.selection, let row = store.row(id), !row.isRunning { deleting = row }
+            }
         } detail: {
             if let id = store.selection, let row = store.row(id) {
-                VMDetailView(store: store, row: row)
+                LibraryDetail(store: store, row: row) { section in
+                    inspectorSection = section
+                    showInspector = true
+                }
+                .inspector(isPresented: $showInspector) {
+                    VMInspector(store: store, row: row, section: $inspectorSection)
+                }
             } else if store.rows.isEmpty {
                 // In the detail area: on the sidebar's translucent background the title fails contrast, and it wraps.
                 ContentUnavailableView {
@@ -62,6 +69,21 @@ struct LibraryWindow: View {
                 Button("New VM", systemImage: "plus") { showingWizard = true }
                     .help("Create a virtual machine")
                     .keyboardShortcut("n", modifiers: .command)
+            }
+            ToolbarItem(placement: .secondaryAction) {
+                Picker("View", selection: $grid) {
+                    Label("List", systemImage: "list.bullet").tag(false)
+                    Label("Grid", systemImage: "square.grid.2x2").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityLabel("View")
+                .help("Show the VMs as a list or a grid")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button("Inspector", systemImage: "sidebar.right") { showInspector.toggle() }
+                    .help("Show or hide the inspector")
+                    .keyboardShortcut("i", modifiers: .command)
+                    .disabled(store.selection == nil)
             }
         }
         .sheet(isPresented: $showingWizard) { NewVMWizard(store: store) }
@@ -134,25 +156,6 @@ private func present<T>(_ item: Binding<T?>) -> Binding<Bool> {
     Binding(get: { item.wrappedValue != nil }, set: { if !$0 { item.wrappedValue = nil } })
 }
 
-/// One VM in the list.
-struct VMRowView: View {
-    let row: LibraryStore.Row
-
-    var body: some View {
-        HStack(spacing: 8) {
-            OSBadge(row.os)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(row.name).lineLimit(1)
-                StateDot(row.state, suspended: row.suspended)
-            }
-            Spacer()
-            ByteSizeText(row.diskBytes).font(.caption).foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 2)
-        .accessibilityElement(children: .combine)
-    }
-}
-
 /// Start/stop and friends, for the context menu and the detail toolbar.
 struct VMActionMenu: View {
     let store: LibraryStore
@@ -188,82 +191,5 @@ struct VMActionMenu: View {
 
     private func act(_ action: LibraryStore.Action) {
         Task { await store.perform(action, on: row.id) }
-    }
-}
-
-/// The selected VM.
-struct VMDetailView: View {
-    let store: LibraryStore
-    let row: LibraryStore.Row
-
-    var body: some View {
-        Form {
-            if let thumbnail = row.thumbnail {
-                Section {
-                    ThumbnailView(url: thumbnail, date: row.thumbnailDate)
-                }
-            }
-            Section {
-                LabeledContent("Name", value: row.name)
-                LabeledContent("System", value: OSBadge.name(row.os))
-                LabeledContent("State") { StateDot(row.state, suspended: row.suspended) }
-                LabeledContent("On disk") { ByteSizeText(row.diskBytes) }
-                LabeledContent("Location") {
-                    Text(row.bundleURL.path).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
-                }
-            }
-            if let error = row.error {
-                Section("Problem") {
-                    Text(error).foregroundStyle(.red)
-                    if !row.isRunning {
-                        Button("Remove from Library") { Task { await store.removeFromLibrary(row.id) } }
-                            .help("Takes this VM off the list. Nothing on disk is deleted.")
-                    }
-                }
-            }
-            AgentActivityView(bundle: row.bundleURL)
-        }
-        .formStyle(.grouped)
-        .navigationTitle(row.name)
-        .toolbar {
-            ToolbarItemGroup {
-                if row.isRunning {
-                    Button("Show Window", systemImage: "macwindow") { act(.showWindow) }
-                        .help("Show this VM's window")
-                    Button("Shut Down", systemImage: "power") { act(.stop(force: false)) }
-                        .help("Shut down the guest")
-                        .keyboardShortcut(".", modifiers: .command)
-                } else {
-                    Button(row.suspended ? "Resume" : "Start", systemImage: "play.fill") { act(.start(headless: false)) }
-                        .help(row.error != nil ? "This VM cannot start: see Problem" : row.suspended ? "Resume this VM" : "Start this VM")
-                        .keyboardShortcut("r", modifiers: .command)
-                        .disabled(row.error != nil)
-                }
-            }
-        }
-    }
-
-    private func act(_ action: LibraryStore.Action) {
-        Task { await store.perform(action, on: row.id) }
-    }
-}
-
-/// The helper's last picture of the guest; reloaded when it changes.
-private struct ThumbnailView: View {
-    let url: URL
-    let date: Date?
-    @State private var image: NSImage?
-
-    var body: some View {
-        Group {
-            if let image {
-                Image(nsImage: image).resizable().scaledToFit().frame(maxHeight: 200)
-            } else {
-                Color.clear.frame(height: 1)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .accessibilityLabel("Last picture of the VM's screen")
-        .task(id: date) { image = await Task.detached { NSImage(contentsOf: url) }.value }
     }
 }

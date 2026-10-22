@@ -85,6 +85,74 @@ public struct LibraryOps: Sendable {
         try? GuestCredentials.store(paths: library.paths).delete(for: config.id)
     }
 
+    // MARK: - Stopped VMs, with no helper (the app's inspector)
+
+    /// Changes a stopped VM's hardware: processors, memory, display size, and the disk grown (never shrunk; the
+    /// guest grows its file system itself). Under the VM's lock: refused while a helper holds it (`VMRunning`).
+    public func updateStopped(_ bundle: VMBundle, _ change: (inout StoppedSettings) -> Void) throws -> VMConfigV1 {
+        guard identity == .ui else { throw PolicyDenied(reason: "only the VMPane app changes a stopped VM's settings") }
+        guard let lock = try bundle.tryLock(retryingFor: 0.5) else { throw VMRunning() }
+        defer { lock.release() }
+        var config = try ConfigStore.load(bundle)
+        var settings = StoppedSettings(config)
+        change(&settings)
+        guard settings.diskGiB >= config.disks[0].sizeGiB else { throw StoppedSettings.Problem.diskShrink }
+        guard settings.cpuCount >= 1, settings.memoryMiB >= 1024 else { throw StoppedSettings.Problem.tooSmall }
+        if settings.diskGiB > config.disks[0].sizeGiB {
+            let disk = try bundle.fileURL(relativePath: config.disks[0].file)
+            let handle = try FileHandle(forWritingTo: disk)
+            try handle.truncate(atOffset: UInt64(settings.diskGiB) << 30)
+            try handle.close()
+        }
+        settings.apply(to: &config)
+        try ConfigStore.save(config, holding: lock)
+        return config
+    }
+
+    /// A stopped VM's snapshots, newest first (with its lock: `VMRunning` while a helper holds it).
+    public func snapshots(of bundle: VMBundle) throws -> [SnapshotMeta] {
+        try withStoppedSnapshots(bundle) { try $0.list().reversed() }
+    }
+
+    /// A disk snapshot of a stopped VM.
+    @discardableResult
+    public func createSnapshot(named name: String, in bundle: VMBundle) throws -> SnapshotMeta {
+        let config = try ConfigStore.load(bundle)
+        let context = SnapshotContext(deviceSetHash: DeviceSet(config).hash, hostBuild: Self.hostBuild, backendVersion: VMPane.version)
+        return try withStoppedSnapshots(bundle) { try $0.create(name: name, kind: .disk, origin: .user, context: context) }
+    }
+
+    /// This Mac's macOS build (`kern.osversion`), as snapshots record it.
+    static let hostBuild: String = {
+        var size = 0
+        sysctlbyname("kern.osversion", nil, &size, nil, 0)
+        var buffer = [UInt8](repeating: 0, count: max(size, 1))
+        sysctlbyname("kern.osversion", &buffer, &size, nil, 0)
+        return String(bytes: buffer.prefix { $0 != 0 }, encoding: .utf8) ?? ""
+    }()
+
+    public func renameSnapshot(_ id: UUID, to name: String, in bundle: VMBundle) throws {
+        try withStoppedSnapshots(bundle) { try $0.setName(name, of: id) }
+    }
+
+    /// Restores a stopped VM to snapshot `id` (its RAM state too, for a live one: the next start resumes it).
+    public func restoreSnapshot(_ id: UUID, in bundle: VMBundle) throws {
+        try withStoppedSnapshots(bundle) { _ = try $0.restore(id) }
+    }
+
+    public func deleteSnapshot(_ id: UUID, in bundle: VMBundle) throws {
+        try withStoppedSnapshots(bundle) { try $0.delete(id) }
+    }
+
+    private func withStoppedSnapshots<T>(_ bundle: VMBundle, _ body: (SnapshotStore) throws -> T) throws -> T {
+        guard identity == .ui else { throw PolicyDenied(reason: "only the VMPane app manages a stopped VM's snapshots") }
+        guard let lock = try bundle.tryLock(retryingFor: 0.5) else { throw VMRunning() }
+        defer { lock.release() }
+        let store = SnapshotStore(lock: lock)
+        try store.recover()
+        return try body(store)
+    }
+
     /// Adds an existing bundle (e.g. one copied from another Mac) to the library.
     public func importBundle(at url: URL) throws -> VMBundle {
         try gate("vm.import", vm: nil, level: .off)

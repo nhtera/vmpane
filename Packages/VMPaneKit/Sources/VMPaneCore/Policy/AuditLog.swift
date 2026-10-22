@@ -162,3 +162,12 @@ public final class AuditLog: @unchecked Sendable {
         return .object(fields.compactMapValues { $0 })
     }
 }
+
+extension AuditEntry {
+    /// The time an entry's `timestamp` names.
+    public static func date(_ timestamp: String) -> Date? {
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return parser.date(from: timestamp) ?? ISO8601DateFormatter().date(from: timestamp)
+    }
+}

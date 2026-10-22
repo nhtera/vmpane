@@ -53,6 +53,7 @@ public enum ControlMethodPolicy {
         "vm.snapshot.create": .level(.control),
         "vm.snapshot.restore": .level(.control),
         "vm.snapshot.delete": .level(.admin),
+        "vm.snapshot.rename": .level(.control),
         "vm.screenshot": .level(.observe),
         "vm.input.key": .level(.control),
         "vm.input.text": .level(.control),

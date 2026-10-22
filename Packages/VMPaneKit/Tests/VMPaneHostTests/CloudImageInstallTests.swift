@@ -17,7 +17,7 @@ private let image = ImageCatalog.Image(
     let bundle = try ops.create(name: "Build Box", os: .linux, diskGiB: 1)
     let base = root.appendingPathComponent("base.raw")
     try Data(repeating: 7, count: 1 << 20).write(to: base)
-    let lock = try #require(try bundle.tryLock())
+    let lock = try #require(try bundle.tryLock(retryingFor: 5))
     let account = CloudImageInstall.Account(userName: "dev", password: "p4ss-word", sshKey: "ssh-ed25519 AAAA k")
     let config = try CloudImageInstall.apply(try ConfigStore.load(bundle), base: base, image: image, account: account, holding: lock)
     try ConfigStore.save(config, holding: lock)
@@ -35,7 +35,7 @@ private let image = ImageCatalog.Image(
     #expect(ssh.hostAddress == "127.0.0.1" && ssh.hostPort > 0 && ssh.origin == .user)
 
     // A clone before the first boot is a new machine with its own seed.
-    let source = try #require(try bundle.tryLock())
+    let source = try #require(try bundle.tryLock(retryingFor: 5))
     let clone = try FullClone.clone(holding: source, to: root.appendingPathComponent("Copy.vmpane"), name: "Copy")
     source.release()
     let cloned = try ConfigStore.load(clone)

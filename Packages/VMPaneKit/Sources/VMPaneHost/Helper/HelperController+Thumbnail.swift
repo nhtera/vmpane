@@ -1,11 +1,12 @@
 import Foundation
 import VMPaneCore
 
-/// `thumbnail.png` in the bundle: a small picture of the guest for the library, refreshed every minute while the
-/// VM runs and once more just before it stops.
+/// `thumbnail.png` in the bundle: a small picture of the guest for the library (which watches the file), taken a few
+/// seconds after a start, at a pause, every minute while the VM runs, and once more just before it stops.
 extension HelperController {
     static let thumbnailInterval: Duration = .seconds(60)
     static let thumbnailEdge = 320
+    static let thumbnailAfterStart: Duration = .seconds(5)
 
     var thumbnailURL: URL { prepared.lock.bundle.url.appendingPathComponent("thumbnail.png") }
 
@@ -13,11 +14,14 @@ extension HelperController {
         switch next {
         case .running where thumbnailTask == nil:
             thumbnailTask = Task { [weak self] in
+                try? await Task.sleep(for: Self.thumbnailAfterStart)
                 while !Task.isCancelled {
-                    try? await Task.sleep(for: Self.thumbnailInterval)
                     await self?.writeThumbnail()
+                    try? await Task.sleep(for: Self.thumbnailInterval)
                 }
             }
+        case .paused:
+            Task { await writeThumbnail() }
         case .stopped, .error, .suspending:
             thumbnailTask?.cancel()
             thumbnailTask = nil

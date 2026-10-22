@@ -289,11 +289,7 @@ struct IntegrationsStep: View {
             }
             Section {
                 Picker("AI agents (MCP)", selection: $wizard.mcpPolicy) {
-                    Text("Off").tag(PolicyLevel.off)
-                    Text("Observe").tag(PolicyLevel.observe)
-                    Text("Control").tag(PolicyLevel.control)
-                    Text("Run commands").tag(PolicyLevel.exec)
-                    Text("Administer").tag(PolicyLevel.admin)
+                    ForEach(PolicyLevel.allCases, id: \.self) { level in Text(level.title).tag(level) }
                 }
             } footer: {
                 if wizard.mcpPolicy >= .exec {

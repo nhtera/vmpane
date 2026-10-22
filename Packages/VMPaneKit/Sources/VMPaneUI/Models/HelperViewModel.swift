@@ -263,7 +263,7 @@ public final class HelperViewModel {
         }
     }
 
-    static func snapshotName(now: Date = Date()) -> String { "Snapshot \(stamp(now))" }
+    public static func snapshotName(now: Date = Date()) -> String { "Snapshot \(stamp(now))" }
 
     static func stamp(_ now: Date = Date()) -> String {
         let formatter = DateFormatter()

@@ -27,6 +27,12 @@ public final class LibraryStore {
         /// The helper's last picture of the guest (`thumbnail.png`), and when it was taken.
         public var thumbnail: URL?
         public var thumbnailDate: Date?
+        /// The AI agent that last used the VM (its audit log), and when.
+        public var agentClient: String?
+        public var agentLastAt: Date?
+
+        /// An agent used it within the last minute.
+        public var agentActive: Bool { agentLastAt.map { -$0.timeIntervalSinceNow < 60 } ?? false }
 
         public var isRunning: Bool { state.map { ![.stopped, .error].contains($0) } ?? false }
         /// Listed, but its bundle is no longer on disk (moved, deleted, on a disk not connected).
@@ -39,7 +45,7 @@ public final class LibraryStore {
         case pause, resume, suspend, showWindow
     }
 
-    public private(set) var rows: [Row] = []
+    public internal(set) var rows: [Row] = []
     public var selection: UUID?
     /// The last failed action, for an alert.
     public var lastError: String?
@@ -48,12 +54,14 @@ public final class LibraryStore {
 
     /// Asks before a VM starts on a Mac low on memory; nil: starts without asking.
     @ObservationIgnored public var lowMemoryGuard: LowMemoryGuard?
-    @ObservationIgnored private let library: VMLibrary
-    @ObservationIgnored private let links: LiveVMLink
+    @ObservationIgnored let library: VMLibrary
+    @ObservationIgnored let links: LiveVMLink
     @ObservationIgnored private let launch: @Sendable (VMBundle, Bool) async throws -> Void
     @ObservationIgnored private var watches: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var listedOnce = false
     @ObservationIgnored private var watchTokens: [UUID: UUID] = [:]
+    /// Each bundle's folder, for its `thumbnail.png` (written atomically: a rename in the folder).
+    @ObservationIgnored var folderWatches: [UUID: DispatchSourceFileSystemObject] = [:]
 
     /// `launch(bundle, headless)` starts a VM's helper (the app's supervisor, via the runtime copy).
     public init(library: VMLibrary, links: LiveVMLink, launch: @escaping @Sendable (VMBundle, Bool) async throws -> Void) {
@@ -97,7 +105,7 @@ public final class LibraryStore {
 
     /// Runs `work`, which needs the stopped VM's bundle to itself. A stopped VM's helper keeps running (its window
     /// and Dock tile stay) and holds the bundle, so it is asked to quit first; `work` is tried until it lets go.
-    private func releaseHelper(of row: Row, _ work: @escaping @Sendable () throws -> Void) async throws {
+    func releaseHelper(of row: Row, _ work: @escaping @Sendable () throws -> Void) async throws {
         if row.state != nil {
             _ = try? await links.call(row.id, ControlMethod.helperShutdown.rawValue, params: nil)
         }
@@ -165,17 +173,6 @@ public final class LibraryStore {
         await perform(.start(headless: false), on: id)
     }
 
-    /// Milliseconds since this process started.
-    static func sinceLaunchMs() -> Int {
-        var info = kinfo_proc()
-        var size = MemoryLayout<kinfo_proc>.size
-        var name: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
-        guard sysctl(&name, 4, &info, &size, nil, 0) == 0 else { return -1 }
-        let start = info.kp_proc.p_un.__p_starttime
-        let started = Double(start.tv_sec) + Double(start.tv_usec) / 1e6
-        return Int((Date().timeIntervalSince1970 - started) * 1000)
-    }
-
     /// Re-reads the library (bundles added, moved or removed), attaches to helpers that started since, and
     /// measures disk usage in the background.
     public func reload() async {
@@ -203,23 +200,25 @@ public final class LibraryStore {
         for id in Set(watches.keys).subtracting(rows.map(\.id)) {
             watches.removeValue(forKey: id)?.cancel()
         }
+        for id in Set(folderWatches.keys).subtracting(rows.map(\.id)) {
+            folderWatches.removeValue(forKey: id)?.cancel()
+        }
         for row in rows where watches[row.id] == nil {
             attach(row.id)
         }
-        let urls = rows.map { ($0.id, $0.bundleURL) }
-        let measured = await Blocking.run {
-            urls.map { id, url in
-                let thumbnail = url.appendingPathComponent("thumbnail.png")
-                let date = (try? thumbnail.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-                return (id, Self.allocatedBytes(url), date.map { _ in thumbnail }, date, VMBundle.isSuspended(url))
-            }
+        for row in rows where folderWatches[row.id] == nil {
+            watchFolder(row.id, row.bundleURL)
         }
-        for (id, size, thumbnail, date, suspended) in measured {
-            guard let index = rows.firstIndex(where: { $0.id == id }) else { continue }
-            rows[index].suspended = suspended
-            rows[index].diskBytes = size
-            rows[index].thumbnail = thumbnail
-            rows[index].thumbnailDate = date
+        let urls = rows.map { ($0.id, $0.bundleURL) }
+        let measured = await Blocking.run { urls.map(Self.measure) }
+        for item in measured {
+            guard let index = rows.firstIndex(where: { $0.id == item.id }) else { continue }
+            rows[index].suspended = item.suspended
+            rows[index].diskBytes = item.size
+            rows[index].thumbnail = item.thumbnail
+            rows[index].thumbnailDate = item.date
+            rows[index].agentClient = item.agentClient?.replacingOccurrences(of: " (claimed)", with: "")
+            rows[index].agentLastAt = item.agentAt
         }
     }
 
@@ -302,15 +301,4 @@ public final class LibraryStore {
         throw RPCError(.backendUnavailable, "the VM's helper did not start")
     }
 
-    /// Bytes the bundle occupies (allocated, so sparse disks count what they use).
-    nonisolated static func allocatedBytes(_ url: URL) -> UInt64 {
-        let keys: [URLResourceKey] = [.totalFileAllocatedSizeKey, .isRegularFileKey]
-        guard let walker = FileManager.default.enumerator(at: url, includingPropertiesForKeys: keys) else { return 0 }
-        var total: UInt64 = 0
-        for case let file as URL in walker {
-            guard let values = try? file.resourceValues(forKeys: Set(keys)), values.isRegularFile == true else { continue }
-            total += UInt64(values.totalFileAllocatedSize ?? 0)
-        }
-        return total
-    }
 }
