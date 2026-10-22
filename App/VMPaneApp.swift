@@ -29,8 +29,10 @@ struct VMPaneApp: App {
             }
             .frame(width: 520)
         }
-        MenuBarExtra("VMPane", systemImage: "square.stack.3d.up") {
+        MenuBarExtra {
             MenuBarExtraView(store: appDelegate.library, killSwitch: appDelegate.killSwitch)
+        } label: {
+            MenuBarIcon(store: appDelegate.library)
         }
     }
 }

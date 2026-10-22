@@ -8,8 +8,8 @@ import VMPaneCore
 /// Helpers the test controls: a VM "runs" once `run` gives it a state stream.
 final class FakeLinks: LiveVMLink, @unchecked Sendable {
     private let lock = NSLock()
-    private var streams: [UUID: AsyncStream<VMRunState>.Continuation] = [:]
-    private var pendingStreams: [UUID: AsyncStream<VMRunState>] = [:]
+    private var streams: [UUID: AsyncStream<LiveVMEvent>.Continuation] = [:]
+    private var pendingStreams: [UUID: AsyncStream<LiveVMEvent>] = [:]
     struct Call {
         let vm: UUID
         let method: String
@@ -23,20 +23,23 @@ final class FakeLinks: LiveVMLink, @unchecked Sendable {
 
     /// Makes `vmID` look like it has a helper in `state`.
     func run(_ vmID: UUID, in state: VMRunState) {
-        let (stream, continuation) = AsyncStream.makeStream(of: VMRunState.self)
-        continuation.yield(state)
+        let (stream, continuation) = AsyncStream.makeStream(of: LiveVMEvent.self)
+        continuation.yield(.state(state))
         lock.withLock {
             streams[vmID] = continuation
             pendingStreams[vmID] = stream
         }
     }
 
-    func emit(_ vmID: UUID, _ state: VMRunState) { _ = lock.withLock { streams[vmID] }?.yield(state) }
+    func emit(_ vmID: UUID, _ state: VMRunState) { _ = lock.withLock { streams[vmID] }?.yield(.state(state)) }
+
+    /// The helper says what agents are doing.
+    func emitActivity(_ vmID: UUID, _ activity: JSONValue) { _ = lock.withLock { streams[vmID] }?.yield(.activity(activity)) }
 
     /// The helper goes away.
     func end(_ vmID: UUID) { lock.withLock { streams.removeValue(forKey: vmID) }?.finish() }
 
-    func watch(_ vmID: UUID) async -> AsyncStream<VMRunState>? {
+    func watch(_ vmID: UUID) async -> AsyncStream<LiveVMEvent>? {
         lock.withLock { pendingStreams.removeValue(forKey: vmID) }
     }
 
@@ -317,4 +320,23 @@ final class LockedFlag: @unchecked Sendable {
     answers.startAnyway = true
     await store.perform(.start(headless: false), on: id)
     #expect(launched.value && links.methods == ["vm.start"])
+}
+
+@MainActor
+@Test func aRowSaysWhenAnAgentActs() async throws {
+    let root = URL(fileURLWithPath: "/tmp/vp-act-\(UUID().uuidString.prefix(8))", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let paths = VMPanePaths(root: root)
+    let bundle = try LibraryOps(library: VMLibrary(paths: paths), identity: .ui).create(name: "A", os: .linux, diskGiB: 1)
+    let id = try ConfigStore.load(bundle).id
+    let links = FakeLinks()
+    links.run(id, in: .running)
+    let store = LibraryStore(library: VMLibrary(paths: paths), links: links) { _, _ in }
+    await store.reload()
+    links.emitActivity(id, ["acting": true, "client": "claude-code", "level": "control", "recent": []])
+    for _ in 0..<50 where store.row(id)?.agentActive != true { try await Task.sleep(for: .milliseconds(20)) }
+    #expect(store.row(id)?.agentActive == true && store.row(id)?.agentClient == "claude-code")
+    links.emitActivity(id, ["acting": false, "level": "control", "recent": []])
+    for _ in 0..<50 where store.row(id)?.agentActive != false { try await Task.sleep(for: .milliseconds(20)) }
+    #expect(store.row(id)?.agentActive == false)
 }

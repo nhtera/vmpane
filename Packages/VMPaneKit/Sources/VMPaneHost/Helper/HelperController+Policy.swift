@@ -71,6 +71,10 @@ extension HelperController {
             writeAudit(request, caller, policy: policy.level, AuditOutcome(result: "denied", reason: reason, durationMs: nil))
             return RPCError(.policyDenied, reason)
         }
+        if heldByTakeOver(request.method, caller) {
+            writeAudit(request, caller, policy: policy.level, AuditOutcome(result: "denied", reason: Self.takenOverReason, durationMs: nil))
+            return RPCError(.takenOver, Self.takenOverReason)
+        }
         let decision = PolicyEnforcer.decide(
             method: request.method, params: request.params, level: policy.level, identity: caller.identity,
             context: PolicyContext(
@@ -104,6 +108,7 @@ extension HelperController {
             session: caller.session, client: caller.claimedClient, identity: caller.label, kind: caller.kind, method: request.method,
             args: AuditLog.recorded(method: request.method, params: request.params, typedText: config.mcp.auditTypedText),
             policy: policy.rawValue, result: outcome.result, reason: outcome.reason, durationMs: outcome.durationMs)
+        noteAgentAction(request, caller, ok: outcome.result == "ok")
         do {
             try auditLog.append(entry)
         } catch {

@@ -22,6 +22,9 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
     @MainActor var windowModel: HelperViewModel?
     /// Window delegates (a window does not retain its delegate).
     @MainActor var windowClosers: [ObjectIdentifier: WindowCloser] = [:]
+    /// The guest's screen in each VM window: the person's own keys and clicks there take over from an AI agent.
+    @MainActor var displayViews: [NSView] = []
+    @MainActor var inputMonitor: Any?
     /// The bundle this helper runs, once prepared.
     var prepared: PreparedBundle?
 
@@ -178,8 +181,13 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
         Task {
             await controller.setHostPasteboard(GeneralPasteboard())
             await controller.setConfirmationPresenter(
-                { question in await MainActor.run { ConfirmationDialog.ask(question) } },
-                dismiss: { await MainActor.run { ConfirmationDialog.dismiss() } })
+                { [weak self] question in await self?.askInWindow(question) ?? false },
+                dismiss: { [weak self] in
+                    await MainActor.run {
+                        self?.windowModel?.dismissApproval()
+                        ConfirmationDialog.dismiss()
+                    }
+                })
         }
         Task {
             do {

@@ -56,7 +56,7 @@ extension HelperController {
     /// Return, typed after text with `submit`.
     static let returnUsage: UInt16 = 0x28
 
-    private struct Stopped: Error {}
+    struct Stopped: Error {}
 
     static let stoppedReason = "AI agents are stopped (VMPane's kill switch)"
 
@@ -75,7 +75,7 @@ extension HelperController {
         // One batch at a time on a VM: another's held keys and screen changes would mix into this one's.
         // One batch at a time, and none while the helper signs the guest in.
         while batching || signingIn {
-            if agentsStopped(since: admitted, caller) { return .failure(RPCError(.policyDenied, Self.stoppedReason)) }
+            if agentInputStopped(since: admitted, caller) { return .failure(inputStopError) }
             try? await Task.sleep(for: .milliseconds(20))
         }
         batching = true
@@ -83,13 +83,13 @@ extension HelperController {
         let before = batch.verify == false ? nil : await captureFrame()?.frame
         var results: [JSONValue] = []
         for (index, action) in batch.actions.enumerated() {
-            if agentsStopped(since: admitted, caller) {
-                return .failure(RPCError(.policyDenied, Self.stoppedReason, data: ["results": .array(results)]))
+            if agentInputStopped(since: admitted, caller) {
+                return .failure(RPCError(code: inputStopError.code, message: inputStopError.message, data: ["results": .array(results)]))
             }
             let failure = await runAction(action, params: raw[index], caller: caller, admitted: admitted, backend: backend)
-            if let failure, failure.message == Self.stoppedReason {
+            if let failure, [Self.stoppedReason, Self.takenOverReason].contains(failure.message) {
                 results.append(["i": .int(Int64(index)), "ok": false, "error": .string(failure.message), "code": .int(Int64(failure.code))])
-                return .failure(RPCError(.policyDenied, Self.stoppedReason, data: ["results": .array(results)]))
+                return .failure(RPCError(code: failure.code, message: failure.message, data: ["results": .array(results)]))
             }
             let result: JSONValue = ["i": .int(Int64(index)), "ok": .bool(failure == nil)]
             results.append(failure.map { result.adding("error", .string($0.message)).adding("code", .int(Int64($0.code))) } ?? result)
@@ -140,6 +140,30 @@ extension HelperController {
         }
     }
 
+    /// Types `text` in pieces short enough that a Take over or the kill switch stops it in time (`Stopped`): whole
+    /// or not at all when a character cannot be typed.
+    func type(_ text: String, backend: VMBackend, admitted: Int, caller: CallerIdentity) async throws {
+        if let character = backend.untypable(in: text) {
+            throw RPCError(.invalidParams, "\(String(character).debugDescription) cannot be typed (US keyboard layout)")
+        }
+        let characters = Array(text)
+        let piece = max(1, Int(Self.batchStopCheck / backend.typingPace))
+        for start in stride(from: 0, to: characters.count, by: piece) {
+            if agentInputStopped(since: admitted, caller) { throw Stopped() }
+            try await backend.send(.text(String(characters[start..<min(start + piece, characters.count)])))
+        }
+    }
+
+    /// Why an agent's input stopped: the person took over, or agents were stopped.
+    var inputStopError: RPCError {
+        !killSwitchEngaged && activity.takenOver ? RPCError(.takenOver, Self.takenOverReason) : RPCError(.policyDenied, Self.stoppedReason)
+    }
+
+    /// `agentsStopped`, or the person took over: what an agent's input checks between pieces.
+    func agentInputStopped(since admitted: Int, _ caller: CallerIdentity) -> Bool {
+        agentsStopped(since: admitted, caller) || heldByTakeOver(ControlMethod.vmInputText.rawValue, caller)
+    }
+
     /// True once agents have been stopped since `admitted`, or the caller went away (never for the app).
     func agentsStopped(since admitted: Int, _ caller: CallerIdentity) -> Bool {
         caller.identity != .ui && (killSwitchEngaged || agentGeneration != admitted || caller.connection?.isFinished ?? true)
@@ -175,7 +199,7 @@ extension HelperController {
             try await perform(action, backend: backend, admitted: admitted, caller: caller)
             result = .success([:])
         } catch is Stopped {
-            result = .failure(RPCError(.policyDenied, Self.stoppedReason))
+            result = .failure(inputStopError)
         } catch let error as RPCError {
             result = .failure(error)
         } catch {
@@ -191,18 +215,9 @@ extension HelperController {
         case "key":
             try await press(action.usages ?? [], backend: backend)
         case "text":
-            // Whole or not at all, as `vm.input.text` is.
-            if let character = backend.untypable(in: action.text ?? "") {
-                throw RPCError(.invalidParams, "\(String(character).debugDescription) cannot be typed (US keyboard layout)")
-            }
-            let characters = Array(action.text ?? "")
-            let piece = max(1, Int(Self.batchStopCheck / backend.typingPace))
-            for start in stride(from: 0, to: characters.count, by: piece) {
-                if agentsStopped(since: admitted, caller) { throw Stopped() }
-                try await backend.send(.text(String(characters[start..<min(start + piece, characters.count)])))
-            }
+            try await type(action.text ?? "", backend: backend, admitted: admitted, caller: caller)
             if action.submit == true {
-                if agentsStopped(since: admitted, caller) { throw Stopped() }
+                if agentInputStopped(since: admitted, caller) { throw Stopped() }
                 try await press([Self.returnUsage], backend: backend)
             }
         case "click", "move", "drag":
@@ -270,7 +285,7 @@ extension HelperController {
     /// Sleeps until `deadline` in slices, throwing `Stopped` when agents are stopped meanwhile.
     private func pause(until deadline: ContinuousClock.Instant, admitted: Int, caller: CallerIdentity) async throws {
         while ContinuousClock.now < deadline {
-            if agentsStopped(since: admitted, caller) { throw Stopped() }
+            if agentInputStopped(since: admitted, caller) { throw Stopped() }
             try await Task.sleep(for: min(Self.batchStopCheck / 2, deadline - ContinuousClock.now))
         }
     }
@@ -301,7 +316,7 @@ extension HelperController {
         var persisted = false, still = false, polls = 0
         while polls < 2 || ContinuousClock.now < deadline {
             try? await Task.sleep(for: interval)
-            if agentsStopped(since: admitted, caller) { return screen(of: before, unknown("stopped", waited())) }
+            if agentInputStopped(since: admitted, caller) { return screen(of: before, unknown("stopped", waited())) }
             let begun = ContinuousClock.now
             guard let (frame, from) = await captureFrame() else { return screen(of: before, unknown("no_display", waited())) }
             source = from

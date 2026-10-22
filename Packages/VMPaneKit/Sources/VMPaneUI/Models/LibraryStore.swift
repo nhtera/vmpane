@@ -30,9 +30,11 @@ public final class LibraryStore {
         /// The AI agent that last used the VM (its audit log), and when.
         public var agentClient: String?
         public var agentLastAt: Date?
+        /// What its running helper says agents are doing (nil: no helper, or an older one).
+        public var agentActing: Bool?
 
-        /// An agent used it within the last minute.
-        public var agentActive: Bool { agentLastAt.map { -$0.timeIntervalSinceNow < 60 } ?? false }
+        /// An agent acts on it (its helper says so), else used it within the last minute (its audit log).
+        public var agentActive: Bool { agentActing ?? agentLastAt.map { -$0.timeIntervalSinceNow < 60 } ?? false }
 
         public var isRunning: Bool { state.map { ![.stopped, .error].contains($0) } ?? false }
         /// Listed, but its bundle is no longer on disk (moved, deleted, on a disk not connected).
@@ -60,6 +62,8 @@ public final class LibraryStore {
     @ObservationIgnored private var watches: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var listedOnce = false
     @ObservationIgnored private var watchTokens: [UUID: UUID] = [:]
+    /// One look again per VM at its agents' activity once acting has run out (`setActivity`).
+    @ObservationIgnored fileprivate var activityRefreshes: [UUID: Task<Void, Never>] = [:]
     /// Each bundle's folder, for its `thumbnail.png` (written atomically: a rename in the folder).
     @ObservationIgnored var folderWatches: [UUID: DispatchSourceFileSystemObject] = [:]
 
@@ -228,9 +232,12 @@ public final class LibraryStore {
         let token = UUID()
         watchTokens[id] = token
         watches[id] = Task { [weak self] in
-            if let states = await links.watch(id) {
-                for await state in states {
-                    self?.setState(state, for: id)
+            if let events = await links.watch(id) {
+                for await event in events {
+                    switch event {
+                    case .state(let state): self?.setState(state, for: id)
+                    case .activity(let json): self?.setActivity(AgentActivity(json), for: id)
+                    }
                 }
                 self?.setState(nil, for: id)
             }
@@ -245,6 +252,7 @@ public final class LibraryStore {
     private func setState(_ state: VMRunState?, for id: UUID) {
         guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
         rows[index].state = state
+        if state == nil { rows[index].agentActing = nil }
         if state == nil || state == .stopped { rows[index].suspended = VMBundle.isSuspended(rows[index].bundleURL) }
     }
 
@@ -300,5 +308,25 @@ public final class LibraryStore {
         }
         throw RPCError(.backendUnavailable, "the VM's helper did not start")
     }
+}
 
+extension LibraryStore {
+    fileprivate func setActivity(_ activity: AgentActivity, for id: UUID) {
+        guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
+        if rows[index].agentActing != activity.acting { rows[index].agentActing = activity.acting }
+        if let client = activity.client, rows[index].agentClient != client { rows[index].agentClient = client }
+        // The helper says nothing when an agent goes quiet: look again once the acting window has passed (one look per
+        // VM, moved on by each notification).
+        activityRefreshes[id]?.cancel()
+        activityRefreshes[id] = nil
+        guard activity.acting else { return }
+        let links = links
+        activityRefreshes[id] = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(11))
+            guard !Task.isCancelled, let json = try? await links.call(id, ControlMethod.vmAgentActivity.rawValue, params: nil),
+                !Task.isCancelled
+            else { return }
+            self?.setActivity(AgentActivity(json), for: id)
+        }
+    }
 }

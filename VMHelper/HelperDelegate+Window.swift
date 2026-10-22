@@ -55,6 +55,41 @@ extension HelperDelegate {
         followDockTile(model, os: os, custom: custom)
     }
 
+    /// An agent's request for the person's yes: in the VM's window (shown first, so the question is seen), else in an
+    /// alert: before the VM's first start (no window yet), or while another sheet (Settings, Snapshots) is open on it.
+    @MainActor func askInWindow(_ question: ConfirmationRequest) async -> Bool {
+        guard let model = windowModel, let showWindow, let window = displayViews.last?.window else {
+            return ConfirmationDialog.ask(question)
+        }
+        showWindow()
+        guard window.isVisible, window.attachedSheet == nil || model.approval != nil else { return ConfirmationDialog.ask(question) }
+        NSApp.activate()
+        return await model.presentApproval(question)
+    }
+
+    /// The person's keyboard and mouse in a VM window's screen: real input only (agents' input goes straight to the
+    /// display view or QEMU, never through the app's event loop, which this watches).
+    @MainActor func watchPersonInput() {
+        guard inputMonitor == nil else { return }
+        let kinds: NSEvent.EventTypeMask = [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]
+        inputMonitor = NSEvent.addLocalMonitorForEvents(matching: kinds) { [weak self] event in
+            if let self, self.isOnScreen(event) { self.windowModel?.personActed() }
+            return event
+        }
+    }
+
+    /// Whether `event` is aimed at a guest's screen: a click on it (not the toolbar or the HUD), or a key in its window
+    /// that no text field takes (the guest's view need not be the first responder to get keys), but not a ⌘ shortcut
+    /// (the window's own). A sheet is a window of its own.
+    @MainActor private func isOnScreen(_ event: NSEvent) -> Bool {
+        guard let window = event.window, window.isKeyWindow, displayViews.contains(where: { $0.window === window }) else {
+            return false  // a click that only brings the window forward is not one in the guest yet
+        }
+        if event.type == .keyDown { return !event.modifierFlags.contains(.command) && !(window.firstResponder is NSText) }
+        guard let target = window.contentView?.hitTest(event.locationInWindow) else { return false }
+        return displayViews.contains { target === $0 || target.isDescendant(of: $0) }
+    }
+
     /// The Dock tile shows the VM's icon and state, and changes with it.
     @MainActor func followDockTile(_ model: HelperViewModel, os: GuestOS?, custom: NSImage?) {
         let state = withObservationTracking {
@@ -100,6 +135,9 @@ extension HelperDelegate {
     ) {
         guard let windowModel, let controller else { return }
         VMWindowContent.install(in: window, display: display, model: windowModel, captureKeys: captureKeys)
+        displayViews.removeAll { $0.window == nil || $0.window === window }  // a VZ start's window replaces the last one's
+        displayViews.append(display)
+        watchPersonInput()
         let vmID = prepared?.config.id.uuidString ?? "vm"
         window.setFrameAutosaveName("VMPane.vm.\(vmID)")
         let closer = WindowCloser(model: windowModel, controller: controller, hide: hide)

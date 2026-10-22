@@ -1,4 +1,4 @@
-/// Error codes of the control protocol: JSON-RPC's standard codes plus VMPane's (-32010…-32018).
+/// Error codes of the control protocol: JSON-RPC's standard codes plus VMPane's (-32010…-32019).
 public enum ControlErrorCode: Int, Codable, Sendable, CaseIterable {
     case parseError = -32700
     case invalidRequest = -32600
@@ -14,4 +14,6 @@ public enum ControlErrorCode: Int, Codable, Sendable, CaseIterable {
     case insufficientSpace = -32016
     case protoUnsupported = -32017
     case macLocked = -32018
+    /// The person at the Mac took over the VM from AI agents (`vm.agent.takeOver`) until they resume.
+    case takenOver = -32019
 }

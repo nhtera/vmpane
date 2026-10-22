@@ -125,6 +125,8 @@ public actor VMAccess {
             "\(vm) runs an older VMPane helper that cannot do this yet: restart the VM (shut it down and start it again)."
         case .policyDenied?:
             "Refused by \(vm)'s agent access setting: \(error.message). Its owner can raise it in VMPane (Settings › AI agents)."
+        case .takenOver?:
+            "The person at the Mac took over \(vm) from AI agents: wait until they hand it back, then retry."
         case .agentUnavailable?:
             "\(error.message). Commands, files and the clipboard need VMPane's guest tools running in \(vm)."
         default:

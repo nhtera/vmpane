@@ -21,6 +21,10 @@ public enum ControlMethod: String, CaseIterable, Sendable {
     case vmInputBatch = "vm.input.batch"
     case vmScreenRead = "vm.screen.read"
     case vmSignIn = "vm.signIn"
+    case vmAgentActivity = "vm.agent.activity"
+    case vmAgentTakeOver = "vm.agent.takeOver"
+    case vmAgentResume = "vm.agent.resume"
+    case vmAgentStop = "vm.agent.stop"
     case vmDisplayShow = "vm.display.show"
     case vmInstallCancel = "vm.install.cancel"
     case vmSettingsGet = "vm.settings.get"
@@ -58,4 +62,6 @@ public enum ControlNotification: String, CaseIterable, Sendable {
     case filesProgress = "files.progress"
     /// An agent asked for a macOS guest's controls before the user allowed VMPane Agent Accessibility.
     case screenAccessibilityNeeded = "screen.accessibilityNeeded"
+    /// What AI agents are doing on the VM changed (`vm.agent.activity`'s result), on the `vm` topic.
+    case agentActivity = "agent.activity"
 }

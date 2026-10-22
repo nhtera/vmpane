@@ -8,6 +8,11 @@ public struct ConfirmationRequest: Sendable, Equatable {
     public let title: String
     /// The command, or what is restored or deleted.
     public let detail: String
+
+    public init(title: String, detail: String) {
+        self.title = title
+        self.detail = detail
+    }
 }
 
 /// Asking before an agent runs a command, goes back to a snapshot, or does an admin action (`mcp.confirmExec`, on
@@ -52,10 +57,15 @@ extension HelperController {
     /// The agent as the person is told about it. The client names itself: one line, printable, short, so it cannot
     /// pose as VMPane's own text.
     static func who(_ caller: CallerIdentity) -> String {
+        printableName(caller).map { "“\($0)” (an AI agent)" } ?? "An AI agent"
+    }
+
+    /// The client's name for itself: one line, printable, at most 40 characters; nil when it gave none.
+    static func printableName(_ caller: CallerIdentity) -> String? {
         let claimed = caller.claimedClient?.replacingOccurrences(of: " (claimed)", with: "") ?? ""
         let printable = String(String.UnicodeScalarView(claimed.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }))
             .trimmingCharacters(in: .whitespaces).prefix(40)
-        return printable.isEmpty ? "An AI agent" : "“\(printable)” (an AI agent)"
+        return printable.isEmpty ? nil : String(printable)
     }
 
     /// What an agent's call must pass after the policy, in order: input that travels with a confirmed command,
@@ -75,13 +85,13 @@ extension HelperController {
                     + "(the input parameter), so the person sees it")
         }
         if let question = confirmation(for: request, caller), await !ask(question) {
-            return RPCError(.policyDenied, "the person at this Mac did not allow it (\(question.title))")
+            // A question closed by the kill switch or a Take over says so (not "not allowed").
+            return agentStopRefusal(since: admitted, caller, method: request.method)
+                ?? RPCError(.policyDenied, "the person at this Mac did not allow it (\(question.title))")
         }
         if let refusal = await snapshotBeforeAgentChange(request, caller) { return refusal }
-        if agentsStopped(since: admitted, caller) {
-            return RPCError(.policyDenied, "AI agents are stopped (VMPane's kill switch)")
-        }
-        return nil
+        // Agents may have been stopped, or the person may have taken over, during the waits.
+        return agentStopRefusal(since: admitted, caller, method: request.method)
     }
 
     /// Asks, one question at a time and never while agents are stopped, with the timeout; false when nobody
@@ -90,7 +100,7 @@ extension HelperController {
     func ask(_ question: ConfirmationRequest) async -> Bool {
         guard let presenter = confirmationPresenter else { return false }
         while confirming { try? await Task.sleep(for: .milliseconds(100)) }
-        guard !killSwitchEngaged else { return false }
+        guard !killSwitchEngaged, !activity.takenOver else { return false }
         confirming = true
         defer { confirming = false }
         // The person's answer, or nil at the timeout: whichever comes first.

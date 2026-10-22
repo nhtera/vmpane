@@ -117,9 +117,12 @@ extension HelperController {
     func agentRequest(_ method: String, _ params: JSONValue?, from owner: ControlConnection) async -> Result<JSONValue, RPCError> {
         if ControlMethod(rawValue: method) == .agentStatus { return await agentStatus() }
         let stopped = agentStop(owner)
+        let admitted = agentGeneration
         guard let connection = await agentHub.waitForConnection(timeout: Self.agentWait) else {
             return .failure(RPCError(.agentUnavailable, "the guest agent is not connected"))
         }
+        // Agents may have been stopped, or the person may have taken over, while the guest's tools connected.
+        if let refusal = agentStopRefusal(since: admitted, identity(of: owner), method: method) { return .failure(refusal) }
         do {
             switch ControlMethod(rawValue: method) {
             case .agentExec?:
@@ -167,7 +170,7 @@ extension HelperController {
         // answer, e.g. busy with a transfer) is ended here.
         if let stopped, await stopped() {
             try? await agentExecs.signal(execId, signal: .kill, owner: owner)
-            throw RPCError(.policyDenied, "AI agents are stopped (VMPane's kill switch); the app can let them act again")
+            throw inputStopError
         }
         // Input given with the command (shown in the confirmation, recorded as a hash): fed, then closed.
         if let input = request.input {
@@ -190,7 +193,7 @@ extension HelperController {
         let started = try await agentExecs.launch(request.agentParams, owner: owner, byAgent: byAgent, on: connection)
         if let stopped, await stopped() {
             try? await agentExecs.signal(started.execId, signal: .kill, owner: owner)
-            throw RPCError(.policyDenied, "AI agents are stopped (VMPane's kill switch); the app can let them act again")
+            throw inputStopError
         }
         return ["execId": .int(Int64(started.execId)), "pid": .int(Int64(started.pid)), "launched": true]
     }
@@ -289,7 +292,9 @@ extension HelperController {
             while let data = try await stream.next() {
                 received += UInt64(data.count)
                 guard received <= size else { throw RPCError(.internalError, "the guest sent more than announced") }
-                if let stop, await stop() { throw RPCError(.policyDenied, "agents were stopped (kill switch)") }
+                if let stop, await stop() {
+                    throw RPCError(.policyDenied, "AI agents were stopped (the kill switch, or Stop in the VM's window)")
+                }
                 try handle.write(contentsOf: data)
             }
             guard received == size else { throw RPCError(.internalError, "the guest sent \(received) of \(size) bytes") }

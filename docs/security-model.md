@@ -99,6 +99,13 @@ files, sign binaries or drive the app's UI like the user.
   connections close, commands and desktop apps agents started are killed (after the agent left too), their file transfers stop, and port forwards agents
   added go down (measured: all within 0.15 s). Only the app releases it. The file is written released when the
   policy key is made; after that a missing or edited file counts as engaged.
+- **Take over** (the VM window's HUD, or the person's own key or click in the guest's screen while an agent acts): every
+  non-read-only agent request, and reading the guest's clipboard, is refused (`takenOver`) until the person resumes,
+  also after a wait for the person's answer, a snapshot or the guest tools; a batch or typing (`vm.input.text` too)
+  stops at its next piece. Commands and transfers already running go on; **Stop** ends them and holds agents the
+  same way. The operator CLI is not held. Only the app (and the itest bridge, which counts as it) may take over,
+  resume or stop (`uiOnly`), and only the app's connections get the `agent.activity` notification. Agents' synthetic input never passes the app's event
+  loop (VZ: straight into the display view; QEMU: over QMP), so it cannot trigger a take over itself.
 - **Audit**: every request a non-app client makes of a VM's helper, every refusal, and every clone or delete
   of the VM by the CLI or an agent is one line in the VM's `logs/mcp-audit.jsonl` (synced before the answer;
   typed text and clipboard contents as SHA-256 unless the VM records typed text, a command's input always as

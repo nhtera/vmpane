@@ -3,6 +3,7 @@ import Foundation
 import Testing
 import VMPaneControl
 import VMPaneCore
+import VMPaneHost
 
 @testable import VMPaneUI
 
@@ -328,4 +329,38 @@ final class MemoryBox: @unchecked Sendable {
     channel.push("agent.connectionChanged", ["connected": true])
     #expect(await eventually { model.agentConnected })
     #expect(model.notice == nil, "not twice for one VM")
+}
+
+/// The person's own key or click takes over only while an agent acts; the HUD's buttons call the helper.
+@Test @MainActor func thePersonTakesOverOnlyWhileAnAgentActs() async throws {
+    let channel = FakeChannel()
+    let acting: JSONValue = ["acting": true, "client": "claude-code", "level": "exec", "current": "typing", "recent": []]
+    channel.answer("vm.agent.takeOver", .success(["acting": false, "takenOver": true, "level": "exec", "recent": []]))
+    channel.answer("vm.agent.resume", .success(["acting": false, "takenOver": false, "level": "exec", "recent": []]))
+    let model = HelperViewModel(channel: channel)
+    model.personActed()  // nobody acts: nothing happens
+    try await Task.sleep(for: .milliseconds(50))
+    #expect(!channel.calls.contains("vm.agent.takeOver"))
+    model.show(AgentActivity(acting))
+    #expect(model.activity?.client == "claude-code" && model.activity?.level == .exec && model.activity?.current == "typing")
+    model.personActed()
+    for _ in 0..<50 where model.activity?.takenOver != true { try await Task.sleep(for: .milliseconds(10)) }
+    #expect(channel.calls.contains("vm.agent.takeOver") && model.activity?.takenOver == true)
+    await model.resumeAgents()
+    #expect(model.activity?.takenOver == false)
+}
+
+/// An approval in the window: Deny is a no, Allow Once a yes, a dismissed question a no.
+@Test @MainActor func approvalsAreAnsweredInTheWindow() async {
+    let model = HelperViewModel(channel: FakeChannel())
+    let question = ConfirmationRequest(title: "An AI agent wants to run a command", detail: "rm -rf /tmp/x")
+    async let allowed = model.presentApproval(question)
+    await Task.yield()
+    #expect(model.approval == question)
+    model.answerApproval(true)
+    #expect(await allowed && model.approval == nil)
+    async let dismissed = model.presentApproval(question)
+    await Task.yield()
+    model.dismissApproval()
+    #expect(await dismissed == false)
 }

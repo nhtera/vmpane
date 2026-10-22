@@ -52,7 +52,7 @@ extension HelperController {
 
     private struct WriteParams: Decodable { var items: [WriteItem] }
 
-    func clipboardRead(_ params: JSONValue?) async -> Result<JSONValue, RPCError> {
+    func clipboardRead(_ params: JSONValue?, from owner: ControlConnection? = nil) async -> Result<JSONValue, RPCError> {
         let types: [AgentClipboardType]
         switch RPCParams.decode(ReadParams.self, from: params ?? [:]) {
         case .success(let decoded): types = decoded.types ?? [.text, .png, .files]
@@ -61,7 +61,7 @@ extension HelperController {
         guard config.clipboard.mode == .off || config.clipboard.mode.receivesFromGuest else {
             return .failure(RPCError(.invalidState, "this VM's clipboard sharing is host to guest only"))
         }
-        return await withClipboardAgent { connection in
+        return await withClipboardAgent(.vmClipboardRead, from: owner) { connection in
             let content = try await AgentClipboard.get(connection, types: types)
             var items: [JSONValue] = []
             if let text = content.text { items.append(["type": "text", "text": .string(text)]) }
@@ -71,7 +71,7 @@ extension HelperController {
         }
     }
 
-    func clipboardWrite(_ params: JSONValue?) async -> Result<JSONValue, RPCError> {
+    func clipboardWrite(_ params: JSONValue?, from owner: ControlConnection? = nil) async -> Result<JSONValue, RPCError> {
         let items: [WriteItem]
         switch RPCParams.decode(WriteParams.self, from: params) {
         case .success(let decoded): items = decoded.items
@@ -92,19 +92,26 @@ extension HelperController {
         guard config.clipboard.mode == .off || config.clipboard.mode.sendsToGuest else {
             return .failure(RPCError(.invalidState, "this VM's clipboard sharing is guest to host only"))
         }
-        return await withClipboardAgent { connection in
+        return await withClipboardAgent(.vmClipboardWrite, from: owner) { connection in
             try await AgentClipboard.set(connection, content)
             return [:]
         }
     }
 
-    private func withClipboardAgent(_ body: (AgentConnection) async throws -> JSONValue) async -> Result<JSONValue, RPCError> {
+    /// `body` with the guest's agent, once it has connected (a wait), unless `owner`'s request may not go on after it.
+    private func withClipboardAgent(
+        _ method: ControlMethod, from owner: ControlConnection?, _ body: (AgentConnection) async throws -> JSONValue
+    ) async -> Result<JSONValue, RPCError> {
         guard config.clipboard.mode != .off else { return .failure(RPCError(.invalidState, "clipboard sharing is off for this VM")) }
+        let admitted = agentGeneration
         guard let connection = await agentHub.waitForConnection(timeout: Self.agentWait),
             await agentHub.status.peer?.hello.caps?.contains(AgentCap.clipboard) == true
         else {
             return .failure(
                 RPCError(.agentUnavailable, "the guest has no VMPane agent with clipboard support (macOS and Windows guests have one)"))
+        }
+        if let owner, let refusal = agentStopRefusal(since: admitted, identity(of: owner), method: method.rawValue) {
+            return .failure(refusal)
         }
         do {
             return .success(try await body(connection))

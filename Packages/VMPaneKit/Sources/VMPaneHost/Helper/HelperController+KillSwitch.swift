@@ -42,6 +42,7 @@ extension HelperController {
         Self.log.notice("agent kill switch \(engaged ? "engaged" : "released", privacy: .public)")
         if engaged { await stopAgents() }
         await applyForwardsAllowedNow()
+        broadcastAgentActivity()
     }
 
     /// The switch as checked with the key this helper holds (see `effectivePolicy`).

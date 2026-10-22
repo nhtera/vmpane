@@ -190,7 +190,7 @@ extension HelperController {
     }
 
     private func checkStillAllowed(_ admitted: Int, _ caller: CallerIdentity) throws {
-        if agentsStopped(since: admitted, caller) { throw RPCError(.policyDenied, Self.stoppedReason) }
+        if agentInputStopped(since: admitted, caller) { throw inputStopError }
     }
 
     /// Select all and delete in the focused field.

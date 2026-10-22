@@ -26,7 +26,7 @@ extension HelperController {
         var dy: Double?
     }
 
-    func displayRequest(_ method: String, _ params: JSONValue?) async -> Result<JSONValue, RPCError> {
+    func displayRequest(_ method: String, _ params: JSONValue?, from owner: ControlConnection? = nil) async -> Result<JSONValue, RPCError> {
         guard let backend else { return .failure(RPCError(.backendUnavailable, "no backend for this VM")) }
         guard state == .running || state == .paused else {
             return .failure(RPCError(.invalidState, "the VM is \(state.rawValue)"))
@@ -52,7 +52,12 @@ extension HelperController {
                 let key = try RPCParams.decode(KeyParams.self, from: params).get()
                 try await backend.send(.key(usage: key.usage, down: key.down))
             case .vmInputText?:
-                try await backend.send(.text(try RPCParams.decode(TextParams.self, from: params).get().text))
+                let text = try RPCParams.decode(TextParams.self, from: params).get().text
+                if let owner {
+                    try await type(text, backend: backend, admitted: agentGeneration, caller: identity(of: owner))
+                } else {
+                    try await backend.send(.text(text))
+                }
             case .vmInputPointer?:
                 let pointer = try RPCParams.decode(PointerParams.self, from: params).get()
                 try await backend.send(.pointer(x: pointer.x, y: pointer.y, buttons: pointer.buttons ?? 0))
@@ -65,6 +70,8 @@ extension HelperController {
             return .success(.object([:]))
         } catch let error as RPCError {
             return .failure(error)
+        } catch is Stopped {
+            return .failure(inputStopError)
         } catch {
             return .failure(RPCError(.agentUnavailable, "display access failed: \(error)"))
         }

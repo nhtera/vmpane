@@ -17,7 +17,7 @@ extension HelperController {
         let size: UInt64
     }
 
-    func dropFiles(_ params: JSONValue?) async -> Result<JSONValue, RPCError> {
+    func dropFiles(_ params: JSONValue?, from owner: ControlConnection? = nil) async -> Result<JSONValue, RPCError> {
         let paths: [String]
         switch RPCParams.decode(DropParams.self, from: params) {
         case .success(let decoded): paths = decoded.paths
@@ -26,11 +26,13 @@ extension HelperController {
         guard !paths.isEmpty, paths.allSatisfy({ $0.hasPrefix("/") }) else {
             return .failure(RPCError(.invalidParams, "paths must be absolute host paths"))
         }
+        let admitted = agentGeneration
         guard let connection = await agentHub.waitForConnection(timeout: Self.agentWait), let peer = await agentHub.status.peer else {
             return .failure(RPCError(.agentUnavailable, "the guest agent is not connected"))
         }
         var dropFolder: String?
         do {
+            try checkStillAdmitted(since: admitted, owner, .vmFilesDrop)
             let (items, skipped) = try await Blocking.run { try Self.dropItems(paths.map { URL(fileURLWithPath: $0) }) }
             let windows = peer.hello.os == "windows"
             let folder = try await makeDropFolder(items.filter { $0.source == nil }.map(\.path), windows: windows, on: connection)
@@ -193,7 +195,7 @@ extension HelperController {
         }
         guard dropTask == nil else { return .failure(RPCError(.invalidState, "files are already being copied into the VM")) }
         let params = request.params
-        let task = Task { await self.dropFiles(params) }
+        let task = Task { await self.dropFiles(params, from: connection) }
         dropTask = task
         dropOwner = ObjectIdentifier(connection)
         defer {

@@ -70,6 +70,8 @@ public actor HelperController {
     var signingIn = false
     /// Single input requests being sent (`displayRequest`), which a sign-in waits for.
     var inputsInFlight = 0
+    /// What agents did lately, and the person's Take over (`AgentActivity`).
+    var activity = AgentActivityState()
     /// How long a question waits for the person (`HelperController+Confirm`); no answer is a no.
     var confirmationTimeout: Duration = .seconds(60)
     /// Agent sessions' undo snapshots (`HelperController+AgentSession`).
@@ -189,9 +191,10 @@ public actor HelperController {
             return .success(.object([:]))
         case .vmInfo?: return info()
         case .vmScreenshot?, .vmScreenRead?, .vmInputKey?, .vmInputText?, .vmInputPointer?, .vmInputScroll?:
-            return await displayRequest(request.method, request.params)
+            return await displayRequest(request.method, request.params, from: connection)
         case .vmInputBatch?: return await inputBatch(request.params, from: connection)
         case .vmSignIn?: return await signIn(from: connection)
+        case .vmAgentActivity?, .vmAgentTakeOver?, .vmAgentResume?, .vmAgentStop?: return await agentActivityRequest(request.method)
         case .vmDisplayShow?:
             displayContinuation.yield()
             return .success(.object([:]))
@@ -204,8 +207,8 @@ public actor HelperController {
         case .vmFilesDrop?, .vmFilesCancel?: return await filesRequest(request, from: connection)
         case .mcpDisableAll?: return await killSwitchRequest(engage: true)
         case .mcpEnableAll?: return await killSwitchRequest(engage: false)
-        case .vmClipboardRead?: return await clipboardRead(request.params)
-        case .vmClipboardWrite?: return await clipboardWrite(request.params)
+        case .vmClipboardRead?: return await clipboardRead(request.params, from: connection)
+        case .vmClipboardWrite?: return await clipboardWrite(request.params, from: connection)
         case .vmSettingsApply?: return await applySettings(request.params, byApp: identity(of: connection).identity == .ui)
         case .vmStart?, .vmPause?, .vmResume?, .vmSuspend?, .vmStop?:
             return await lifecycle(request.method, request.params)

@@ -28,8 +28,8 @@ Then, in VMPane, open the VM's **Settings › AI agents** and choose what agents
 The table in `ControlMethodPolicy` (`Packages/VMPaneKit/Sources/VMPaneCore/Policy/`) is the one source of these
 levels; the helper checks every call against it.
 
-Other settings there: **Ask before an agent runs a command** (on by default: a dialog shows the command and its
-input, Deny is the default, no answer in a minute is a no; it also asks before an agent restores or deletes a
+Other settings there: **Ask before an agent runs a command** (on by default: the VM's window, or an alert when it has none, shows the command
+and its input, Deny is the default, no answer in a minute is a no; it also asks before an agent restores or deletes a
 snapshot or shuts the VM down, and the kill switch turns an open question into a no), **Snapshot before each agent session** (on by default),
 **Record typed text** (off: typed text is recorded as a hash), **Let agents read and set the clipboard** (off).
 Settings that reach beyond the VM (shared folders, removable media, networking, its name, port rules that listen
@@ -104,6 +104,18 @@ Before a session's first call that changes anything, VMPane snapshots the VM (wi
 its disks, frozen through the guest tools). When it cannot, the call is refused rather than run without a way
 back. The VM's snapshots list shows these as **Before agent**; **Undo This Agent Session…** restores one. The last
 five are kept, and a session's own is never removed while it runs.
+
+## The person at the Mac
+
+While an agent works in a VM, its window shows who it is, at what level and what it just did, with **Take Over** and
+**Stop**. Take Over (also any key or click of the person's in the VM's screen while an agent acts) makes every tool
+that changes the VM, and reading its clipboard, answer "The person at the Mac took over": wait, and retry once they
+resume. Typing or a batch under way stops at its next piece; commands and transfers already running go on. Reading
+the screen keeps working. Stop also ends what agents are doing in that VM (commands, apps, transfers) and closes
+their connections, and holds them like Take Over until the person resumes. The person's own `vmpane` commands (an
+operator) are not held. Questions for the person (a command, a snapshot restore or delete, a shutdown) appear in the
+VM's window, which shows itself first (an alert when it has no window yet, or another sheet is open); Deny is the
+default, and no answer in a minute is a no.
 
 ## Stopping every agent
 

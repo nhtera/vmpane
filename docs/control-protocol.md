@@ -55,11 +55,15 @@ with end-of-file after it starts; when the VM asks before agents run commands, t
 | `vm.snapshot.rename` | `{id, name}` (1-200 characters; an agent session's undo snapshot only by the app) | `{}` | control |
 | `vm.screenshot` | `{maxEdge, format}` | `{dataB64, width, height}` | observe |
 | `vm.input.key` | `{usage, down}` | `{}` | control |
-| `vm.input.text` | `{text}` | `{}` | control |
+| `vm.input.text` | `{text}` (an agent's is typed in pieces: a take over or the kill switch stops it at the next one) | `{}` | control |
 | `vm.input.pointer` | `{x, y, buttons}` | `{}` | control |
 | `vm.input.scroll` | `{dx, dy}` | `{}` | control |
 | `vm.input.batch` | `{actions: [{type: key, usages} \| {type: text, text, submit?} \| {type: click, x, y, button?, count?, modifiers?} \| {type: move, x, y} \| {type: drag, from, to} \| {type: scroll, dx, dy} \| {type: wait, ms}], stopOnError?, settleMs?, verify?}` (≤ 50 actions, waits ≤ 30 s together; each action is also decided and audited as the `vm.input.*` request it stands for; a stop ends it between actions, pieces of text and captures) | `{results: [{i, ok, error?}], verified: {status: changed\|unchanged\|unknown, changeRatio, bbox?, settled, waitedMs, reason?}, screen?: {width, height}}` (guest pixels) | control |
 | `vm.signIn` | `{}` (only with the VM's `mcp.signIn` on, inside the policy's tag; the guest tools' `session.state` must report `greeter` or `locked`; at exec and admin the person is asked first; a password field must be on the screen once woken; the kept password is typed by the helper itself, never part of a request, reply or log; agents' input answers `busy` meanwhile) | `{verified: {status: signed_in\|already_signed_in}}` once `session.state` reports `unlocked` (within 30 s) | control |
+| `vm.agent.activity` | `{}` | `{acting, takenOver, stopped, level, client?, current?, recent: [{method, what, ok, at}]}`: what AI agents do on the VM (acting: a request in the last 10 s; no notification when that runs out, so ask again; `stopped`: VMPane's kill switch is on; `client`: the name the agent gave itself, made printable; `recent`: the last 3, a repeat replacing the newest) | uiOnly |
+| `vm.agent.takeOver` | `{}` (the person takes over: agents' requests that change anything, and `vm.clipboard.read`, answer `takenOver`, also after waits; a batch or typing under way stops at its next piece; commands and transfers already running go on; the operator CLI is not held) | the activity | uiOnly |
+| `vm.agent.resume` | `{}` | the activity | uiOnly |
+| `vm.agent.stop` | `{}` (ends what agents do on this VM: their commands, desktop apps and transfers, and their connections; then holds them as `vm.agent.takeOver` does until `vm.agent.resume`; unlike the kill switch, only this VM) | the activity | uiOnly |
 | `vm.screen.read` | `{source?: ocr\|elements\|auto\|both, region?: {x, y, width, height}, maxItems?}` (guest pixels; `ocr` is recognized on the Mac from the display; `elements` needs the guest tools' `screen` cap; `auto`: elements when they have it, else ocr; text cleaned of control and bidi characters, never logged) | `{source, screen: {width, height}, ocr?: {items: [{text, rect: [x, y, w, h]}], truncated}, elements?: {items: [{role, name, value?, rect, enabled?, focused?}], truncated}, elementsError?}` (`elementsError`: why there are no controls, for auto and both; VMPane's words, the guest's message only quoted) | observe |
 | `vm.display.show` | — | `{}` | control |
 | `vm.install.cancel` | — (ends a Windows install; a running VM is ejected from its install discs and stopped) | `{state}` | uiOnly |
@@ -106,6 +110,7 @@ at it) needs `control` for clients other than the app and an operator.
 |---|---|
 | `vm.stateChanged` | `{state, reason}` |
 | `agent.connectionChanged` | `{connected}` |
+| `agent.activity` | `vm.agent.activity`'s result (topic `vm`, the app's connections only), after every agent request, a take over, a resume, a stop and a kill switch change |
 | `screen.accessibilityNeeded` | `{}` (topic `agent`: a guest refused its controls until the user allows VMPane Agent Accessibility; the VM window says so, once) |
 | `exec.output` | `{execId, stream, dataB64}` |
 | `exec.exited` | `{execId, code, signal}` |
@@ -135,3 +140,4 @@ JSON-RPC's standard codes (-32700 parse error, -32600 invalid request, -32601 me
 | -32016 | insufficientSpace | not enough free disk space for RAM state |
 | -32017 | protoUnsupported | no shared protocol version |
 | -32018 | macLocked | saved VM memory cannot be restored while this Mac is locked; the state is kept, start again after unlocking |
+| -32019 | takenOver | the person at the Mac took over the VM from AI agents (`vm.agent.takeOver`); retry after they resume |

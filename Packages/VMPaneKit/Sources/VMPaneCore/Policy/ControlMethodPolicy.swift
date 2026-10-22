@@ -64,6 +64,11 @@ public enum ControlMethodPolicy {
         "vm.screen.read": .level(.observe),
         // Also needs the VM's "Let agents sign in" (`mcp.signIn`), and the person's yes at exec levels.
         "vm.signIn": .level(.control),
+        // The person's controls over agents (an agent cannot resume itself).
+        "vm.agent.activity": .uiOnly,
+        "vm.agent.takeOver": .uiOnly,
+        "vm.agent.resume": .uiOnly,
+        "vm.agent.stop": .uiOnly,
         "vm.display.show": .level(.control),
         "vm.install.cancel": .uiOnly,
         "vm.settings.get": .level(.observe),

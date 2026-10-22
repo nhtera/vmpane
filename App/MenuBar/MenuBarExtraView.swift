@@ -39,3 +39,15 @@ struct MenuBarExtraView: View {
         Task { await store.perform(action, on: row.id) }
     }
 }
+
+/// VMPane's menu bar icon: filled while an AI agent acts on any VM. A view of its own, so it follows the library (the
+/// App's body does not).
+struct MenuBarIcon: View {
+    let store: LibraryStore
+
+    var body: some View {
+        let acting = store.rows.contains(where: \.agentActive)
+        Image(systemName: acting ? "square.stack.3d.up.fill" : "square.stack.3d.up")
+            .accessibilityLabel(acting ? "VMPane, an AI agent is acting" : "VMPane")
+    }
+}

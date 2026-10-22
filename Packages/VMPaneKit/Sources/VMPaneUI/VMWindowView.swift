@@ -60,12 +60,14 @@ public struct VMWindowView: View {
             } else if model.state == .stopped || model.state == .error {
                 StoppedOverlay(model: model)
             }
+            AgentEdgeTint(acting: model.activity?.acting == true)
             if let transfer = model.transfer {
                 TransferHUD(transfer: transfer) { Task { await model.cancelDrop() } }
                     .frame(maxHeight: .infinity, alignment: .bottom)
                     .padding(.bottom, 16)
             }
             VStack(spacing: 8) {
+                AgentHUD(model: model).padding(.horizontal, 16)
                 if model.memoryLow && (model.state == .running || model.state == .paused) {
                     LowMemoryBanner().transition(.opacity)
                 }
@@ -128,6 +130,9 @@ public struct VMWindowView: View {
                 SnapshotsSheet(model: snapshots, running: model.state == .running || model.state == .paused)
                     .frame(height: fitted(SnapshotsSheet.idealHeight))
             }
+        }
+        .sheet(isPresented: Binding(get: { model.approval != nil }, set: { if !$0 { model.dismissApproval() } })) {
+            if let question = model.approval { ApprovalSheet(question: question) { model.answerApproval($0) } }
         }
         .alert("Cancel the Windows installation?", isPresented: $confirmingCancelInstall) {
             Button("Keep Installing", role: .cancel) {}

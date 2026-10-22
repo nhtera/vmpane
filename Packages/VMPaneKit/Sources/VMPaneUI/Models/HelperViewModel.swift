@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import VMPaneControl
 import VMPaneCore
+import VMPaneHost
 
 /// A control connection the VM window uses (`UDSClient` to its own helper; faked in tests).
 public protocol HelperChannel: Sendable {
@@ -57,6 +58,12 @@ public final class HelperViewModel {
     public internal(set) var transfer: Transfer?
     /// The Mac is nearly out of memory while the VM runs (`watchMemory`).
     public private(set) var memoryLow = false
+    /// What AI agents are doing on the VM (`HelperViewModel+Agent`); nil until read.
+    public internal(set) var activity: AgentActivity?
+    /// An agent's request waiting for the person's answer in the window (`ApprovalSheet`).
+    public internal(set) var approval: ConfirmationRequest?
+    @ObservationIgnored var approvalAnswer: CheckedContinuation<Bool, Never>?
+    @ObservationIgnored var activityRefresh: Task<Void, Never>?
     /// Asks before a start on a Mac low on memory, and reads the Mac's memory for `memoryLow`; nil: neither.
     @ObservationIgnored public var lowMemoryGuard: LowMemoryGuard?
 
@@ -84,6 +91,7 @@ public final class HelperViewModel {
             await refreshAudio()
             agentConnected =
                 (try? await channel.call(ControlMethod.agentStatus.rawValue, params: nil, timeout: .seconds(5)))?["connected"] == true
+            await refreshActivity()
         } catch {
             lastError = String(describing: error)
         }
@@ -158,6 +166,8 @@ public final class HelperViewModel {
                 message: note.params?["message"]?.stringValue ?? "")
         case ControlNotification.agentConnectionChanged.rawValue:
             agentConnected = note.params?["connected"] == true
+        case ControlNotification.agentActivity.rawValue:
+            if let params = note.params { show(AgentActivity(params)) }
         case ControlNotification.screenAccessibilityNeeded.rawValue:
             // Once per VM: macOS shows its own prompt in the guest too.
             let key = "accessibilityHintShown.\(vmID ?? "?")"
