@@ -1,6 +1,28 @@
 # Linux guests
 
-## Installing
+## Ready in minutes: cloud images
+
+New VM › Linux › *Ready in minutes* makes a VM from the distribution's own arm64 cloud image (Ubuntu 26.04 LTS,
+Debian 13, Fedora 44) with nothing to click through: you give a user name, a password and, if you like, an SSH public
+key, and choose whether to add a desktop.
+
+- The image is downloaded once and checked against the SHA-256 pinned in VMPane, then converted to a disk once (in
+  `~/Library/Caches/app.vmpane.mac/Cloud/`); each VM's disk is an APFS clone of it, grown to the size you chose.
+  The pins come from Ubuntu's and Fedora's signed checksum lists; Debian publishes its cloud images' checksums over
+  HTTPS only, unsigned (`scripts/refresh-linux-catalog.sh`).
+- The first boot (cloud-init) creates your user as an administrator (`sudo`; `wheel` on Fedora), grows the disk,
+  sets the host name from the VM's name and installs VMPane's guest tools from the VM's `vmpane-tools` share. It
+  takes about a minute; the VM's window shows the progress. The password reaches the VM only as a `$6$` hash.
+- With a key, SSH accepts only the key; without, it accepts the password. VMPane forwards SSH from 127.0.0.1 on
+  this Mac only: `vmpane ssh <vm> -u <user>`.
+- *Install a desktop* adds GNOME (Ubuntu's minimal desktop, Debian's GNOME task, Fedora Workstation) during the
+  first boot, with automatic login, and restarts once: several minutes and a few GB more, downloaded by the VM.
+- The setup data (`install/cidata*` in the VM's bundle) is removed once the guest tools run, and so are
+  cloud-init's copies of it in the VM (`user-data.txt`, `cloud-config.txt`; its root-only cache keeps the
+  password's hash, as `/etc/shadow` does). Until then the VM cannot be snapshotted. A copy made before that is a new
+  machine with its own setup, and every copy gets its own SSH port.
+
+## Installing from an ISO
 
 Create a Linux VM from the catalog (Ubuntu Server, Debian, Fedora Server; arm64 ISOs, checked against a
 pinned SHA-256 after download) or from your own ISO. VMPane refuses ISOs without an arm64 UEFI loader

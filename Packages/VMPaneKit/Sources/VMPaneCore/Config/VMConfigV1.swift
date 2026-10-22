@@ -314,13 +314,20 @@ public struct InstallConfig: ExtensibleFields {
     public var restoreImage: String?
     /// Linux: id of the `removable` entry holding the installer ISO, detached after the installer's reboot.
     public var media: String?
+    /// Linux cloud image: id of the `removable` entry holding the cloud-init seed (`install/cidata.iso`, from
+    /// `install/cidata/`); its data goes once the guest tools run, the entry when the VM next stops.
+    public var cloudInit: String?
+    /// Linux cloud image: the first boot also installs a desktop (it takes a while, and reboots once).
+    public var desktop: Bool?
 
-    public init(restoreImage: String? = nil, media: String? = nil) {
+    public init(restoreImage: String? = nil, media: String? = nil, cloudInit: String? = nil, desktop: Bool? = nil) {
         self.restoreImage = restoreImage
         self.media = media
+        self.cloudInit = cloudInit
+        self.desktop = desktop
     }
 
-    enum CodingKeys: String, CodingKey, CaseIterable { case restoreImage, media }
+    enum CodingKeys: String, CodingKey, CaseIterable { case restoreImage, media, cloudInit, desktop }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
 

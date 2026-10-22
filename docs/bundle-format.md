@@ -17,7 +17,8 @@ Name.vmpane/
     state/               saved RAM state (suspend.vzvmsave | state.qemu + state-qemu.json) + suspend.json
                          {generationId, deviceSetHash, hostBuild, backendVersion}
   snapshots/<uuid>/      meta.json, disk.img, aux/, state/ — meta.json is written last
-  install/               Windows install state; never snapshotted or cloned
+  install/               Windows install state; a Linux cloud image's cloud-init seed (cidata/, cidata.iso, 0600,
+                         until the guest tools run); never snapshotted; a clone gets its own seed
   restore.journal        present only while a restore is in progress
   logs/                  helper.log serial.log qemu.log swtpm.log mcp-audit.jsonl
 ```

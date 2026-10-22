@@ -38,7 +38,9 @@ public enum BackendFactory {
             // saved RAM state waits, which a device change would discard.
             let hasSavedState = !((try? FileManager.default.contentsOfDirectory(atPath: bundle.stateDirectory.path)) ?? []).isEmpty
             let steps: [(VMConfigV1) -> VMConfigV1?] =
-                [VZBackend.prepare] + (hasSavedState ? [] : [{ LinuxInstall.finished($0, bundle: bundle) }])
+                [VZBackend.prepare]
+                + (hasSavedState
+                    ? [] : [{ LinuxInstall.finished($0, bundle: bundle) }, { CloudImageInstall.finished($0, bundle: bundle) }])
             for step in steps {
                 if let updated = step(config) {
                     try ConfigStore.save(updated, holding: prepared.lock)
@@ -51,7 +53,7 @@ public enum BackendFactory {
                 plan: plan, title: config.name, replan: { try VZPlanBuilder.plan($0, bundle: bundle, guestTools: tools) })
             return Made(
                 backend: backend, config: config, afterStart: { VZBackend.installed($0, bundle: bundle) },
-                afterStop: { LinuxInstall.finished($0, bundle: bundle) })
+                afterStop: { LinuxInstall.finished($0, bundle: bundle) ?? CloudImageInstall.finished($0, bundle: bundle) })
         case .qemu:
             guard let runtime, FileManager.default.fileExists(atPath: runtime.appendingPathComponent("qemu/bin").path) else {
                 return Made(backend: nil, config: config)  // this app has no QEMU

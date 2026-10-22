@@ -14,7 +14,9 @@ install -m 0755 "$root/agent/target/aarch64-unknown-linux-musl/release/vmpane-ag
 install -m 0755 "$root/agent/installer/linux/install.sh" "$out.partial/install.sh"
 install -m 0644 "$root/agent/installer/linux/vmpane-agent.service" "$out.partial/vmpane-agent.service"
 install -m 0644 "$root/agent/installer/linux/vmpane-session.service" "$out.partial/vmpane-session.service"
-(cd "$out.partial" && shasum -a 256 vmpane-agent install.sh vmpane-agent.service vmpane-session.service >SHA256SUMS)
+install -m 0644 "$root/agent/installer/linux/vmpane-session-env.desktop" "$out.partial/vmpane-session-env.desktop"
+(cd "$out.partial" && shasum -a 256 vmpane-agent install.sh vmpane-agent.service vmpane-session.service \
+    vmpane-session-env.desktop >SHA256SUMS)
 rm -rf "$out"
 mv "$out.partial" "$out"
 echo "$out"

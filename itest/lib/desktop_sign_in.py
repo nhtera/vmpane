@@ -1,5 +1,6 @@
 """Desktop apps and agent sign-in through `vmpane mcp` (desktop-sign-in.sh): one phase per call.
   launch <cli> <os>             vm_exec desktop opens the guest's test app; its name shows on the screen
+  launch <cli> <program> <title>  the same for a program given, whose window shows title
   sign-in <cli> <expect>        vm_sign_in; <expect>: signed_in or already_signed_in
   lock <cli>                    the macOS lock shortcut (ctrl+cmd+q)
 Every reply is appended to $DSI_TRANSCRIPT (the MCP transcript checked for the password afterwards)."""
@@ -32,7 +33,8 @@ def screen_has(text, timeout=30):
         time.sleep(1)
 
 if phase == "launch":
-    argv, title = APPS[sys.argv[3]]
+    # launch <cli> <os>, or launch <cli> <program> <title> (Linux: whichever app the desktop has).
+    argv, title = APPS[sys.argv[3]] if len(sys.argv) == 4 else ([sys.argv[3]], sys.argv[4])
     started = record(client.call("vm_exec", vm=vm, argv=argv, desktop=True))
     assert not started.get("isError"), started
     structured = started["structuredContent"]

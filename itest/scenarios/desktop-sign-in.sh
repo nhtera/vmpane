@@ -31,19 +31,31 @@ it_dsi_allow() {
     (umask 077 && printf '%s' "$password" >"$VMPANE_SUPPORT_DIR/sign-in/$id")
 }
 
-# The kill switch closes the desktop app ($1: a command printing a line while it runs).
+# Whether the desktop app runs: $1, a command that exits 0 while it does and 1 once it is gone (pgrep, findstr);
+# any other exit (the check itself failed) is an error, never "gone".
+it_dsi_app() {
+    local status=0
+    /usr/bin/python3 "$VMPANE_ROOT/itest/lib/agent_exec.py" "$socket" --user "$1" >/dev/null || status=$?
+    case $status in
+        0) echo running ;; 1) echo gone ;; *) echo "error $status" ;;
+    esac
+}
+
+# The kill switch closes the desktop app ($1: the check for it_dsi_app).
 it_dsi_kill_closes() {
-    local running=$1 cli="$APP/Contents/Helpers/vmpane"
-    if ! /usr/bin/python3 "$VMPANE_ROOT/itest/lib/agent_exec.py" "$socket" --user "$running" | grep -q .; then
+    local check=$1 cli="$APP/Contents/Helpers/vmpane" state deadline
+    state=$(it_dsi_app "$check")
+    if [[ $state != running ]]; then
         /usr/bin/python3 "$VMPANE_ROOT/itest/lib/agent_exec.py" "$socket" 'ps -axo pid,ppid,user,comm' | grep -iE 'textedit|charmap|vmpane' >&2
-        it_fail "the desktop app is not running"
+        it_fail "the desktop app is not running ($state)"
         return 1
     fi
     "$cli" mcp kill >/dev/null || it_fail "vmpane mcp kill failed" || return 1
     sleep 2
     it_rpc "$socket" mcp.enableAll >/dev/null || it_fail "the app could not release the kill switch" || return 1
-    it_wait_for 15 bash -c "! /usr/bin/python3 '$VMPANE_ROOT/itest/lib/agent_exec.py' '$socket' --user '$running' | grep -q ." \
-        || it_fail "the kill switch did not close the desktop app" || return 1
+    deadline=$((SECONDS + 15))
+    while state=$(it_dsi_app "$check") && [[ $state == running ]] && ((SECONDS < deadline)); do sleep 1; done
+    [[ $state == gone ]] || { it_fail "the kill switch did not close the desktop app ($state)"; return 1; }
     echo "desktop-sign-in: the kill switch closed the desktop app"
 }
 

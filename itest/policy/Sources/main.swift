@@ -2,17 +2,24 @@
 // never treat the itest bridge as the app (PeerClassifier), so the tests act as an agent would, within a policy
 // set here the way the app sets it (VMPaneCore's PolicyIntegrity and KillSwitch). It writes only into the
 // library named by $VMPANE_SUPPORT_DIR, a temporary one the test owns. Never shipped.
+// It also stands in for the wizard's create of a Linux VM from a cloud image (VMCreator, as the app runs it).
 // Usage: vmpane-itest-policy set <bundle> <off|observe|control|exec|admin> [--clipboard] [--confirm-exec]
 //        vmpane-itest-policy release   (the kill switch)
+//        vmpane-itest-policy create-cloud <image id> <name> <user> <qemu-img> <cache dir> [--desktop] [--ssh-key <key>]
+//            (the password on stdin; prints the new bundle's path)
 import Foundation
 import VMPaneCore
+import VMPaneHost
+import VMPaneUI
 
 func fail(_ message: String, code: Int32 = 1) -> Never {
     FileHandle.standardError.write(Data("vmpane-itest-policy: \(message)\n".utf8))
     exit(code)
 }
 
-let usage = "usage: vmpane-itest-policy set <bundle> <level> [--clipboard] [--confirm-exec] | release"
+let usage =
+    "usage: vmpane-itest-policy set <bundle> <level> [--clipboard] [--confirm-exec] | release "
+    + "| create-cloud <image id> <name> <user> <qemu-img> <cache dir> [--desktop] [--ssh-key <key>]"
 guard let support = ProcessInfo.processInfo.environment["VMPANE_SUPPORT_DIR"], !support.isEmpty else {
     fail("VMPANE_SUPPORT_DIR is not set (this tool never touches the real library)", code: 64)
 }
@@ -23,6 +30,27 @@ do {
     switch arguments.first {
     case "release":
         try KillSwitch.release(paths: paths)
+    case "create-cloud":
+        guard arguments.count >= 6, let image = try ImageCatalog.linux().images.first(where: { $0.id == arguments[1] }) else {
+            fail(usage, code: 64)
+        }
+        let options = Array(arguments.dropFirst(6))
+        let sshKey = options.firstIndex(of: "--ssh-key").flatMap { options.indices.contains($0 + 1) ? options[$0 + 1] : nil }
+        let password =
+            String(data: FileHandle.standardInput.readDataToEndOfFile(), encoding: .utf8)?
+            .trimmingCharacters(in: .newlines) ?? ""
+        let account = CloudImageInstall.Account(
+            userName: arguments[3], password: password, sshKey: sshKey, desktop: options.contains("--desktop"))
+        let creator = VMCreator(
+            ops: LibraryOps(library: VMLibrary(paths: paths), identity: .ui), windowsTools: nil,
+            qemuImg: URL(fileURLWithPath: arguments[4]), cloudCache: ImageCache(directory: URL(fileURLWithPath: arguments[5])))
+        let request = VMCreator.Request(
+            os: .linux, name: arguments[2], diskGiB: 16, source: .linuxCatalog(image), cloudAccount: account
+        ) { config in
+            config.cpu.count = 2
+            config.memory.mib = 4096
+        }
+        print(try await creator.create(request).url.path)
     case "set":
         guard arguments.count >= 3, let level = PolicyLevel(rawValue: arguments[2]) else { fail(usage, code: 64) }
         let options = Set(arguments.dropFirst(3))

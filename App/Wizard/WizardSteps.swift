@@ -79,8 +79,17 @@ struct SourceStep: View {
                     }
                 }
             case .linux?:
-                Section("Download") {
-                    ForEach(catalog) { image in catalogRow(image, .linuxCatalog(image)) }
+                Section {
+                    ForEach(catalog.filter(\.isCloudImage)) { image in catalogRow(image, .linuxCatalog(image)) }
+                } header: {
+                    Text("Ready in minutes")
+                } footer: {
+                    Text(
+                        "The distribution's cloud image: no installer to click through; your account, SSH and VMPane's "
+                            + "guest tools are set up on first boot.")
+                }
+                Section("Installer (ISO download)") {
+                    ForEach(catalog.filter { !$0.isCloudImage }) { image in catalogRow(image, .linuxCatalog(image)) }
                 }
                 Section("Or use an ISO you have") {
                     fileRow(title: "Choose an arm64 ISO…", types: [UTType(filenameExtension: "iso") ?? .data]) { .linuxISO($0) }
@@ -114,6 +123,7 @@ struct SourceStep: View {
     static func isCached(_ source: WizardModel.Source?) -> Bool {
         switch source {
         case .macCatalog(let image)?: ImageCache.ipsw.has(image)
+        case .linuxCatalog(let image)? where image.isCloudImage: CloudImageInstall.isReady(image)
         case .linuxCatalog(let image)?: ImageCache.iso.has(image)
         default: false
         }
@@ -160,36 +170,65 @@ struct SourceStep: View {
     }
 }
 
-/// Windows only: the account Windows Setup creates, and Microsoft's licence.
+/// The account the system creates: Windows Setup's (with Microsoft's licence), or a Linux cloud image's first boot.
 struct AccountStep: View {
     @Bindable var wizard: WizardModel
 
     var body: some View {
         Form {
-            Section {
-                TextField("User name", text: $wizard.userName)
-                SecureField("Password", text: $wizard.password)
-                Picker("Edition", selection: $wizard.edition) {
-                    ForEach(["Windows 11 Pro", "Windows 11 Home"], id: \.self) { Text($0) }
-                }
-                Toggle("Remember the password so agents can sign in", isOn: $wizard.keepSignInPassword)
-            } header: {
-                Text("Your Windows account")
-            } footer: {
-                if wizard.keepSignInPassword {
-                    Text("Kept where only VMPane can read it; VMPane types it at the lock screen, agents never see it.")
-                }
-            }
-            Section {
-                Toggle(isOn: $wizard.eulaAccepted) {
-                    Text("I accept the Microsoft Software License Terms for Windows 11.")
-                }
-                if let terms = Links.windowsTerms { Link("Read the license terms", destination: terms) }
-            } footer: {
-                Text("VMPane installs Windows with Microsoft's generic key for the edition: it installs but is not activated.")
-            }
+            if wizard.isCloudImage { linux } else { windows }
         }
         .formStyle(.grouped)
+    }
+
+    private var rememberToggle: some View {
+        Toggle("Remember the password so agents can sign in", isOn: $wizard.keepSignInPassword)
+    }
+
+    @ViewBuilder private var windows: some View {
+        Section {
+            TextField("User name", text: $wizard.userName)
+            SecureField("Password", text: $wizard.password)
+            Picker("Edition", selection: $wizard.edition) {
+                ForEach(["Windows 11 Pro", "Windows 11 Home"], id: \.self) { Text($0) }
+            }
+            rememberToggle
+        } header: {
+            Text("Your Windows account")
+        } footer: {
+            if wizard.keepSignInPassword {
+                Text("Kept where only VMPane can read it; VMPane types it at the lock screen, agents never see it.")
+            }
+        }
+        Section {
+            Toggle(isOn: $wizard.eulaAccepted) {
+                Text("I accept the Microsoft Software License Terms for Windows 11.")
+            }
+            if let terms = Links.windowsTerms { Link("Read the license terms", destination: terms) }
+        } footer: {
+            Text("VMPane installs Windows with Microsoft's generic key for the edition: it installs but is not activated.")
+        }
+    }
+
+    @ViewBuilder private var linux: some View {
+        Section {
+            TextField("User name", text: $wizard.userName)
+            SecureField("Password", text: $wizard.password)
+            TextField("SSH public key (optional)", text: $wizard.sshKey, axis: .vertical).lineLimit(1...3)
+            rememberToggle
+        } header: {
+            Text("Your Linux account")
+        } footer: {
+            Text("An administrator (sudo). With a key, SSH takes only the key. VMPane forwards SSH from this Mac only.")
+        }
+        Section {
+            Toggle("Install a desktop (GNOME)", isOn: $wizard.desktop)
+        } footer: {
+            Text(
+                wizard.desktop
+                    ? "Downloads and installs the desktop on first boot: several minutes and a few GB more."
+                    : "A server: a text console and SSH.")
+        }
     }
 }
 
@@ -285,7 +324,8 @@ struct SummaryStep: View {
         Form {
             LabeledContent("System", value: OSBadge.name(wizard.os))
             LabeledContent("Installer", value: installer)
-            if wizard.os == .windows { LabeledContent("Account", value: wizard.userName) }
+            if wizard.needsAccount { LabeledContent("Account", value: wizard.userName) }
+            if wizard.isCloudImage { LabeledContent("Desktop", value: wizard.desktop ? "GNOME" : "None (server)") }
             LabeledContent("Processors", value: "\(wizard.cpuCount)")
             LabeledContent("Memory", value: "\(wizard.memoryGiB) GB")
             LabeledContent("Disk", value: "\(wizard.diskGiB) GB")

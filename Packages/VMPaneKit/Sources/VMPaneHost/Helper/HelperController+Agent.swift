@@ -49,6 +49,7 @@ extension HelperController {
                 await execs.disconnected(connection)
             }
             Task { await Self.syncClock(connection, peer: peer) }
+            Task { await self.cloudInitReady() }
             Task { await self.mountShares(connection, peer: peer) }
             mapSharesDrive(connection, peer: peer)
             broadcastAgent(connected: true)
@@ -80,6 +81,7 @@ extension HelperController {
     func agentFollowState(from previous: VMRunState, to next: VMRunState) {
         switch next {
         case .running:
+            if previous != .paused { cloudInitStarted() }
             if config.backend == .qemu, windowsInstall?.isFinished ?? true, agentLink == nil {
                 let link = UDSAgentLink(
                     socket: prepared.runFiles.childDirectory.appendingPathComponent("agent.sock"), hub: agentHub,
@@ -389,11 +391,4 @@ private struct ExecInput: Decodable {
 private struct ExecSignal: Decodable {
     var execId: UInt32
     var signal: AgentSignal
-}
-
-struct FileTransfer: Decodable {
-    var hostPath: String
-    var guestPath: String
-    /// Replace an existing target (the guest file for a push, the host file for a pull).
-    var overwrite: Bool?
 }

@@ -20,8 +20,8 @@ public enum FullClone {
         return config
     }
 
-    /// Clones a stopped bundle to `destination` as a new machine. RAM state, install files and snapshots
-    /// are not copied: the clone cold boots from the current disks. With `policyKey`, a source agent policy that
+    /// Clones a stopped bundle to `destination` as a new machine. RAM state, install files (but a cloud image's
+    /// pending seed, which becomes the clone's own) and snapshots are not copied: the clone cold boots from the current disks. With `policyKey`, a source agent policy that
     /// checks out is tagged for the clone; one that does not stays untagged (off), so cloning does not make a
     /// hand-edited level count.
     @discardableResult
@@ -36,6 +36,18 @@ public enum FullClone {
             config = PolicyIntegrity.signed(config, key: policyKey)
         }
         let fm = FileManager.default
+        // VMPane's SSH forward: a port of the clone's own (both may run at once).
+        for index in config.portForwards.indices where config.portForwards[index].id == "ssh" {
+            let rule = config.portForwards[index]
+            if rule.guestPort == 22, let port = LoopbackPort.free(avoiding: [rule.hostPort]) { config.portForwards[index].hostPort = port }
+        }
+        // A cloud image's seed not used up yet (`install/cidata`): the clone gets its own copy, as a new machine for
+        // cloud-init.
+        let seed = config.install?.cloudInit
+        let seedFolder: String? = seed == nil ? nil : "cidata"
+        if let seed, let seedFolder, let index = config.removable.firstIndex(where: { $0.id == seed }) {
+            config.removable[index].path = CloudInitSeed.iso(of: destination.appendingPathComponent("install/\(seedFolder)")).path
+        }
         return try VMBundle.createStaged(at: destination, config: config) { target in
             for entry in try fm.contentsOfDirectory(at: source.currentDirectory, includingPropertiesForKeys: nil)
             where !["state", "generation.json", "aux"].contains(entry.lastPathComponent) {
@@ -44,6 +56,16 @@ public enum FullClone {
             for entry in try fm.contentsOfDirectory(at: source.auxDirectory, includingPropertiesForKeys: nil)
             where entry.lastPathComponent != "MachineIdentifier" {
                 try CloneFile.clone(entry, to: target.auxDirectory.appendingPathComponent(entry.lastPathComponent))
+            }
+            let original = seedFolder.map { source.installDirectory.appendingPathComponent($0, isDirectory: true) }
+            if let original, (try? original.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == false,
+                fm.fileExists(atPath: original.path)
+            {
+                let copy = target.installDirectory.appendingPathComponent(original.lastPathComponent, isDirectory: true)
+                try fm.createDirectory(
+                    at: target.installDirectory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+                try fm.copyItem(at: original, to: copy)
+                _ = try CloudInitSeed.reissue(copy)
             }
             try DurableWrite.syncTree(target.currentDirectory)
         }

@@ -58,6 +58,10 @@ extension HelperController {
     func createSnapshot(_ name: String, kind: SnapshotMeta.Kind, origin: SnapshotMeta.Origin) async throws -> SnapshotMeta {
         // Until the first sign-in removes them, the disk (and Setup's RAM) hold the install's answers, password included.
         guard !isInstallingWindows else { throw RPCError(.invalidState, "a VM installing Windows cannot be snapshotted") }
+        // A cloud image's first boot: a snapshot would hold the seed's data, and one restored after it would boot without it.
+        guard config.install?.cloudInit == nil || CloudImageInstall.isUsed(prepared.lock.bundle) else {
+            throw RPCError(.invalidState, "a VM still in its first boot cannot be snapshotted (its guest tools are not running yet)")
+        }
         while snapshotting { try await Task.sleep(for: .milliseconds(50)) }  // one at a time, in turn
         snapshotting = true
         defer { snapshotting = false }

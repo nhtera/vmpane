@@ -16,7 +16,24 @@ public struct VMCreator: Sendable {
         public var unattend: UnattendInput?
         /// Keep the account's password for agent sign-in (`GuestCredentials`).
         public var keepSignInPassword = false
+        /// Linux cloud images: the account cloud-init creates.
+        public var cloudAccount: CloudImageInstall.Account?
         public var configure: @Sendable (inout VMConfigV1) -> Void
+
+        public init(
+            os: GuestOS, name: String, diskGiB: Int, source: WizardModel.Source, unattend: UnattendInput? = nil,
+            keepSignInPassword: Bool = false, cloudAccount: CloudImageInstall.Account? = nil,
+            configure: @escaping @Sendable (inout VMConfigV1) -> Void = { _ in }
+        ) {
+            self.os = os
+            self.name = name
+            self.diskGiB = diskGiB
+            self.source = source
+            self.unattend = unattend
+            self.keepSignInPassword = keepSignInPassword
+            self.cloudAccount = cloudAccount
+            self.configure = configure
+        }
     }
 
     public enum Progress: Sendable, Equatable {
@@ -27,10 +44,19 @@ public struct VMCreator: Sendable {
 
     let ops: LibraryOps
     let windowsTools: URL?
+    /// The app's `qemu-img` (cloud images are converted with it, sandboxed), and where converted cloud images stay.
+    let qemuImg: URL
+    let cloudCache: ImageCache
 
-    public init(ops: LibraryOps, windowsTools: URL? = WindowsInstall.bundledTools()) {
+    public init(
+        ops: LibraryOps, windowsTools: URL? = WindowsInstall.bundledTools(),
+        qemuImg: URL = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/qemu/bin/qemu-img"),
+        cloudCache: ImageCache = CloudImageInstall.cache
+    ) {
         self.ops = ops
         self.windowsTools = windowsTools
+        self.qemuImg = qemuImg
+        self.cloudCache = cloudCache
     }
 
     public func create(_ request: Request, progress: @escaping @Sendable (Progress) -> Void = { _ in }) async throws -> VMBundle {
@@ -39,9 +65,10 @@ public struct VMCreator: Sendable {
         let bundle = try await Blocking.run { try ops.create(name: request.name, os: request.os, diskGiB: request.diskGiB) }
         do {
             try await prepare(bundle, request, progress: progress)
-            if request.keepSignInPassword, let account = request.unattend {
+            let password = request.unattend?.password ?? request.cloudAccount?.password
+            if request.keepSignInPassword, let password {
                 let id = try ConfigStore.load(bundle).id
-                try GuestCredentials.store(paths: ops.library.paths).save(account.password, for: id, name: request.name)
+                try GuestCredentials.store(paths: ops.library.paths).save(password, for: id, name: request.name)
             }
             return bundle
         } catch {
@@ -54,8 +81,16 @@ public struct VMCreator: Sendable {
         var config = try ConfigStore.load(bundle)
         request.configure(&config)
         let downloading: @Sendable (Int64, Int64?) -> Void = { progress(.downloading(received: $0, total: $1)) }
+        var cloudBase: URL?
         // Downloads happen before the bundle is locked: they can take a long time.
         switch request.source {
+        case .linuxCatalog(let image) where image.isCloudImage:
+            cloudBase = try await CloudImageInstall.base(image, qemuImg: qemuImg, cache: cloudCache) { stage in
+                switch stage {
+                case .downloading(let received, let total): progress(.downloading(received: received, total: total))
+                case .converting: progress(.preparing)
+                }
+            }
         case .macCatalog(let image):
             let ipsw = try await ImageCache.ipsw.ensure(image, progress: downloading)
             config.install = Extensible(InstallConfig(restoreImage: ipsw.path))
@@ -70,6 +105,7 @@ public struct VMCreator: Sendable {
         }
         progress(.preparing)
         let tools = windowsTools
+        let base = cloudBase
         // The app chose the agent policy: tagged, so it counts (PolicyIntegrity).
         let key = PolicyKeyFile(paths: ops.library.paths).key(create: true)
         let configured = key.map { PolicyIntegrity.signed(config, key: $0) } ?? config
@@ -80,6 +116,10 @@ public struct VMCreator: Sendable {
             if case .windowsISO(let iso) = request.source {
                 guard let unattend = request.unattend else { throw CreateError.missingAccount }
                 config = try WindowsInstall.prepare(config, iso: iso, input: unattend, tools: tools, holding: lock)
+            }
+            if case .linuxCatalog(let image) = request.source, let base {
+                guard let account = request.cloudAccount else { throw CreateError.missingAccount }
+                config = try CloudImageInstall.apply(config, base: base, image: image, account: account, holding: lock)
             }
             try ConfigStore.save(config, holding: lock)
         }
@@ -92,7 +132,7 @@ public struct VMCreator: Sendable {
         public var description: String {
             switch self {
             case .bundleBusy: "The new VM is in use by another process."
-            case .missingAccount: "The Windows account is missing."
+            case .missingAccount: "The account is missing."
             }
         }
     }
@@ -114,7 +154,7 @@ extension WizardModel {
         let wizard = Snapshot(self)
         return VMCreator.Request(
             os: os, name: name.trimmingCharacters(in: .whitespaces), diskGiB: diskGiB, source: source, unattend: unattend,
-            keepSignInPassword: os == .windows && keepSignInPassword, configure: { wizard.configure(&$0) })
+            keepSignInPassword: needsAccount && keepSignInPassword, cloudAccount: cloudAccount, configure: { wizard.configure(&$0) })
     }
 
     /// The settings `configure` writes, copied off the main actor.
@@ -133,7 +173,7 @@ extension WizardModel {
             sharedFolders = model.sharedFolders
             rosetta = model.rosetta
             os = model.os
-            signIn = model.os == .windows && model.keepSignInPassword
+            signIn = model.needsAccount && model.keepSignInPassword
         }
 
         func configure(_ config: inout VMConfigV1) {

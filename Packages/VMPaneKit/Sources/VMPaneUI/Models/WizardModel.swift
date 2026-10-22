@@ -61,6 +61,9 @@ public final class WizardModel {
     public var password = ""
     /// Keep the password so agents may sign the VM in (VM Settings › AI agents can change it later).
     public var keepSignInPassword = false
+    /// Linux cloud images: an optional SSH public key, and whether to install a desktop.
+    public var sshKey = ""
+    public var desktop = false
     public var edition = "Windows 11 Pro"
     public var eulaAccepted = false
     // Resources
@@ -89,7 +92,16 @@ public final class WizardModel {
     }
 
     /// Steps this OS goes through (only Windows asks for an account).
-    public var steps: [Step] { Step.allCases.filter { $0 != .account || os == .windows } }
+    public var steps: [Step] { Step.allCases.filter { $0 != .account || needsAccount } }
+
+    /// Windows Setup and Linux cloud images create the account from the wizard.
+    public var needsAccount: Bool { os == .windows || isCloudImage }
+
+    /// A Linux cloud image: no installer, cloud-init sets the VM up.
+    public var isCloudImage: Bool {
+        if case .linuxCatalog(let image)? = source { return image.isCloudImage }
+        return false
+    }
 
     /// Memory and CPU a Mac keeps for itself.
     public static let reservedHostMemoryGiB = 4
@@ -159,6 +171,7 @@ public final class WizardModel {
     }
 
     private var accountProblems: [String] {
+        if isCloudImage { return linuxAccountProblems }
         guard os == .windows else { return [] }
         var problems: [String] = []
         let user = userName.trimmingCharacters(in: .whitespaces)
@@ -171,6 +184,21 @@ public final class WizardModel {
         }
         if password.count < 4 { problems.append("Use a password of at least 4 characters.") }
         if !eulaAccepted { problems.append("Accept Microsoft's licence terms to install Windows.") }
+        return problems
+    }
+
+    private var linuxAccountProblems: [String] {
+        var problems: [String] = []
+        if CloudInitSeed.reservedNames.contains(userName) || userName.hasPrefix("systemd-") {
+            problems.append("\(userName) is a name the system uses already.")
+        } else if !CloudInitSeed.isUserName(userName) {
+            problems.append("User names are lowercase letters, digits, - and _, starting with a letter (at most 32).")
+        }
+        if password.count < 4 { problems.append("Use a password of at least 4 characters.") }
+        let key = sshKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !key.isEmpty, !CloudInitSeed.isSSHKey(key) {
+            problems.append("Paste one public key, as in ~/.ssh/id_ed25519.pub.")
+        }
         return problems
     }
 
@@ -223,5 +251,12 @@ public final class WizardModel {
     /// Forgets the Windows password (after create, or when the wizard closes).
     public func clearSecrets() {
         password = ""
+    }
+
+    /// The account a cloud image's first boot creates.
+    var cloudAccount: CloudImageInstall.Account? {
+        guard isCloudImage else { return nil }
+        let key = sshKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        return CloudImageInstall.Account(userName: userName, password: password, sshKey: key.isEmpty ? nil : key, desktop: desktop)
     }
 }

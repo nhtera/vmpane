@@ -135,7 +135,7 @@ extension HelperController {
         guard ![.stopped, .error].contains(self.state) else { return nil }
         loadInstall()
         guard let state = windowsInstall, !state.isFinished, var (percent, message) = Self.installProgress[state.phase] else {
-            return nil
+            return cloudInitProgress()
         }
         if state.phase == .setupRunning, state.mediaEjected {
             (percent, message) = (30, "Windows Setup restarted; the installer disc is ejected")

@@ -203,3 +203,11 @@ extension HelperController {
         return await task.value
     }
 }
+
+/// `agent.file.push` / `agent.file.pull` params.
+struct FileTransfer: Decodable {
+    var hostPath: String
+    var guestPath: String
+    /// Replace an existing target (the guest file for a push, the host file for a pull).
+    var overwrite: Bool?
+}

@@ -24,6 +24,39 @@
       "url": "https://download.fedoraproject.org/pub/fedora/linux/releases/44/Server/aarch64/iso/Fedora-Server-netinst-aarch64-44-1.7.iso",
       "sha256": "a93ebd0322cda5a439039710b727ac1899a06e1c11876cfdf7f27c25b8262cc3",
       "sizeBytes": 1257783296
+    },
+    {
+      "id": "ubuntu-26.04-cloud",
+      "name": "Ubuntu 26.04 LTS",
+      "version": "26.04",
+      "build": "20261016",
+      "kind": "cloudImage",
+      "distro": "ubuntu",
+      "url": "https://cloud-images.ubuntu.com/releases/26.04/release-20261016/ubuntu-26.04-server-cloudimg-arm64.img",
+      "sha256": "8eb876c2ccc4b6ff89e4a65d511815923b285e04503ba465809bf587f763da24",
+      "sizeBytes": 940373504
+    },
+    {
+      "id": "debian-13-cloud",
+      "name": "Debian 13",
+      "version": "13",
+      "build": "20261021-2638",
+      "kind": "cloudImage",
+      "distro": "debian",
+      "url": "https://cloud.debian.org/images/cloud/trixie/20261021-2638/debian-13-generic-arm64-20261021-2638.qcow2",
+      "sha256": "cf011f3c2bb67a3f77fec6da0144653b6467a1ed1ac15e818cfd02f51cf2eacb",
+      "sizeBytes": 431357952
+    },
+    {
+      "id": "fedora-44-cloud",
+      "name": "Fedora 44",
+      "version": "44",
+      "build": "1.7",
+      "kind": "cloudImage",
+      "distro": "fedora",
+      "url": "https://download.fedoraproject.org/pub/fedora/linux/releases/44/Cloud/aarch64/images/Fedora-Cloud-Base-Generic-44-1.7.aarch64.qcow2",
+      "sha256": "55c60a3b80d3616a08705afd0459e75fe9f03c54aba7a46e4002a41a72fa0d5b",
+      "sizeBytes": 528154624
     }
   ]
 }

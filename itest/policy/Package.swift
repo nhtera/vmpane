@@ -9,6 +9,10 @@ let package = Package(
     dependencies: [.package(path: "../../Packages/VMPaneKit")],
     targets: [
         .executableTarget(
-            name: "vmpane-itest-policy", dependencies: [.product(name: "VMPaneCore", package: "VMPaneKit")], path: "Sources")
+            name: "vmpane-itest-policy",
+            dependencies: [
+                .product(name: "VMPaneCore", package: "VMPaneKit"), .product(name: "VMPaneHost", package: "VMPaneKit"),
+                .product(name: "VMPaneUI", package: "VMPaneKit"),
+            ], path: "Sources")
     ]
 )

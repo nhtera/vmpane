@@ -1,0 +1,4 @@
+# The Linux catalog's trust root: what VMPane pins for download, and the script that decides it.
+/scripts/refresh-linux-catalog.sh @nhtera
+/Packages/VMPaneKit/Sources/VMPaneHost/Install/Resources/*-catalog.json @nhtera
+/scripts/ @nhtera
