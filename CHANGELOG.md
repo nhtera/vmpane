@@ -4,8 +4,11 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
-AI agents act faster and see more, with you able to take over at any moment; Linux VMs are ready in minutes; and
-the library and the new-VM sheet are rebuilt.
+
+## [1.0.0-beta.11]
+AI agents act faster and see more, with you able to take over at any moment; Linux VMs are ready in minutes; the
+library and the new-VM sheet are rebuilt; the clipboard keeps formatting and carries files both ways; and Windows VMs
+get a microphone.
 
 ### Added
 - `vm_actions`: up to 50 keys, typing, clicks, drags, scrolls and waits in one call, each decided and audited as
