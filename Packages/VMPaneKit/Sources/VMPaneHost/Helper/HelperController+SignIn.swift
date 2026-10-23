@@ -190,7 +190,7 @@ extension HelperController {
     }
 
     private func checkStillAllowed(_ admitted: Int, _ caller: CallerIdentity) throws {
-        if agentInputStopped(since: admitted, caller) { throw inputStopError }
+        if agentInputStopped(since: admitted, caller) { throw inputStopError(since: admitted) }
     }
 
     /// Select all and delete in the focused field.

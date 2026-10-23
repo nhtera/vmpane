@@ -12,7 +12,8 @@ contract: `ControlContractTests` fails when the tables below and the code (`Cont
   closed. Responses and notifications may be up to 64 MiB (screenshots). Batches are rejected. Ids are
   integers or strings (`null` is refused); `params` is an object or an array.
 - A client that half-closes after sending (`echo … | nc -U`) still gets its responses; a client that stops
-  reading for 10 s is disconnected.
+  reading for 10 s is disconnected. Input from an agent (typing, a batch, a held key) stops once its client
+  closes its side, half-closed or gone: the answer says so ("the client closed its connection").
 - The run directory is 0700 and the socket 0600. The helper checks every peer's uid
   (`LOCAL_PEERCRED`) and reads its audit token (`LOCAL_PEERTOKEN`) for code-signing checks.
 - Debugging: `echo '{"jsonrpc":"2.0","id":1,"method":"vm.info"}' | nc -U <socket>`.

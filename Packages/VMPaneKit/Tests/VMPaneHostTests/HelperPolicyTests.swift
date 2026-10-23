@@ -74,6 +74,31 @@ private func entries(_ helper: Harness) throws -> [AuditEntry] {
     await helper.tearDown()
 }
 
+/// One request line through a client that half-closes after sending (`echo … | nc -U`); the answer line.
+func halfClosedCall(_ path: String, _ line: String) throws -> String {
+    let fd = try UnixSocket.make()
+    defer { close(fd) }
+    var timeout = timeval(tv_sec: 10, tv_usec: 0)
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+    try UnixSocket.connect(fd, to: .absolute(path))
+    try UnixSocket.writeAll(fd, Data((line + "\n").utf8))
+    shutdown(fd, SHUT_WR)
+    var answer = Data()
+    var byte: UInt8 = 0
+    while read(fd, &byte, 1) == 1, byte != 0x0A { answer.append(byte) }
+    return String(bytes: answer, encoding: .utf8) ?? ""
+}
+
+@Test func anAgentThatHalfClosesAfterSendingIsAnswered() async throws {
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.settings.apply", params: ["patch": ["mcp": ["policy": "admin"]]])
+    await helper.controller.setClassifier(strangers)
+    let path = await helper.controller.prepared.runFiles.socketURL.path
+    let answer = try halfClosedCall(path, #"{"jsonrpc":"2.0","id":1,"method":"vm.info"}"#)
+    #expect(answer.contains(#""result""#), "\(answer)")
+    await helper.tearDown()
+}
+
 @Test func anEngagedSwitchWrittenElsewhereIsNoticed() async throws {
     let helper = try await Harness.make()
     _ = try await helper.client.call("vm.settings.apply", params: ["patch": ["mcp": ["policy": "admin"]]])

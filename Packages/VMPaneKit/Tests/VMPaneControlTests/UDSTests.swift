@@ -264,7 +264,9 @@ private final class TokenBox: @unchecked Sendable {
         let start = ContinuousClock.now
         call.cancel()
         await #expect(throws: CancellationError.self) { try await call.value }
-        #expect(ContinuousClock.now - start < .seconds(1), "well before the handler's 5 s")
+        // A thrown CancellationError, not the handler's answer (200 ms), and far from the call's 30 s timeout; a loaded
+        // Mac took 1.07 s.
+        #expect(ContinuousClock.now - start < .seconds(3), "well before the call's 30 s timeout")
         #expect(try await client.call("echo", params: ["still": "works"]) == ["still": "works"])
     }
 }

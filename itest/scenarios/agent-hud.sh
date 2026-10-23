@@ -7,6 +7,8 @@ IT_SCENARIO=agent-hud
 
 scenario_run() {
     local work bundle pid socket cli agent stop log
+    # At control from the start: on a signed app a later change restarts the helper, which stops the VM.
+    local IT_POLICY=control
     cli="$APP/Contents/Helpers/vmpane"
     it_boot_linux_clone || return 1  # (sets work, bundle, pid, socket)
     stop="$work/stop-agent"

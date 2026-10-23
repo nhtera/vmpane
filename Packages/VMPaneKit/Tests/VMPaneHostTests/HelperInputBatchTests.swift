@@ -171,6 +171,18 @@ private func frame(_ value: UInt8, box: ScreenChange.Box? = nil) -> GrayFrame {
     await helper.tearDown()
 }
 
+/// A client that half-closes after sending (`echo … | nc -U`) has its typing cut short, and is told why: not the kill
+/// switch.
+@Test func typingFromAHalfClosedClientSaysWhyItStopped() async throws {
+    let helper = try await runningAtControl()
+    helper.backend.typingDelay = .milliseconds(8)
+    let path = await helper.controller.prepared.runFiles.socketURL.path
+    let line = #"{"jsonrpc":"2.0","id":1,"method":"vm.input.text","params":{"text":"\#(String(repeating: "a", count: 300))"}}"#
+    let answer = try halfClosedCall(path, line)
+    #expect(answer.contains(HelperController.goneReason) && !answer.contains("kill switch"), "\(answer)")
+    await helper.tearDown()
+}
+
 @Test func batchesOnOneVMRunOneAtATime() async throws {
     let helper = try await runningAtControl()
     let socket = await helper.controller.prepared.runFiles.socketURL

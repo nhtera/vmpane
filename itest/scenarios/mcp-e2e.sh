@@ -120,11 +120,7 @@ PY
     # At a lower level (control) exec is refused and screenshots still work. On a signed app the change restarts
     # the helper (it_set_policy), which stops the VM: start it again.
     it_set_policy control || it_fail "cannot lower the policy" || return 1
-    if it_signed; then
-        it_rpc "$socket" vm.start '{"headless": true}' >/dev/null || it_fail "vm.start at control failed" || return 1
-        it_wait_for 60 bash -c "[[ \$(/usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' '$socket' vm.info | jq -r .state) == running ]]" \
-            || it_fail "the VM did not start again" || return 1
-    fi
+    it_start_again || it_fail "the VM did not start again at control" || return 1
     /usr/bin/python3 - "$cli" "$bundle" <<'PY' || { it_fail "the MCP session at control failed"; return 1; }
 import json, os, sys
 sys.path.insert(0, os.path.join(os.environ["VMPANE_ROOT"], "itest/lib"))

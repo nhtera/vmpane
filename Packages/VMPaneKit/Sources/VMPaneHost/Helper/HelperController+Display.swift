@@ -69,7 +69,7 @@ extension HelperController {
         } catch let error as RPCError {
             return .failure(error)
         } catch is Stopped {
-            return .failure(inputStopError)
+            return .failure(inputStopError(since: admitted))
         } catch {
             return .failure(RPCError(.agentUnavailable, "display access failed: \(error)"))
         }

@@ -61,6 +61,8 @@ hardened runtime: without a team ID, library validation would refuse the app's o
   `itest/scenarios/` defines `scenario_run` (return 0 pass, 77 skipped, anything else fail). Results are
   written to `itest/results/` keyed by the artifact's SHA-256, scenario, chip and macOS build;
   a skipped scenario never counts as a pass.
+- `VMPANE_ITEST_LINUX_ONLY=1` skips the Windows parts (they need the Windows golden, about 25 GiB to build):
+  for a loaded Mac or a gate about Linux; the release tier runs them.
 - `import-parallels` imports through the app's UI (needs an unlocked session) and boots the result. Without
   `VMPANE_ITEST_PVM` it makes a `.pvm` from the golden Linux disk; for the release tier, set
   `VMPANE_ITEST_PVM` to a Linux VM made by Parallels Desktop (kept locally, never committed: Parallels licence).

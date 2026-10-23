@@ -53,7 +53,7 @@ extension HelperController {
     func agentStopRefusal(since admitted: Int, _ caller: CallerIdentity, method: String) -> RPCError? {
         if killSwitchEngaged, caller.identity != .ui { return RPCError(.policyDenied, Self.stoppedReason) }
         if heldByTakeOver(method, caller) { return RPCError(.takenOver, Self.takenOverReason) }
-        if agentsStopped(since: admitted, caller) { return RPCError(.policyDenied, Self.stoppedReason) }
+        if agentsStopped(since: admitted, caller, orGone: false) { return RPCError(.policyDenied, Self.stoppedReason) }
         return nil
     }
 

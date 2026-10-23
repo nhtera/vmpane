@@ -69,9 +69,9 @@ extension HelperController {
     }
 
     /// What an agent's call must pass after the policy, in order: input that travels with a confirmed command,
-    /// the person's answer, the session's undo snapshot, and the kill switch and the agent's connection once more
-    /// (both waits can be long, and agents may have been stopped meanwhile: a call the switch stopped stays stopped,
-    /// even when the app has released the switch since).
+    /// the person's answer, the session's undo snapshot, and the kill switch once more (both waits can be long, and
+    /// agents may have been stopped meanwhile: a call the switch stopped stays stopped, even when the app has released
+    /// the switch since). A call whose client closed its side meanwhile still goes ahead: it may only have half-closed.
     func agentChecks(_ request: RPCRequest, _ caller: CallerIdentity) async -> RPCError? {
         guard caller.identity != .ui else { return nil }
         let admitted = agentGeneration

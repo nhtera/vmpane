@@ -17,19 +17,23 @@ it_ocr_log() {
 }
 
 scenario_linux() {
-    local work bundle pid socket cli since
+    local work bundle pid socket cli since level=observe
+    # On a signed app the bridge is an agent and a policy change restarts the helper, which stops the VM (and
+    # clears the console): it types and reads at control there, and the checks of Look only are left to the
+    # development app's run.
+    if it_signed; then level=control; local IT_POLICY=control; fi
     cli="$APP/Contents/Helpers/vmpane"
     since=$(date '+%Y-%m-%d %H:%M:%S')
     it_boot_linux_clone || return 1
     trap 'set +e; [[ -n ${pid:-} ]] && kill -9 "$pid" 2>/dev/null; rm -rf "$work"; trap - RETURN; true' RETURN
-    # Typed by the itest bridge (the app's identity): no agent session yet.
+    # Typed by the itest bridge before any agent session (the app on a development app; at control on a signed one).
     sleep 8  # cloud-init's last lines print on the console a few seconds after the ready marker
     # Two rows above the bottom: the very last row, against the screen's edge, reads poorly.
     it_rpc "$socket" vm.input.text '{"text": "echo VMPANE OCR CHECK 4271\n\n"}' >/dev/null || it_fail "typing failed" || return 1
     sleep 1
-    it_set_policy observe || it_fail "cannot set the policy" || return 1
+    it_set_policy "$level" || it_fail "cannot set the policy" || return 1
 
-    /usr/bin/python3 - "$cli" "$VMPANE_ROOT/itest/results/screen-read-linux.png" <<'PY' || { it_fail "the MCP session failed"; return 1; }
+    /usr/bin/python3 - "$cli" "$VMPANE_ROOT/itest/results/screen-read-linux.png" "$level" <<'PY' || { it_fail "the MCP session failed"; return 1; }
 import base64, os, sys, time
 sys.path.insert(0, os.path.join(os.environ["VMPANE_ROOT"], "itest/lib"))
 from mcp_client import MCPClient
@@ -61,17 +65,19 @@ if not found:
     raise AssertionError([item["text"] for item in items][-8:])
 assert found[0]["id"].startswith("t"), found
 assert "untrusted_guest_text" in read["content"][0]["text"]
-print(f"mcp-read linux: ocr at Look only in {elapsed:.2f} s, {len(items)} lines; the typed text: {[i['text'] for i in found]} ({found[0]['id']} at {found[0]['rect']})")
+print(f"mcp-read linux: ocr at {'Look only' if sys.argv[3] == 'observe' else 'control'} in {elapsed:.2f} s, {len(items)} lines; the typed text: {[i['text'] for i in found]} ({found[0]['id']} at {found[0]['rect']})")
 
 elements = client.call("vm_read_screen", vm=vm, source="elements")
 assert elements.get("isError") and "update them" in elements["content"][0]["text"], elements
-refused = client.call("vm_click", vm=vm, element=found[0]["id"])
-assert refused.get("isError") and "Refused" in refused["content"][0]["text"], refused
-snapshots = client.call("vm_snapshot_list", vm=vm)["structuredContent"]["snapshots"]
-assert not [s for s in snapshots if s["origin"] == "agentSession"], snapshots
+if sys.argv[3] == "observe":
+    refused = client.call("vm_click", vm=vm, element=found[0]["id"])
+    assert refused.get("isError") and "Refused" in refused["content"][0]["text"], refused
+    snapshots = client.call("vm_snapshot_list", vm=vm)["structuredContent"]["snapshots"]
+    assert not [s for s in snapshots if s["origin"] == "agentSession"], snapshots
 shot = client.call("vm_screenshot", vm=vm, max_edge=8192)["content"][0]["data"]
 open(sys.argv[2], "wb").write(base64.b64decode(shot))
-print("mcp-read linux: elements asks for newer guest tools; a click is refused at Look only; no Before-agent snapshot")
+print("mcp-read linux: elements asks for newer guest tools"
+      + ("; a click is refused at Look only; no Before-agent snapshot" if sys.argv[3] == "observe" else " (read at control)"))
 client.close()
 PY
     it_ocr_log "$since"
@@ -116,13 +122,19 @@ scenario_windows() {
     local agent=${VMPANE_ITEST_WINDOWS_AGENT:-$VMPANE_ROOT/agent/target/aarch64-pc-windows-msvc/release/vmpane-agent.exe}
     [[ -f $agent ]] || agent=""
     it_windows_autologon "$socket" "$work" "$agent" || it_fail "no signed-in desktop after turning on automatic sign-in" || return 1
+    # Lowered once signed in (that needs admin); on a signed app Windows starts again, signed in automatically.
+    it_set_policy control || it_fail "cannot set the policy" || return 1
+    if it_signed; then
+        it_start_again || it_fail "Windows did not start again at control" || return 1
+        it_wait_for 240 bash -c "/usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' '$socket' agent.status 2>/dev/null \
+            | jq -e '.connected and .session' >/dev/null" || it_fail "the agent's user session did not connect again" || return 1
+    fi
     if [[ -n $agent ]]; then
         it_rpc "$socket" agent.status | jq -e '.caps | index("screen")' >/dev/null || it_fail "the agent under test has no screen cap" || return 1
         echo "screen-read: the agent under test: $agent"
     fi
     it_wait_windows_desktop "$socket" 120 || it_fail "no Windows desktop" || return 1
     sleep 20  # first-logon animations and startup apps settle
-    it_set_policy control || it_fail "cannot set the policy" || return 1
     since=$(date '+%Y-%m-%d %H:%M:%S')
 
     /usr/bin/python3 - "$cli" "$VMPANE_ROOT/itest/results/screen-read-windows" "${agent:+elements}" <<'PY' || { it_uia_diagnose; it_fail "the MCP session failed"; return 1; }

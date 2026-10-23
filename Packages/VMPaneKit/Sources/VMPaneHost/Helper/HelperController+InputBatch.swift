@@ -59,6 +59,7 @@ extension HelperController {
     struct Stopped: Error {}
 
     static let stoppedReason = "AI agents are stopped (VMPane's kill switch)"
+    static let goneReason = "Stopped: the client closed its connection"
 
     func inputBatch(_ params: JSONValue?, from connection: ControlConnection) async -> Result<JSONValue, RPCError> {
         guard let backend else { return .failure(RPCError(.backendUnavailable, "no backend for this VM")) }
@@ -75,7 +76,7 @@ extension HelperController {
         // One batch at a time on a VM: another's held keys and screen changes would mix into this one's.
         // One batch at a time, and none while the helper signs the guest in.
         while batching || signingIn {
-            if agentInputStopped(since: admitted, caller) { return .failure(inputStopError) }
+            if agentInputStopped(since: admitted, caller) { return .failure(inputStopError(since: admitted)) }
             try? await Task.sleep(for: .milliseconds(20))
         }
         batching = true
@@ -84,10 +85,11 @@ extension HelperController {
         var results: [JSONValue] = []
         for (index, action) in batch.actions.enumerated() {
             if agentInputStopped(since: admitted, caller) {
-                return .failure(RPCError(code: inputStopError.code, message: inputStopError.message, data: ["results": .array(results)]))
+                let stop = inputStopError(since: admitted)
+                return .failure(RPCError(code: stop.code, message: stop.message, data: ["results": .array(results)]))
             }
             let failure = await runAction(action, params: raw[index], caller: caller, admitted: admitted, backend: backend)
-            if let failure, [Self.stoppedReason, Self.takenOverReason].contains(failure.message) {
+            if let failure, [Self.stoppedReason, Self.takenOverReason, Self.goneReason].contains(failure.message) {
                 results.append(["i": .int(Int64(index)), "ok": false, "error": .string(failure.message), "code": .int(Int64(failure.code))])
                 return .failure(RPCError(code: failure.code, message: failure.message, data: ["results": .array(results)]))
             }
@@ -159,14 +161,26 @@ extension HelperController {
         !killSwitchEngaged && activity.takenOver ? RPCError(.takenOver, Self.takenOverReason) : RPCError(.policyDenied, Self.stoppedReason)
     }
 
+    /// Why an agent's input stopped (`agentInputStopped`): the person took over, agents were stopped since `admitted`,
+    /// or else the client closed its side of the connection. A client that half-closes after sending (`echo … | nc -U`)
+    /// looks the same: its input is cut short, and the answer says why.
+    func inputStopError(since admitted: Int) -> RPCError {
+        if !killSwitchEngaged, activity.takenOver { return RPCError(.takenOver, Self.takenOverReason) }
+        if killSwitchEngaged || agentGeneration != admitted { return RPCError(.policyDenied, Self.stoppedReason) }
+        return RPCError(.invalidState, Self.goneReason)
+    }
+
     /// `agentsStopped`, or the person took over: what an agent's input checks between pieces.
     func agentInputStopped(since admitted: Int, _ caller: CallerIdentity) -> Bool {
         agentsStopped(since: admitted, caller) || heldByTakeOver(ControlMethod.vmInputText.rawValue, caller)
     }
 
-    /// True once agents have been stopped since `admitted`, or the caller went away (never for the app).
-    func agentsStopped(since admitted: Int, _ caller: CallerIdentity) -> Bool {
-        caller.identity != .ui && (killSwitchEngaged || agentGeneration != admitted || caller.connection?.isFinished ?? true)
+    /// True once agents have been stopped since `admitted`, or (`orGone`) the caller stopped sending: a batch or typing
+    /// under way then stops. Never for the app. A request's own checks leave `orGone` out: a client that half-closes
+    /// after sending (`echo … | nc -U`) is still answered.
+    func agentsStopped(since admitted: Int, _ caller: CallerIdentity, orGone: Bool = true) -> Bool {
+        caller.identity != .ui
+            && (killSwitchEngaged || agentGeneration != admitted || (orGone && caller.connection?.isFinished ?? true))
     }
 
     /// A frame for verification: the helper app's (SPICE, in memory) when it has one, else the backend's; and which.
@@ -199,7 +213,7 @@ extension HelperController {
             try await perform(action, backend: backend, admitted: admitted, caller: caller)
             result = .success([:])
         } catch is Stopped {
-            result = .failure(inputStopError)
+            result = .failure(inputStopError(since: admitted))
         } catch let error as RPCError {
             result = .failure(error)
         } catch {

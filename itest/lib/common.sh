@@ -70,7 +70,8 @@ it_grant() {
 }
 
 # Sets the agents' level for VM $bundle (helper $pid on $socket: the caller's variables) to $1 as the app does:
-# live on a development app; on a signed one by restarting the helper with the new policy, which stops the VM.
+# live on a development app; on a signed one by restarting the helper with the new policy, which stops the VM (a
+# QEMU guest gets its 120 s to shut down cleanly: it_start_again boots it again).
 it_set_policy() {
     if ! it_signed; then
         it_rpc "$socket" vm.settings.apply "{\"patch\": {\"mcp\": {\"policy\": \"$1\", \"confirmExec\": false}}}" >/dev/null
@@ -79,8 +80,16 @@ it_set_policy() {
     [[ $IT_POLICY == "$1" ]] && return 0
     IT_POLICY=$1
     kill -TERM "$pid" 2>/dev/null
-    it_wait_exit "$pid" 30 || { kill -9 "$pid" 2>/dev/null; it_wait_exit "$pid"; }
+    it_wait_exit "$pid" 150 || { kill -9 "$pid" 2>/dev/null; it_wait_exit "$pid"; }
     pid=$(it_start_helper "$bundle")
+}
+
+# After it_set_policy on a signed app, whose helper restart stopped the VM: starts it again and waits until it runs.
+# Nothing to do on a development app (the change was live).
+it_start_again() {
+    it_signed || return 0
+    it_rpc "$socket" vm.start '{"headless": true}' >/dev/null || return 1
+    it_wait_for 60 bash -c "[[ \$(/usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' '$socket' vm.info | jq -r .state) == running ]]"
 }
 
 it_start_helper() {
@@ -276,6 +285,8 @@ IT_WINDOWS_EXTRA="$VMPANE_ROOT/build/guest-tools/windows-extra"
 it_windows_extra_sum() { cat "$IT_WINDOWS_EXTRA"/*.msi | shasum -a 256 | cut -d' ' -f1; }
 it_golden_windows() {
     local golden="$HOME/VMPaneItest/win11-base.vmpane" status
+    # VMPANE_ITEST_LINUX_ONLY=1: Windows parts skip (a loaded Mac, or no room to build the golden).
+    [[ ${VMPANE_ITEST_LINUX_ONLY:-0} == 1 ]] && { echo "$IT_SCENARIO: Windows skipped (VMPANE_ITEST_LINUX_ONLY)" >&2; return 77; }
     if [[ $(cat "$golden/.ready" 2>/dev/null) == "$IT_GOLDEN_WINDOWS_VERSION" ]] &&
         { ! compgen -G "$IT_WINDOWS_EXTRA/*.msi" >/dev/null || [[ $(cat "$golden/.agent" 2>/dev/null) == "$(it_windows_extra_sum)" ]]; }; then
         echo "$golden"

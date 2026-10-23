@@ -18,6 +18,8 @@ it_verify_log() {
 
 scenario_linux() {
     local work bundle pid socket cli since
+    # At control from the start: on a signed app a later change restarts the helper, which stops the VM.
+    local IT_POLICY=control
     cli="$APP/Contents/Helpers/vmpane"
     since=$(date '+%Y-%m-%d %H:%M:%S')
     it_boot_linux_clone || return 1
@@ -30,9 +32,18 @@ sys.path.insert(0, os.path.join(os.environ["VMPANE_ROOT"], "itest/lib"))
 from mcp_client import MCPClient
 
 cli, bundle, socket = sys.argv[1:4]
-def bridge(method, params):  # as the app (the itest bridge), which the kill switch does not stop
-    subprocess.run(["/usr/bin/python3", os.path.join(os.environ["VMPANE_ROOT"], "itest/lib/rpc.py"), socket, method,
-                    json.dumps(params)], check=True, capture_output=True)
+signed = os.environ.get("VMPANE_ITEST_SIGNED") == "1"
+def bridge(method, params, timeout=0):
+    # The itest bridge: the app on a development app, which the kill switch does not stop; an agent on a signed one,
+    # retried for up to `timeout` s while the helper still refuses it for the switch.
+    deadline = time.time() + timeout
+    while True:
+        done = subprocess.run(["/usr/bin/python3", os.path.join(os.environ["VMPANE_ROOT"], "itest/lib/rpc.py"), socket,
+                               method, json.dumps(params)], capture_output=True, text=True)
+        if done.returncode == 0 or "kill switch" not in done.stdout + done.stderr or time.time() >= deadline:
+            done.check_returncode()
+            return
+        time.sleep(0.1)
 serial = os.path.join(bundle, "logs/serial.log")
 def typed_lines():
     return [line.split(b"VMPANE-TYPED ", 1)[1].rstrip(b"\r\n").decode(errors="replace")
@@ -70,15 +81,25 @@ assert "batch one" not in audit and '"vm.input.batch"' in audit and '"vm.input.t
 print("mcp-actions linux: the batch and each action are audited; the typed text is not in the record")
 
 # The kill switch while 3,000 characters are being typed (24 s at VZ's pace): nothing typed 300 ms later, and the
-# action after the text never runs. The itest bridge (the app's identity) ends the line twice: first right after
-# the stop, then 2 s later; the second line must be empty.
+# action after the text never runs. The itest bridge ends the line twice: first right after the stop, then 2 s
+# later; the second line must be empty. On a signed app the bridge is an agent: the app releases the switch first
+# (itest/policy), once the stopped call has its answer (the helper saw the switch).
 before = len(typed_lines())
 long = client.start("tools/call", {"name": "vm_actions", "arguments": {"vm": vm, "actions": [
     {"type": "type", "text": "x" * 3000}, {"type": "type", "text": "AFTER", "submit": True}]}})
 time.sleep(1.5)
 subprocess.run([cli, "mcp", "kill"], check=True, capture_output=True)
-time.sleep(0.3)
-bridge("vm.input.text", {"text": "\n"})
+answer = None
+if signed:
+    try:
+        answer = client.wait(long, timeout=10)
+    except Exception as error:  # as below: a closed session is an answer too
+        assert "Empty" not in type(error).__name__, "the stopped call was never answered"
+        answer = {}
+    subprocess.run([os.environ["VMPANE_ITEST_POLICY"], "release"], check=True, capture_output=True)
+else:
+    time.sleep(0.3)
+bridge("vm.input.text", {"text": "\n"}, timeout=3 if signed else 0)
 time.sleep(2)
 bridge("vm.input.text", {"text": "\n"})
 first, second = wait_line(before + 1), wait_line(before + 2)
@@ -86,7 +107,7 @@ assert 0 < first.count("x") < 3000 and "AFTER" not in first, first[:80]
 assert second == "", f"typing went on after the kill switch: {second[:80]!r}"
 assert not any("AFTER" in line for line in typed_lines())
 try:
-    answer = client.wait(long, timeout=10)
+    answer = answer if answer is not None else client.wait(long, timeout=10)
     said = "\n".join(block.get("text", "") for block in answer.get("result", {}).get("content", []))
     assert answer.get("result", {}).get("isError") and "action 0 failed" in said and "kill switch" in said, answer
 except Exception as error:
@@ -115,9 +136,11 @@ scenario_windows() {
     it_wait_for 180 bash -c "/usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' '$socket' agent.status | jq -e .connected >/dev/null" \
         || it_fail "the agent did not connect" || return 1
     it_windows_autologon "$socket" "$work" || it_fail "no signed-in desktop after turning on automatic sign-in" || return 1
-    it_wait_windows_desktop "$socket" 120 || it_fail "no Windows desktop" || return 1
-    sleep 20  # first-logon animations and startup apps settle
+    # Lowered once signed in (that needs admin); on a signed app Windows starts again, signed in automatically.
     it_set_policy control || it_fail "cannot set the policy" || return 1
+    it_start_again || it_fail "Windows did not start again at control" || return 1
+    it_wait_windows_desktop "$socket" 240 || it_fail "no Windows desktop" || return 1
+    sleep 20  # first-logon animations and startup apps settle
     since=$(date '+%Y-%m-%d %H:%M:%S')
 
     /usr/bin/python3 - "$cli" "$VMPANE_ROOT/itest/results/mcp-actions-windows-failure.png" <<'PY' || { it_fail "the MCP session failed"; return 1; }
