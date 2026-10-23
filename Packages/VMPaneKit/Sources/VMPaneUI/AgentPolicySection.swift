@@ -13,7 +13,7 @@ struct AgentPolicySection: View {
     let name: String
 
     var body: some View {
-        Section("AI agents") {
+        Section("What agents may do") {
             if tampered {
                 Label(
                     "Agent access was changed outside VMPane, so it is off. Choose a level to set it again.",
@@ -22,10 +22,22 @@ struct AgentPolicySection: View {
                 .foregroundStyle(.orange)
             }
             Picker("Access", selection: $mcp.policy) {
-                ForEach(PolicyLevel.allCases, id: \.self) { level in Text(level.title).tag(level) }
+                ForEach(PolicyLevel.allCases, id: \.self) { level in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(level.title)
+                        Text(level.explanation).font(.caption).foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 2)
+                    .accessibilityLabel(level.title)
+                    .accessibilityHint(level.explanation)
+                    .tag(level)
+                }
             }
-            Text(mcp.policy.explanation).font(.caption).foregroundStyle(.secondary)
-            if mcp.policy != .off {
+            .pickerStyle(.radioGroup)
+            .labelsHidden()
+        }
+        if mcp.policy != .off {
+            Section {
                 Toggle("Ask before an agent runs a command", isOn: $mcp.confirmExec)
                 Toggle("Snapshot before each agent session", isOn: $mcp.autoSnapshot)
                 Toggle("Record typed text in the activity log", isOn: $mcp.auditTypedText)

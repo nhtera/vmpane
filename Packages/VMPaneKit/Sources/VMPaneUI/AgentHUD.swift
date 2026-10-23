@@ -46,29 +46,20 @@ public struct AgentHUD: View {
     private func pill(_ activity: AgentActivity) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
-                Image(systemName: activity.takenOver ? "hand.raised.fill" : "sparkles")
-                    .foregroundStyle(activity.takenOver ? AnyShapeStyle(.orange) : AnyShapeStyle(.tint))
-                    .accessibilityHidden(true)
+                SectionIcon(activity.takenOver ? "hand.raised.fill" : "sparkles", color: activity.takenOver ? .orange : .blue, size: 32)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("\(activity.client ?? "An AI agent") · \(activity.level.title)").font(.callout).bold().lineLimit(1)
                     Text(Self.status(activity)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 4)
-                if activity.takenOver {
-                    Button("Resume") { Task { await model.resumeAgents() } }
-                        .help("Let AI agents act on this VM again")
-                } else {
-                    Button("Take Over") { Task { await model.takeOver() } }
-                        .help("Stop AI agents from changing this VM until you resume (typing or clicking in the VM does it too)")
-                }
-                Button("Stop", role: .destructive) { Task { await model.stopAgents() } }
-                    .help("End what AI agents are doing in this VM: their commands, apps and transfers")
+                controls(activity)
                 Button {
                     withAnimation { expanded.toggle() }
                 } label: {
                     Image(systemName: expanded ? "chevron.up" : "chevron.down")
                 }
                 .buttonStyle(.borderless)
+                .controlSize(.small)
                 .accessibilityLabel(expanded ? "Hide recent actions" : "Show recent actions")
                 .disabled(activity.recent.isEmpty)
             }
@@ -86,7 +77,6 @@ public struct AgentHUD: View {
                 }
             }
         }
-        .controlSize(.small)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(maxWidth: 520)
@@ -94,6 +84,23 @@ public struct AgentHUD: View {
         .opacity(activity.acting || activity.takenOver || expanded ? 1 : 0.75)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("AI agent activity")
+    }
+
+    /// Take Over (Resume once taken over) and Stop.
+    @ViewBuilder private func controls(_ activity: AgentActivity) -> some View {
+        if activity.takenOver {
+            Button("Resume") { Task { await model.resumeAgents() } }
+                .vmCapsule(prominent: true, large: false)
+                .help("Let AI agents act on this VM again")
+        } else {
+            Button("Take Over") { Task { await model.takeOver() } }
+                .vmCapsule(large: false)
+                .help("Stop AI agents from changing this VM until you resume (typing or clicking in the VM does it too)")
+        }
+        Button("Stop", role: .destructive) { Task { await model.stopAgents() } }
+            .vmCapsule(prominent: true, large: false)
+            .tint(.red)  // a tint shows on a prominent button only (macOS 15)
+            .help("End what AI agents are doing in this VM: their commands, apps and transfers")
     }
 
     static func status(_ activity: AgentActivity) -> String {
@@ -104,24 +111,30 @@ public struct AgentHUD: View {
     }
 }
 
-/// The tint around the VM's screen while an agent acts on it: it pulses, or stays still with Reduce Motion.
+/// The tint around the VM's screen: blue while an agent acts on it (it pulses, or stays still with Reduce Motion),
+/// orange and still while the person has taken over.
 public struct AgentEdgeTint: View {
     let acting: Bool
+    let takenOver: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulse = false
 
-    public init(acting: Bool) {
+    private var pulsing: Bool { acting && !takenOver && !reduceMotion }
+
+    public init(acting: Bool, takenOver: Bool = false) {
         self.acting = acting
+        self.takenOver = takenOver
     }
 
     public var body: some View {
         Rectangle()
-            .strokeBorder(.tint, lineWidth: 2)
-            .opacity(acting ? (reduceMotion ? 0.8 : (pulse ? 0.9 : 0.35)) : 0)
+            .strokeBorder(takenOver ? AnyShapeStyle(.orange) : AnyShapeStyle(.tint), lineWidth: 2)
+            .opacity(takenOver ? 0.8 : acting ? (pulsing ? (pulse ? 0.9 : 0.35) : 0.8) : 0)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
-            .animation(acting && !reduceMotion ? .easeInOut(duration: 1.2).repeatForever() : .default, value: pulse)
-            .onChange(of: acting, initial: true) { pulse = acting }
+            .animation(pulsing ? .easeInOut(duration: 1.2).repeatForever() : .default, value: pulse)
+            .id(pulsing)  // a new view when the pulse starts or ends: the endless animation goes with the old one
+            .onChange(of: pulsing, initial: true) { pulse = pulsing }
     }
 }
 
@@ -138,8 +151,14 @@ public struct ApprovalSheet: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(question.title, systemImage: "exclamationmark.shield.fill").font(.headline)
-            Text("Allow it this once? Check what it does first.").foregroundStyle(.secondary)
+            HStack(spacing: 12) {
+                SectionIcon("exclamationmark.shield.fill", color: .orange, size: 36)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(question.title).font(.headline)
+                    Text("Allow it this once? Check what it does first. No answer within a minute is a no.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+            }
             ScrollView {
                 Text(question.detail)
                     .font(.system(.callout, design: .monospaced))
@@ -148,11 +167,11 @@ public struct ApprovalSheet: View {
                     .padding(8)
             }
             .frame(minHeight: 60, maxHeight: 180)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             HStack {
                 Spacer()
-                Button("Allow Once") { answer(true) }
-                Button("Deny") { answer(false) }.keyboardShortcut(.defaultAction)
+                Button("Allow Once") { answer(true) }.vmCapsule(large: false)
+                Button("Deny") { answer(false) }.keyboardShortcut(.defaultAction).vmCapsule(prominent: true, large: false)
             }
         }
         .padding(20)

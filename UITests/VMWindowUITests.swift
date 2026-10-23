@@ -41,6 +41,8 @@ final class VMWindowUITests: XCTestCase {
         window.toolbars.buttons["Settings"].firstMatch.click()
         let sheet = window.sheets.firstMatch
         XCTAssertTrue(sheet.waitForExistence(timeout: 10))
+        sheet.descendants(matching: .any)["section Sharing"].firstMatch.click()  // the section with the shared folders
+        XCTAssertTrue(sheet.buttons["Add Folder…"].waitForExistence(timeout: 5))
         for share in shares {
             sheet.buttons["Add Folder…"].click()
             // The open panel: go to the folder (⇧⌘G), then Open chooses it.
@@ -83,6 +85,13 @@ final class VMWindowUITests: XCTestCase {
         let settled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isHittable == true"), object: sheet.buttons["Done"])
         XCTAssertEqual(XCTWaiter().wait(for: [settled], timeout: 10), .completed)
         try AppUnderTest.audit(vm, window: window)
+        // Every section the VM has, each in its turn.
+        for title in ["Hardware", "Display", "Sharing", "AI agents", "Network", "Port Forwarding"] {
+            let section = sheet.descendants(matching: .any)["section \(title)"].firstMatch
+            guard section.exists else { continue }
+            section.click()
+            try AppUnderTest.audit(vm, window: window)
+        }
         sheet.buttons["Done"].click()
         XCTAssertTrue(sheet.waitForNonExistence(timeout: 5))
     }

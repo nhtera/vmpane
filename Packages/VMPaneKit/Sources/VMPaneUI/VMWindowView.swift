@@ -15,7 +15,7 @@ public struct VMWindowView: View {
     @State private var hud = false
     @State private var confirmingCancelInstall = false
     /// The content's height: sheets fit in it instead of hanging below a small window.
-    @State private var room: CGFloat = 600
+    @State private var room = CGSize(width: 800, height: 600)
 
     public init(display: NSView, model: HelperViewModel, captureKeys: (@MainActor (Bool) -> Void)? = nil) {
         self.display = display
@@ -60,7 +60,10 @@ public struct VMWindowView: View {
             } else if model.state == .stopped || model.state == .error {
                 StoppedOverlay(model: model)
             }
-            AgentEdgeTint(acting: model.activity?.acting == true)
+            // Orange while the person holds the VM (not after the kill switch: the HUD says that one).
+            AgentEdgeTint(
+                acting: model.activity?.acting == true,
+                takenOver: model.activity.map { $0.takenOver && !$0.stopped } ?? false)
             if let transfer = model.transfer {
                 TransferHUD(transfer: transfer) { Task { await model.cancelDrop() } }
                     .frame(maxHeight: .infinity, alignment: .bottom)
@@ -87,7 +90,7 @@ public struct VMWindowView: View {
             .padding(.top, 12)
             .animation(.default, value: model.memoryLow)
         }
-        .onGeometryChange(for: CGFloat.self, of: \.size.height) { room = $0 }
+        .onGeometryChange(for: CGSize.self, of: \.size) { room = $0 }
         .task { await model.watchInput() }
         .task { await model.watchMemory() }
         .task(id: model.notice) {
@@ -98,17 +101,16 @@ public struct VMWindowView: View {
         }
         .toolbar {
             VMToolbar(model: model)
-            if captureKeys != nil {
-                ToolbarItem(placement: .primaryAction) {
+            // The VM's tools, one group (the system draws it as one glass group on macOS 26, plain before).
+            ToolbarItemGroup(placement: .primaryAction) {
+                VMToolbar.snapshotButton(model)
+                VMToolbar.screenshotButton(model)
+                if captureKeys != nil {
                     Toggle("Capture Keyboard", systemImage: "command", isOn: capture)
                         .help(capturing ? "Give ⌘-shortcuts back to the Mac" : "Send ⌘-shortcuts (⌘-Tab, ⌘Q…) to the VM")
                 }
-            }
-            ToolbarItem(placement: .primaryAction) {
                 Button("Snapshots", systemImage: "clock.arrow.circlepath") { snapshots = model.snapshotsModel() }
                     .help("Take, restore and delete snapshots")
-            }
-            ToolbarItem(placement: .primaryAction) {
                 Button("Settings", systemImage: "slider.horizontal.3") {
                     Task { settings = await model.loadSettings() }
                 }
@@ -122,7 +124,11 @@ public struct VMWindowView: View {
             isPresented: Binding(get: { settings != nil }, set: { if !$0 { settings = nil } }),
             onDismiss: { Task { await model.refresh() } },
             content: {
-                if let settings { SettingsSheet(model: settings).frame(height: fitted(SettingsSheet.idealHeight)) }
+                if let settings {
+                    SettingsSheet(model: settings)
+                        .frame(width: min(SettingsSheet.idealWidth, max(SettingsSheet.minimumWidth, room.width - 12)))
+                        .frame(height: fitted(SettingsSheet.idealHeight))
+                }
             }
         )
         .sheet(isPresented: Binding(get: { snapshots != nil }, set: { if !$0 { snapshots = nil } })) {
@@ -148,7 +154,7 @@ public struct VMWindowView: View {
     }
 
     /// A sheet's height in this window: its own when there is room, else the window's (it scrolls).
-    private func fitted(_ ideal: CGFloat) -> CGFloat { min(ideal, max(VMWindowContent.minimumHeight - 12, room - 12)) }
+    private func fitted(_ ideal: CGFloat) -> CGFloat { min(ideal, max(VMWindowContent.minimumHeight - 12, room.height - 12)) }
 }
 
 /// Puts `VMWindowView` into a display window, with its toolbar bridged into the window's title bar.
@@ -181,7 +187,8 @@ private struct DisplayHost: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
-/// The toolbar: power, pause/resume, suspend, snapshot, screenshot, agent status.
+/// The toolbar's power group (start or shut down, pause/resume, suspend) and its status items (sound, guest agent);
+/// the window adds its tools group (snapshot, screenshot, capture, snapshots, settings).
 struct VMToolbar: ToolbarContent {
     let model: HelperViewModel
 
@@ -201,16 +208,6 @@ struct VMToolbar: ToolbarContent {
                 button("Pause", "pause.circle", .pause, help: "Pause the VM")
             }
             button("Suspend", "moon.zzz", .suspend, help: "Save the VM's state and stop it")
-            button("Snapshot", "camera.aperture", .snapshot, help: "Take a live snapshot")
-                .keyboardShortcut("s", modifiers: [.command, .shift])
-            Button("Screenshot", systemImage: "camera.viewfinder") {
-                let desktop =
-                    FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
-                    ?? FileManager.default.homeDirectoryForCurrentUser
-                Task { await model.screenshot(to: desktop) }
-            }
-            .help("Save a screenshot of the VM to the Desktop")
-            .disabled(model.state != .running && model.state != .paused)
         }
         ToolbarItem(placement: .status) {
             AudioIndicators(output: model.audioOutput, input: model.audioInput, inputInUse: model.inputInUse)
@@ -227,9 +224,33 @@ struct VMToolbar: ToolbarContent {
     }
 
     private func button(_ title: String, _ symbol: String, _ action: HelperViewModel.Action, help: String) -> some View {
+        Self.button(model, title, symbol, action, help: help)
+    }
+
+    private static func button(
+        _ model: HelperViewModel, _ title: String, _ symbol: String, _ action: HelperViewModel.Action, help: String
+    ) -> some View {
         Button(title, systemImage: symbol) { Task { await model.perform(action) } }
             .help(help)
             .disabled(!model.can(action))
+    }
+
+    /// A live snapshot (⇧⌘S), in the window's tools group.
+    static func snapshotButton(_ model: HelperViewModel) -> some View {
+        button(model, "Snapshot", "camera.aperture", .snapshot, help: "Take a live snapshot")
+            .keyboardShortcut("s", modifiers: [.command, .shift])
+    }
+
+    /// A screenshot of the guest to the Desktop, in the window's tools group.
+    static func screenshotButton(_ model: HelperViewModel) -> some View {
+        Button("Screenshot", systemImage: "camera.viewfinder") {
+            let desktop =
+                FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
+                ?? FileManager.default.homeDirectoryForCurrentUser
+            Task { await model.screenshot(to: desktop) }
+        }
+        .help("Save a screenshot of the VM to the Desktop")
+        .disabled(model.state != .running && model.state != .paused)
     }
 }
 

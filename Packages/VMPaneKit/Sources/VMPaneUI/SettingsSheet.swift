@@ -2,11 +2,15 @@ import AppKit
 import SwiftUI
 import VMPaneCore
 
-/// The VM's settings. Each setting says whether a change takes effect now ("Live"), at the next start ("Next
-/// start"), or simply when saved; Apply sends all changes at once and shows what each one did.
+/// The VM's settings, as System Settings shows them: its sections in a sidebar (`SettingsModel.section`), one grouped
+/// form each. Each setting says whether a change takes effect now ("Live"), at the next start ("Next start"), or
+/// simply when saved; Apply sends all changes at once and shows what each one did, whichever section they are in.
 public struct SettingsSheet: View {
     /// Its height when the window has room; smaller windows get a shorter sheet (the form scrolls).
     static let idealHeight: CGFloat = 600
+    /// Its width when the window has room; a narrower window gets a narrower sheet (the forms wrap).
+    static let idealWidth: CGFloat = 720
+    static let minimumWidth: CGFloat = 520
     @Bindable var model: SettingsModel
     @Environment(\.dismiss) private var dismiss
 
@@ -16,80 +20,29 @@ public struct SettingsSheet: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            Form {
-                Section("General") {
-                    row("name") { TextField("Name", text: $model.draft.name) }
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 10) {
+                        SystemTile(SystemTile.System(model.draft.os), size: 32)
+                        Text(model.draft.name).font(.headline).lineLimit(2)
+                    }
+                    .padding([.horizontal, .top], 14)
+                    .padding(.bottom, 6)
+                    List(selection: Binding(get: { shown }, set: { if let new = $0 { model.section = new } })) {
+                        ForEach(sections) { sidebarRow($0).tag($0) }
+                    }
+                    .listStyle(.sidebar)
+                    .accessibilityLabel("Sections")
                 }
-                Section("Hardware") {
-                    row("cpu.count") {
-                        Stepper(
-                            "Processors: \(model.draft.cpu.count)", value: $model.draft.cpu.count,
-                            in: 1...ProcessInfo.processInfo.activeProcessorCount)
-                    }
-                    row("memory.mib") {
-                        Stepper("Memory: \(model.draft.memory.mib >> 10) GB", value: memoryGiB, in: 2...maxMemoryGiB)
-                    }
+                .frame(width: 190)
+                Divider()
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(shown.title).font(.title2.bold()).padding([.horizontal, .top], 20)
+                    Form { content(shown) }
+                        .formStyle(.grouped)
                 }
-                Section("Display") {
-                    row("display.widthPx") {
-                        Picker("Resolution", selection: resolution) {
-                            ForEach(resolutionChoices, id: \.self) { size in Text(verbatim: "\(size.width) × \(size.height)").tag(size) }
-                        }
-                    }
-                    row("display.autoResize") { Toggle("Follow the window size", isOn: $model.draft.display.autoResize) }
-                    if model.draft.os != .macos {
-                        // A macOS guest scales itself for Retina; Linux and Windows draw what they are given.
-                        row("display.scaling") {
-                            Picker("Scaling", selection: $model.draft.display.scaling) {
-                                Text("Sharp (Retina pixels)").tag(DisplayConfig.Scaling.retina)
-                                Text("Larger (one pixel per point)").tag(DisplayConfig.Scaling.standard)
-                            }
-                        }
-                    }
-                }
-                Section("Sharing") {
-                    row("clipboard.mode") {
-                        Picker("Clipboard", selection: $model.draft.clipboard.mode) {
-                            Text("Both ways").tag(ClipboardConfig.Mode.both)
-                            Text("Mac to VM").tag(ClipboardConfig.Mode.hostToGuest)
-                            Text("VM to Mac").tag(ClipboardConfig.Mode.guestToHost)
-                            Text("Off").tag(ClipboardConfig.Mode.off)
-                        }
-                    }
-                    if model.draft.clipboard.mode != .off && model.draft.os != .linux {
-                        // Linux guests share their clipboard through SPICE: plain text and images only.
-                        row("clipboard.keepFormatting") {
-                            Toggle("Keep text formatting", isOn: $model.draft.clipboard.keepsFormatting)
-                        }
-                    }
-                    row("audio.output") { Toggle("Sound output", isOn: $model.draft.audio.output) }
-                    row("audio.input") { Toggle("Microphone", isOn: $model.draft.audio.input) }
-                    row("shares") { SharedFoldersEditor(shares: $model.draft.shares) }
-                }
-                AgentPolicySection(
-                    mcp: $model.draft.mcp, clipboardAllowWithAgents: $model.draft.clipboard.allowWithAgents,
-                    tampered: model.policyTampered, writableShares: model.draft.shares.contains { !$0.readOnly },
-                    vm: model.draft.id, name: model.draft.name)
-                if model.draft.network.contains(where: { $0.mode == .nat }) {
-                    Section("Port Forwarding") {
-                        row("portForwards") {
-                            PortForwardsEditor(rules: $model.draft.portForwards, statuses: model.portStatuses, listening: model.listening)
-                        }
-                    }
-                }
-                if !model.draft.network.isEmpty {
-                    Section("Network") {
-                        row("network.0.mode") {
-                            Picker("Network", selection: $model.draft.network[0].mode) {
-                                Text("Shared (NAT)").tag(NetworkConfig.Mode.nat)
-                                Text("Bridged").tag(NetworkConfig.Mode.bridged)
-                                Text("Off").tag(NetworkConfig.Mode.none)
-                            }
-                        }
-                    }
-                }
+                .frame(maxWidth: .infinity)
             }
-            .formStyle(.grouped)
             if model.needsRestart {
                 Label("Some changes take effect when the VM next starts.", systemImage: "arrow.clockwise.circle")
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -98,16 +51,17 @@ public struct SettingsSheet: View {
             }
             Divider()
             HStack {
-                Button("Revert") { model.revert() }.disabled(!model.hasChanges || model.applying)
+                Button("Revert") { model.revert() }.vmCapsule(large: false).disabled(!model.hasChanges || model.applying)
                 Spacer()
-                Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Done") { dismiss() }.keyboardShortcut(.cancelAction).vmCapsule(large: false)
                 Button("Apply") { Task { await model.apply() } }
                     .keyboardShortcut(.defaultAction)
+                    .vmCapsule(prominent: true, large: false)
                     .disabled(!model.hasChanges || model.applying)
             }
             .padding()
         }
-        .frame(width: 520)
+        .frame(minWidth: Self.minimumWidth, idealWidth: Self.idealWidth)
         .frame(minHeight: 300, idealHeight: Self.idealHeight)
         .task {
             await model.refreshPorts()
@@ -117,6 +71,150 @@ public struct SettingsSheet: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(model.lastError ?? "")
+        }
+    }
+
+    /// The section on screen: the chosen one while the VM has it (a Revert can take Port Forwarding away).
+    private var shown: SettingsSection { sections.contains(model.section) ? model.section : .general }
+
+    /// A section in the sidebar, marked when it holds a refused change (orange) or one not yet applied (a dot): Apply
+    /// and Revert act on every section, not only the one on screen.
+    private func sidebarRow(_ section: SettingsSection) -> some View {
+        let refused = model.outcomes.contains { SettingsSection.holding($0.key) == section && $0.value == .rejected }
+        let pending = model.changedPaths.contains { SettingsSection.holding($0) == section }
+        return Label {
+            HStack {
+                Text(section.title)
+                Spacer(minLength: 4)
+                if refused {
+                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
+                } else if pending {
+                    Circle().fill(.tint).frame(width: 7, height: 7)
+                }
+            }
+        } icon: {
+            SectionIcon(section.systemImage, color: section.color, size: 20)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(section.title)
+        .accessibilityValue(refused ? "a change was refused" : pending ? "changed, not applied" : "")
+        .accessibilityIdentifier("section \(section.title)")
+    }
+
+    /// The sections this VM has (Network and Port Forwarding only with a network; forwards only with NAT).
+    private var sections: [SettingsSection] {
+        SettingsSection.allCases.filter { section in
+            switch section {
+            case .network: !model.draft.network.isEmpty
+            case .portForwarding: model.draft.network.contains { $0.mode == .nat }
+            default: true
+            }
+        }
+    }
+
+    @ViewBuilder private func content(_ section: SettingsSection) -> some View {
+        switch section {
+        case .general: generalSection
+        case .hardware: hardwareSection
+        case .display: displaySection
+        case .sharing: sharingSection
+        case .agents: agentsSection
+        case .network: networkSection
+        case .portForwarding: portForwardingSection
+        }
+    }
+
+    @ViewBuilder private var generalSection: some View {
+        Section {
+            row("name") { TextField("Name", text: $model.draft.name) }
+        }
+    }
+
+    @ViewBuilder private var hardwareSection: some View {
+        Section {
+            row("cpu.count") {
+                Stepper(
+                    "Processors: \(model.draft.cpu.count)", value: $model.draft.cpu.count,
+                    in: 1...ProcessInfo.processInfo.activeProcessorCount)
+            }
+            row("memory.mib") {
+                Stepper("Memory: \(model.draft.memory.mib >> 10) GB", value: memoryGiB, in: 2...maxMemoryGiB)
+            }
+        }
+    }
+
+    @ViewBuilder private var displaySection: some View {
+        Section {
+            row("display.widthPx") {
+                Picker("Resolution", selection: resolution) {
+                    ForEach(resolutionChoices, id: \.self) { size in Text(verbatim: "\(size.width) × \(size.height)").tag(size) }
+                }
+            }
+            row("display.autoResize") { Toggle("Follow the window size", isOn: $model.draft.display.autoResize) }
+            if model.draft.os != .macos {
+                // A macOS guest scales itself for Retina; Linux and Windows draw what they are given.
+                row("display.scaling") {
+                    Picker("Scaling", selection: $model.draft.display.scaling) {
+                        Text("Sharp (Retina pixels)").tag(DisplayConfig.Scaling.retina)
+                        Text("Larger (one pixel per point)").tag(DisplayConfig.Scaling.standard)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var sharingSection: some View {
+        Section("Clipboard") {
+            row("clipboard.mode") {
+                Picker("Clipboard", selection: $model.draft.clipboard.mode) {
+                    Text("Both ways").tag(ClipboardConfig.Mode.both)
+                    Text("Mac to VM").tag(ClipboardConfig.Mode.hostToGuest)
+                    Text("VM to Mac").tag(ClipboardConfig.Mode.guestToHost)
+                    Text("Off").tag(ClipboardConfig.Mode.off)
+                }
+            }
+            if model.draft.clipboard.mode != .off && model.draft.os != .linux {
+                // Linux guests share their clipboard through SPICE: plain text and images only.
+                row("clipboard.keepFormatting") {
+                    Toggle("Keep text formatting", isOn: $model.draft.clipboard.keepsFormatting)
+                }
+            }
+        }
+        Section("Sound") {
+            row("audio.output") { Toggle("Sound output", isOn: $model.draft.audio.output) }
+            row("audio.input") { Toggle("Microphone", isOn: $model.draft.audio.input) }
+        }
+        Section("Shared folders") {
+            row("shares") { SharedFoldersEditor(shares: $model.draft.shares) }
+        }
+    }
+
+    @ViewBuilder private var agentsSection: some View {
+        AgentPolicySection(
+            mcp: $model.draft.mcp, clipboardAllowWithAgents: $model.draft.clipboard.allowWithAgents,
+            tampered: model.policyTampered, writableShares: model.draft.shares.contains { !$0.readOnly },
+            vm: model.draft.id, name: model.draft.name)
+    }
+
+    @ViewBuilder private var networkSection: some View {
+        if !model.draft.network.isEmpty {
+            Section {
+                row("network.0.mode") {
+                    Picker("Network", selection: $model.draft.network[0].mode) {
+                        Text("Shared (NAT)").tag(NetworkConfig.Mode.nat)
+                        Text("Bridged").tag(NetworkConfig.Mode.bridged)
+                        Text("Off").tag(NetworkConfig.Mode.none)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var portForwardingSection: some View {
+        Section {
+            row("portForwards") {
+                PortForwardsEditor(rules: $model.draft.portForwards, statuses: model.portStatuses, listening: model.listening)
+            }
         }
     }
 
@@ -193,13 +291,13 @@ public struct ApplyModeBadge: View {
     }
 }
 
-/// The VM's shared folders: add with a folder picker; per row, read-only or not, and remove.
+/// The VM's shared folders (under the Sharing section's "Shared folders"): add with a folder picker; per row,
+/// read-only or not, and remove.
 struct SharedFoldersEditor: View {
     @Binding var shares: [Extensible<ShareConfig>]
 
     var body: some View {
         VStack(alignment: .leading) {
-            Text("Shared folders")
             ForEach($shares, id: \.id) { $share in
                 HStack {
                     Label(share.hostPath, systemImage: "folder").lineLimit(1).truncationMode(.middle)

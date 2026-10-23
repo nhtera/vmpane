@@ -63,11 +63,17 @@ extension HelperViewModel {
     func show(_ activity: AgentActivity) {
         let started = activity.acting && self.activity?.acting != true
         let tookOver = activity.takenOver && self.activity?.takenOver != true
+        let resumed = !activity.takenOver && self.activity?.takenOver == true
         withAnimation(.easeInOut(duration: 0.2)) { self.activity = activity }
         if started, let client = activity.client {
             AccessibilityNotification.Announcement("\(client) is using \(name ?? "the VM")").post()
         }
-        if tookOver { AccessibilityNotification.Announcement("You took over \(name ?? "the VM") from AI agents").post() }
+        if tookOver, activity.stopped {
+            AccessibilityNotification.Announcement("AI agents are stopped in \(name ?? "the VM")").post()
+        } else if tookOver {
+            AccessibilityNotification.Announcement("You took over \(name ?? "the VM") from AI agents").post()
+        }
+        if resumed { AccessibilityNotification.Announcement("AI agents can act on \(name ?? "the VM") again").post() }
         activityRefresh?.cancel()
         guard activity.acting else { return }
         activityRefresh = Task { [weak self] in

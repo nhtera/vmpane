@@ -17,6 +17,9 @@ public final class SettingsModel {
     /// Each saved port forward's state (`vm.ports.list`), by rule id.
     public private(set) var portStatuses: [String: PortStatus] = [:]
 
+    /// The section the sheet shows.
+    public var section: SettingsSection = .general
+
     /// A raised agent level was set outside VMPane, so it counts as off (`vm.info`).
     public private(set) var policyTampered = false
 
