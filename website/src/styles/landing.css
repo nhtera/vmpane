@@ -55,26 +55,45 @@
   .act .li .i { margin-top: .05em; }
   .act small { display: block; font-size: .85em; color: var(--win-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .act .empty { display: block; color: var(--win-text-2); }
-  /* the library */
-  .lib { display: grid; grid-template-columns: 35% minmax(0, 1fr); }
+  /* the library: filters | its VMs | the chosen one */
+  .lib { display: grid; grid-template-columns: 27% minmax(0, 1fr) 32%; }
   .lib .side { background: var(--win-side); border-right: 1px solid var(--win-line); padding: 0 .5em .7em; display: grid; align-content: start; gap: .2em; }
   .side-top { height: 3.6em; display: flex; align-items: center; padding-left: .7em; }
-  .lib .row { display: flex; align-items: center; gap: .7em; padding: .5em .7em; border-radius: .8em; }
+  .lib .row { display: flex; align-items: center; gap: .6em; padding: .45em .6em; border-radius: .7em; }
   .lib .row.sel { background: var(--sel); color: var(--on-color); }
   .lib .row.sel .sd, .lib .row.sel .sz { color: var(--on-color); }
-  .lib .ico { width: 2em; height: 2em; border-radius: .5em; display: grid; place-items: center; flex: none; background: var(--c); box-shadow: var(--rim); }
-  .lib .ico .i { width: 1.25em; height: 1.25em; color: var(--on-color); }
+  .lib .ico, .sets .ico { width: 1.6em; height: 1.6em; border-radius: .4em; display: grid; place-items: center; flex: none; background: var(--c); box-shadow: var(--rim); }
+  .lib .ico .i, .sets .ico .i { width: 1.05em; height: 1.05em; color: var(--on-color); }
   .lib .nm { display: grid; gap: .1em; min-width: 0; flex: 1; }
   .lib .nm b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lib .nm small { font-size: .78em; color: var(--win-text-2); }
+  .lib .vms { padding: .6em .7em; display: grid; gap: .3em; align-content: start; }
+  .lib .vm { display: flex; align-items: center; gap: .8em; padding: .55em .7em; border-radius: .8em; }
+  .lib .vm.sel { background: var(--accent-soft); }
+  .lib .insp { border-left: 1px solid var(--win-line); padding: 1.1em 1.1em; display: grid; gap: .9em; align-content: start; overflow: hidden; }
+  .lib .insp .ihead { display: flex; align-items: center; gap: .8em; }
+  .lib .insp .tile { width: 2.9em; height: 2.9em; font-size: 1.2em; }
+  /* a system's tile (SystemTile): its colours top to bottom, a white glyph */
+  .tile { width: 2.4em; height: 2.4em; border-radius: 25%; flex: none; display: grid; place-items: center; color: var(--on-color); font-weight: 800; box-shadow: var(--rim), var(--tile-shadow); }
+  .tile .i { width: 1.3em; height: 1.3em; }
+  .tile.ubuntu { background: var(--tile-ubuntu); } .tile.debian { background: var(--tile-debian); }
+  .tile.fedora { background: var(--tile-fedora); } .tile.windows { background: var(--tile-windows); }
+  .tile.macos { background: var(--tile-macos); }
+  .tile .panes { display: grid; grid-template-columns: repeat(2, .5em); gap: .1em; } .tile .panes i { width: .5em; height: .5em; border-radius: .08em; background: var(--on-color); }
+  /* the settings sheet: sections | the open one's form */
+  .sets { display: grid; grid-template-columns: 33% minmax(0, 1fr); height: calc(100% - 3.6em); }
+  .sets .secs { background: var(--win-side); border-right: 1px solid var(--win-line); padding: .6em .5em; display: grid; gap: .15em; align-content: start; }
+  .sets .sec { display: flex; align-items: center; gap: .55em; padding: .4em .55em; border-radius: .6em; white-space: nowrap; overflow: hidden; }
+  .sets .sec.sel { background: var(--sel); color: var(--on-color); }
+  .sets .rad.on { font-weight: 600; }
+  .sets .rd { width: 1em; height: 1em; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px var(--popup-line); }
+  .sets .rd.on { background: var(--on-color); box-shadow: inset 0 0 0 .3em var(--blue); }
   .sd { display: inline-flex; align-items: center; gap: .35em; font-size: .83em; color: var(--win-text-2); }
   .sd::before { content: ""; width: .6em; height: .6em; border-radius: 50%; background: var(--c, var(--gray)); }
   .sd.run { --c: var(--ok); } .sd.susp { --c: var(--blue); }
   .group .li > .sd:last-child { font-size: 1em; }
   .sz { margin-left: auto; flex: none; font-size: .83em; color: var(--win-text-2); font-variant-numeric: tabular-nums; }
   .lib .main { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; }
-  .lib .detail { padding: 1.2em 1.6em; display: grid; gap: 1em; align-content: start; overflow: hidden; }
-  .thumb { height: 7em; border-radius: .5em; background: var(--term-thumb); display: grid; place-items: center; }
-  .thumb pre { margin: 0; font: .7em/1.5 var(--f-mono); color: var(--term-text); }
   /* a guest's screen: a Linux terminal, the macOS desktop, Windows installing */
   /* its font is .96 of the window's: the 3.6em title bar is 3.75em here */
   .term { height: calc(100% - 3.75em); padding: 1em 1.2em; overflow: hidden; white-space: pre; font: 400 .96em/1.55 var(--f-mono); background: var(--term-bg); color: var(--term-text); }

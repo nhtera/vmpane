@@ -9,18 +9,21 @@ only the rest is done by hand.
       *Tested:* notarization and Gatekeeper (`release.sh build-candidate`, release-verify), the welcome on a first
       launch (ui-smoke), `install-cli --user` (cli-e2e). *By hand:* the new account's first-run prompts, and
       `install-cli` with its administrator prompt.
-- [ ] New VM, each card: macOS (IPSW), Ubuntu, Debian and Fedora (cloud images, nothing typed), Windows 11 (ISO,
-      unattended, from Customize); a dropped .iso/.ipsw opens the sheet with its system. Each is made in the background
+- [ ] New VM, each system in the sheet's list: macOS (IPSW), Ubuntu, Debian and Fedora (cloud images, nothing
+      typed), Windows 11 (ISO, unattended, from Customize), an installer file; a dropped .iso/.ipsw opens the sheet with it. Each is made in the background
       and installs to a desktop or a login prompt with the guest tools.
-      *Tested:* the cards and Customize (ui-smoke's LibraryUITests), cloud images (linux-cloud), the installs
-      (macos-install, linux-iso-install, win-install), dropped ISOs read in place (unit tests). *By hand:* a card's
-      Create through to the running VM, and a drop on the Dock icon.
+      *Tested:* the list, its keys and Customize (ui-smoke's LibraryUITests), cloud images (linux-cloud), the installs
+      (macos-install, linux-iso-install, win-install), dropped ISOs read in place (unit tests). *By hand:* a
+      system's Create through to the running VM, and a drop on the Dock icon.
 - [ ] Dock: each running VM has its own Dock tile with its icon; the Dock menu acts on it.
       *Tested:* the VM's own app has a menu bar, and its Quit asks while the VM runs (ui-smoke).
       *By hand:* the tile's icon and its menu (UITests' testDockMenuActsOnTheVM, when the Dock is not auto-hidden).
 - [ ] VoiceOver: the library, the wizard, a VM window's toolbar and Settings can be used without a mouse.
-      *Tested:* the accessibility audit of the welcome, the library, the wizard, Settings, a VM window and its
-      settings (ui-smoke). *By hand:* VoiceOver itself.
+      *Tested:* the accessibility audit of the welcome, the library (with a VM: library-ui), the wizard, Settings,
+      a VM window and each section of its settings (ui-smoke). *By hand:* VoiceOver itself.
+- [ ] Light and dark: the new-VM sheet, the library (list, grid, inspector), a VM's settings (each section) and
+      the agent HUD read well in both, with Increase Contrast and Reduce Transparency too (macOS 15 here; macOS 26
+      from the beta testers' screenshots).
 - [ ] Update with running VMs (once Sparkle's feed is live): from the previous version, with a Linux and a
       Windows VM running, Check for Updates → Suspend All and Update → after the relaunch both resume where they
       were; Update Now leaves them running on the old helper until restarted.

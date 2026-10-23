@@ -24,11 +24,16 @@ get a microphone.
 - The VM's window shows an AI agent at work: who, at what level, what it just did, with **Take Over** and **Stop**.
   Typing or clicking in the VM while an agent acts takes over too; agents wait (`takenOver`) until you resume. Agents' questions appear
   in the VM's window.
-- A new library: thumbnails, a list or a grid, filters, an inspector (system, resources, snapshots, activity), and
-  a stopped VM's processors, memory, display, disk and snapshots changed without starting it.
-- New VM is one sheet of system cards sized for your Mac (⌘N, then Return makes another of the last one), made in
-  the background with each stage in the library. Drop an .iso or .ipsw on the library or the Dock icon to start
-  from it. A Linux VM made from a card gets a password VMPane keeps for you (**Copy Password** in the inspector).
+- A new library, in the style of macOS 26 (and Sequoia's on macOS 15): filters with their counts in the sidebar, the
+  VMs as a list or a grid with each system's own tile, and an inspector with the chosen VM's actions, its problem
+  and fix, and its system, resources (a stopped VM's processors, memory, display and disk change without starting
+  it), snapshots and agent activity.
+- New VM is one sheet: the systems listed by kind (macOS, Linux, Windows, an installer file from this Mac) and the
+  chosen one's detail, sized for your Mac (⌘N, then Return makes another of the last one), made in the background
+  with each stage in the library. Drop an .iso or .ipsw on the library or the Dock icon to start from it. A Linux
+  VM made from the sheet gets a password VMPane keeps for you (**Copy Password** in the inspector).
+- A VM's settings are sections in a sidebar, as in System Settings (General, Hardware, Display, Sharing, AI agents,
+  Network, Port Forwarding); the agents' levels are a list that says what each allows.
 - The clipboard of macOS and Windows VMs keeps formatting: bold, links, colours, fonts and tables copied in Word,
   Outlook, Excel or a browser paste formatted on the other side (HTML and RTF, with plain text alongside; **Keep text
   formatting** in Settings › Sharing turns it off) (#6).

@@ -6,7 +6,7 @@
 cloud image (Ubuntu 26.04 LTS, Debian 13, Fedora 44) with nothing to click through. The account is your Mac's user
 name with a password VMPane makes up and keeps for you (**Copy Password** in the VM's inspector); **Customize…**
 lets you choose the name, a password of your own, an SSH public key, a desktop, the resources and the rest. ⌘N then
-Return makes another of the card you used last.
+Return makes another of the system you used last.
 
 - The image is downloaded once and checked against the SHA-256 pinned in VMPane, then converted to a disk once (in
   `~/Library/Caches/app.vmpane.mac/Cloud/`); each VM's disk is an APFS clone of it, grown to the size you chose.

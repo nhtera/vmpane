@@ -247,14 +247,14 @@ test("level chips set the drawn Settings, the app's explanation and the activity
   assert.equal(await chips.first().getAttribute("aria-pressed"), "true");
   assert.equal(await page.locator("#agents .explain").textContent(), "Off. Agents cannot see this VM.");
   assert.equal(await page.locator("#agents .explain").getAttribute("aria-live"), "polite");
-  assert.equal(await page.locator("#agents .popup").textContent(), "Off");
+  assert.equal(await page.locator("#agents .rad.on").textContent(), "Off");
   assert.equal(await page.locator("#agents .act").innerText(), "No agent has used this VM.");
   // Run commands: the administrator command is refused with the policy's own reason.
   await chips.nth(3).click();
   assert.match(await page.locator("#agents .act").innerText(), /agent\.exec needs policy level admin; this VM allows exec/);
   // Full control: it reaches the person, who says no.
   await chips.nth(4).click();
-  assert.equal(await page.locator("#agents .popup").textContent(), "Full control");
+  assert.equal(await page.locator("#agents .rad.on").textContent(), "Full control");
   assert.match(await page.locator("#agents .act").innerText(), /the person at this Mac did not allow it/);
   await context.close();
 });

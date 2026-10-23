@@ -17,6 +17,10 @@
   --blue: #007AFF; --green: #34C759; --orange: #FF9500; --red: #FF3B30; --purple: #AF52DE; --indigo: #5856D6;
   --teal: #30B0C7; --yellow: #FFCC00; --pink: #FF2D55; --gray: #8E8E93;
   --on-color: #FFFFFF;
+  /* the app's system tiles (SystemTile): each system's colours, top to bottom, the same in both looks */
+  --tile-ubuntu: linear-gradient(#E8622C, #C2410C); --tile-debian: linear-gradient(#C8174A, #8A0F33);
+  --tile-fedora: linear-gradient(#3C6EB4, #22437A); --tile-windows: linear-gradient(#1F8BE8, #0A5BB0);
+  --tile-macos: linear-gradient(#5A5A60, #2C2C30); --tile-shadow: 0 1px 2px rgba(0,0,0,.3);
   /* a selected row (macOS's selection blue): white text on it is AA */
   --sel: #0064E1;
   --accent-soft: color-mix(in srgb, var(--blue) 14%, transparent);

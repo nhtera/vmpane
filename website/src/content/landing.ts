@@ -193,15 +193,19 @@ export const landing = {
   // install overlay. Each picture's description (`label`) is what a screen reader announces.
   mock: {
     vm: "Ubuntu 24.04",
+    // The app's system tiles (SystemTile): a letter for a Linux distribution, four panes for Windows, a laptop for
+    // macOS (never Apple's logo on the web), in each system's colours.
     vms: [
-      { name: "Ubuntu 24.04", icon: "terminal", c: "teal", state: "Running", st: "run", size: "9.8 GB" },
-      { name: "Windows 11", icon: "pc", c: "orange", state: "Running", st: "run", size: "38 GB" },
-      { name: "macOS 26", icon: "laptopcomputer", c: "purple", state: "Suspended", st: "susp", size: "41 GB" },
-      { name: "Fedora 42", icon: "terminal", c: "teal", state: "Stopped", st: "", size: "7.2 GB" },
+      { name: "Ubuntu 24.04", tile: "U", brand: "ubuntu", os: "Linux", state: "Running", st: "run", spec: "4 CPUs · 4 GB" },
+      { name: "Windows 11", tile: "panes", brand: "windows", os: "Windows", state: "Running", st: "run", spec: "4 CPUs · 8 GB" },
+      { name: "macOS 26", tile: "mac", brand: "macos", os: "macOS", state: "Suspended", st: "susp", spec: "4 CPUs · 8 GB" },
+      { name: "Fedora 42", tile: "F", brand: "fedora", os: "Linux", state: "Stopped", st: "", spec: "2 CPUs · 4 GB" },
     ],
     library: {
-      label: "VMPane's library: Ubuntu and Windows running, macOS suspended, Fedora stopped; Ubuntu's agent activity shows a denied command.",
-      facts: [["System", "Linux"], ["State", "Running"]],
+      label: "VMPane's library: Ubuntu and Windows running, macOS suspended, Fedora stopped; Ubuntu is chosen, and its agent activity shows a denied command.",
+      // The sidebar's filters and their counts (LibraryFilter).
+      filters: [["All", "4", "list", "gray"], ["Running", "2", "play", "green"], ["Agent active", "1", "sparkle", "blue"]],
+      facts: [["System", "Linux"], ["On disk", "9.8 GB"]],
       thumb: ["ubuntu@ubuntu:~$ uname -m", "aarch64"],
       activity: "Agent activity",
     },
@@ -231,7 +235,13 @@ export const landing = {
     allowed: "Allowed",
     refused: "Refused",
     personSaidNo: "the person at this Mac did not allow it",
-    settings: { title: "Settings", section: "AI agents", access: "Access" },
+    // The settings sheet's sections (SettingsSection) with their icons and colours; AI agents is open.
+    settings: {
+      title: "Settings",
+      section: "AI agents",
+      levels: "What agents may do",
+      sections: [["General", "sliders", "gray"], ["Hardware", "cpu", "blue"], ["Display", "macwindow", "indigo"], ["Sharing", "folder", "green"], ["AI agents", "sparkle", "purple"], ["Network", "network", "teal"], ["Port Forwarding", "import", "orange"]],
+    },
     toggles: [
       { label: "Ask before an agent runs a command", on: true },
       { label: "Snapshot before each agent session", on: true },

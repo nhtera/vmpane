@@ -62,50 +62,77 @@ const Switch = ({ on }: { on: boolean }) => <span className={on ? "sw" : "sw off
 
 // ---------- the story: the library, the VM's window, the agent's question ----------
 
+/** A system's tile, as the app draws it: a letter, four panes (Windows) or a laptop (macOS), in its colours. */
+function Tile({ v }: { v: (typeof m.vms)[number] }) {
+  return (
+    <span className={`tile ${v.brand}`}>
+      {v.tile === "panes" ? <span className="panes"><i /><i /><i /><i /></span> : v.tile === "mac" ? <Icon name="laptopcomputer" /> : v.tile}
+    </span>
+  );
+}
+
 export function LibraryMock({ className }: { className?: string }) {
   // Newest first, as the app lists them: the denied command on top.
   const [denied, allowed] = activity(4);
+  const chosen = m.vms[0];
   return (
     <div className={className ? `w lib ${className}` : "w lib"} role="img" aria-label={m.library.label}>
       <div className="side">
         <div className="side-top">
           <Lights />
         </div>
-        {m.vms.map((v, i) => (
-          <div key={v.name} className={i === 0 ? "row sel" : "row"}>
-            <span className="ico" style={{ "--c": `var(--${v.c})` } as CSSProperties}>
-              <Icon name={v.icon} />
+        {m.library.filters.map(([title, count, icon, c], i) => (
+          <div key={title} className={i === 0 ? "row sel" : "row"}>
+            <span className="ico" style={{ "--c": `var(--${c})` } as CSSProperties}>
+              <Icon name={icon as IconName} />
             </span>
             <span className="nm">
-              <b>{v.name}</b>
-              <span className={`sd ${v.st}`}>{v.state}</span>
+              <b>{title}</b>
             </span>
-            <span className="sz">{v.size}</span>
+            <span className="sz">{count}</span>
           </div>
         ))}
       </div>
       <div className="main">
         <div className="bar">
-          <b>{m.vm}</b>
-          <span className="tools">{tools(["macwindow", "power", "import", "plus"])}</span>
+          <b>{m.library.filters[0][0]}</b>
+          <span className="tools">{tools(["import", "list", "plus"])}</span>
         </div>
-        <div className="detail">
-          <div className="thumb">
-            <pre>{m.library.thumb.join("\n")}</pre>
-          </div>
-          <div className="group">
-            {m.library.facts.map(([k, v]) => (
-              <div className="li" key={k}>
-                <span>{k}</span>
-                <span className={k === "State" ? "sd run" : undefined}>{v}</span>
-              </div>
-            ))}
-          </div>
-          <div className="gh">{m.library.activity}</div>
-          <div className="group act">
-            <ActivityRow row={denied} className="s-row" />
-            <ActivityRow row={allowed} />
-          </div>
+        <div className="vms">
+          {m.vms.map((v, i) => (
+            <div key={v.name} className={i === 0 ? "vm sel" : "vm"}>
+              <Tile v={v} />
+              <span className="nm">
+                <b>{v.name}</b>
+                <span className={`sd ${v.st}`}>
+                  {v.state} · {v.os}
+                </span>
+                <small>{v.spec}</small>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="insp">
+        <div className="ihead">
+          <Tile v={chosen} />
+          <span className="nm">
+            <b>{chosen.name}</b>
+            <span className={`sd ${chosen.st}`}>{chosen.state}</span>
+          </span>
+        </div>
+        <div className="group">
+          {m.library.facts.map(([k, v]) => (
+            <div className="li" key={k}>
+              <span>{k}</span>
+              <span>{v}</span>
+            </div>
+          ))}
+        </div>
+        <div className="gh">{m.library.activity}</div>
+        <div className="group act">
+          <ActivityRow row={denied} className="s-row" />
+          <ActivityRow row={allowed} />
         </div>
       </div>
     </div>
@@ -194,24 +221,40 @@ function ActivityRow({ row, className }: { row: Activity; className?: string }) 
 }
 
 export function SettingsMock({ level }: { level: number }) {
-  const lv = landing.agents.levels[level];
+  const levels = landing.agents.levels;
   return (
     <Win title={`${m.settings.title} · ${m.vm}`}>
-      <div className="body">
-        <div className="gh">{m.settings.section}</div>
-        <div className="group">
-          <div className="formrow">
-            <span>{m.settings.access}</span>
-            <span className="popup">{lv.title}</span>
-          </div>
-          <div className="cap">{lv.explain}</div>
-          {level > 0 &&
-            m.toggles.map((t) => (
-              <div className="formrow" key={t.label}>
-                <span>{t.label}</span>
-                <Switch on={t.on} />
+      <div className="sets">
+        <div className="secs">
+          {m.settings.sections.map(([title, icon, c]) => (
+            <div key={title} className={title === m.settings.section ? "sec sel" : "sec"}>
+              <span className="ico" style={{ "--c": `var(--${c})` } as CSSProperties}>
+                <Icon name={icon as IconName} />
+              </span>
+              {title}
+            </div>
+          ))}
+        </div>
+        <div className="body">
+          <div className="gh">{m.settings.levels}</div>
+          <div className="group">
+            {levels.map((lv, i) => (
+              <div className="formrow" key={lv.title}>
+                <span className={i === level ? "rad on" : "rad"}>{lv.title}</span>
+                <span className={i === level ? "rd on" : "rd"} />
               </div>
             ))}
+          </div>
+          {level > 0 && (
+            <div className="group">
+              {m.toggles.map((t) => (
+                <div className="formrow" key={t.label}>
+                  <span>{t.label}</span>
+                  <Switch on={t.on} />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </Win>
