@@ -136,9 +136,9 @@ scenario_windows() {
     it_wait_for 180 bash -c "/usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' '$socket' agent.status | jq -e .connected >/dev/null" \
         || it_fail "the agent did not connect" || return 1
     it_windows_autologon "$socket" "$work" || it_fail "no signed-in desktop after turning on automatic sign-in" || return 1
-    # Lowered once signed in (that needs admin); on a signed app Windows starts again, signed in automatically.
-    it_set_policy control || it_fail "cannot set the policy" || return 1
-    it_start_again || it_fail "Windows did not start again at control" || return 1
+    # Lowered once signed in (that needs admin). A signed app's helper would restart for it, and Windows does not sign
+    # in automatically a second time: there the part runs at admin, which allows all it does.
+    it_signed || it_set_policy control || it_fail "cannot set the policy" || return 1
     it_wait_windows_desktop "$socket" 240 || it_fail "no Windows desktop" || return 1
     sleep 20  # first-logon animations and startup apps settle
     since=$(date '+%Y-%m-%d %H:%M:%S')

@@ -46,8 +46,14 @@ extension HelperController {
         for kind in live ? [SnapshotMeta.Kind.live, .disk] : [.disk] where taken == nil {
             taken = try? await createSnapshot(name, kind: kind, origin: .agentSession)
         }
+        // A live snapshot pauses the guest while its memory is saved: input sent the moment it runs again is lost
+        // (Windows 11 build 26300 dropped an agent's first Windows key so). The guest catches up first.
+        if taken?.kind == .live { try? await Task.sleep(for: Self.afterLiveSnapshot) }
         return taken
     }
+
+    /// How long a guest gets to catch up after the live undo snapshot before the agent's call goes on.
+    static let afterLiveSnapshot: Duration = .seconds(1)
 
     /// Keeps the newest agent snapshots and every live session's first one.
     private func pruneAgentSnapshots() async {

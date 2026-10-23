@@ -122,13 +122,9 @@ scenario_windows() {
     local agent=${VMPANE_ITEST_WINDOWS_AGENT:-$VMPANE_ROOT/agent/target/aarch64-pc-windows-msvc/release/vmpane-agent.exe}
     [[ -f $agent ]] || agent=""
     it_windows_autologon "$socket" "$work" "$agent" || it_fail "no signed-in desktop after turning on automatic sign-in" || return 1
-    # Lowered once signed in (that needs admin); on a signed app Windows starts again, signed in automatically.
-    it_set_policy control || it_fail "cannot set the policy" || return 1
-    if it_signed; then
-        it_start_again || it_fail "Windows did not start again at control" || return 1
-        it_wait_for 240 bash -c "/usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' '$socket' agent.status 2>/dev/null \
-            | jq -e '.connected and .session' >/dev/null" || it_fail "the agent's user session did not connect again" || return 1
-    fi
+    # Lowered once signed in (that needs admin). A signed app's helper would restart for it, and Windows does not sign
+    # in automatically a second time: there the part runs at admin, which allows all it does.
+    it_signed || it_set_policy control || it_fail "cannot set the policy" || return 1
     if [[ -n $agent ]]; then
         it_rpc "$socket" agent.status | jq -e '.caps | index("screen")' >/dev/null || it_fail "the agent under test has no screen cap" || return 1
         echo "screen-read: the agent under test: $agent"

@@ -140,6 +140,25 @@ private func agentSnapshots(_ helper: Harness) async throws -> [JSONValue] {
     return all.filter { $0["origin"] == "agentSession" }
 }
 
+/// After the live undo snapshot, the guest gets a moment before the agent's input: a guest that just ran again loses
+/// what arrives at once (Windows dropped an agent's first Windows key so).
+@Test func anAgentsFirstInputWaitsForTheGuestAfterTheLiveUndoSnapshot() async throws {
+    let helper = try await Harness.make()
+    _ = try await helper.client.call("vm.settings.apply", params: ["patch": ["mcp": ["policy": "control"]]])
+    #expect(try await helper.client.call("vm.start", params: ["headless": true])["state"] == "running")
+    await helper.controller.setClassifier(strangers)
+    let agent = try UDSClient.connect(to: await helper.controller.prepared.runFiles.socketURL)
+    defer { agent.close() }
+    try await hello(agent, session: "s1")
+    let started = ContinuousClock.now
+    _ = try await agent.call("vm.input.batch", params: ["actions": [["type": "key", "usages": [0xE3]]], "settleMs": 0])
+    let snapshot = try #require(try await agentSnapshots(helper).first)
+    #expect(snapshot["kind"] == "live", "\(snapshot)")
+    let firstInput = try #require(helper.backend.inputTimes.first)
+    #expect(firstInput - started >= HelperController.afterLiveSnapshot, "the key waited for the guest")
+    await helper.tearDown()
+}
+
 /// Before an agent session's first change, the VM is snapshotted, once per session.
 @Test func agentSessionsGetAnUndoSnapshot() async throws {
     let helper = try await Harness.make()
