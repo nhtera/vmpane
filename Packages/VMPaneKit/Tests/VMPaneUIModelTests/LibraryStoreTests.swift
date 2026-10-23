@@ -75,10 +75,11 @@ func makeStore(_ links: FakeLinks, launch: @escaping @Sendable (VMBundle, Bool) 
     return Fixture(store: LibraryStore(library: library, links: links, launch: launch), ops: ops, root: root)
 }
 
-/// Waits (up to 2 s) for `condition` on the main actor.
+/// Waits (up to 10 s, returning as soon as it holds) for `condition` on the main actor: background work (a create, a
+/// reload) can take seconds while the Mac is loaded, and these tests check that it ends, not how fast.
 @MainActor
 func eventually(_ condition: @MainActor () -> Bool) async -> Bool {
-    for _ in 0..<100 {
+    for _ in 0..<500 {
         if condition() { return true }
         try? await Task.sleep(for: .milliseconds(20))
     }
