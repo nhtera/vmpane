@@ -211,18 +211,61 @@ struct VMActionMenu: View {
     }
 }
 
-/// The library with no VM yet: the systems to start from, and where an installer can be dropped.
+/// The library with no VM yet: three systems to start from, the others in the new-VM sheet, and where an installer
+/// can be dropped (the whole view takes the drop).
 private struct EmptyLibrary: View {
-    let choose: (WizardModel.Card) -> Void
+    /// Opens the new-VM sheet on a card (nil: on the last one used, with the full list).
+    let choose: (WizardModel.Card?) -> Void
 
     var body: some View {
-        VStack(spacing: 18) {
-            Text("Create Your First VM").font(.title.bold())
-            OSCardGrid(selected: nil, choose: choose).frame(maxWidth: 640)
-            Text("Or drop an installer (.iso or .ipsw) here.").foregroundStyle(.secondary)
-            Label("AI agents cannot see a VM until you allow it.", systemImage: "lock.shield").foregroundStyle(.secondary)
+        ScrollView {
+            VStack(spacing: 22) {
+                VStack(spacing: 6) {
+                    Text("Create your first VM").font(.largeTitle.bold())
+                    Text("macOS, Linux and Windows on this Mac, each in a window of its own.").foregroundStyle(.secondary)
+                }
+                HStack(spacing: 14) {
+                    tile(.macos, "Latest from Apple")
+                    tile(.ubuntu, "\(WizardModel.Card.ubuntu.versionText(in: .bundled) ?? "") · ready in minutes")
+                    tile(.windows, "for Arm, installed for you")
+                }
+                Button("More systems: Debian, Fedora, an installer file…") { choose(nil) }.vmCapsule(large: false)
+                VStack(spacing: 10) {
+                    Label("Or drop an installer (.iso or .ipsw) here", systemImage: "arrow.down.doc")
+                        .frame(maxWidth: .infinity)
+                        .padding(18)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(.secondary.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
+                    Label("AI agents cannot see a VM until you allow it.", systemImage: "lock.shield")
+                }
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: 560)
+            }
+            .padding(30)
+            .frame(maxWidth: .infinity)
         }
-        .padding(30)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .defaultScrollAnchor(.center)
+    }
+
+    /// A quick-start tile: a real button (Tab reaches it), named by its system.
+    private func tile(_ card: WizardModel.Card, _ line: String) -> some View {
+        Button {
+            choose(card)
+        } label: {
+            VStack(spacing: 10) {
+                SystemTile(SystemTile.System(card), size: 64)
+                VStack(spacing: 2) {
+                    Text(card.title).font(.headline)
+                    Text(line).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                }
+            }
+            .frame(width: 160, height: 150)
+            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(card.title)
+        .accessibilityHint(line)
     }
 }

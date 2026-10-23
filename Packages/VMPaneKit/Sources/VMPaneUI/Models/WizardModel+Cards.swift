@@ -27,15 +27,6 @@ extension WizardModel {
             }
         }
 
-        /// What the card makes, in a few words.
-        public var detail: String {
-            switch self {
-            case .macos: "Apple's latest restore image"
-            case .ubuntu, .debian, .fedora: "Ready in minutes, SSH and guest tools set up"
-            case .windows: "Windows 11 for Arm, installed for you from Microsoft's ISO"
-            }
-        }
-
         /// What Create does, in a sentence or two (the new-VM sheet's detail).
         public var about: String {
             switch self {
@@ -81,7 +72,8 @@ extension WizardModel {
             }
         }
 
-        static func dropping(_ name: String, from title: String) -> String {
+        /// `title` without a leading `name` ("macOS Sequoia 15.6.1" → "Sequoia 15.6.1").
+        public static func dropping(_ name: String, from title: String) -> String {
             guard title.hasPrefix(name + " ") else { return title }
             return String(title.dropFirst(name.count + 1))
         }
@@ -162,6 +154,14 @@ extension WizardModel {
         }
     }
 
+    /// The installer file from this Mac Create makes the VM from (nil: a catalog image, or none yet).
+    public var installerFile: URL? {
+        switch source {
+        case .macRestoreImage(let url)?, .linuxISO(let url)?, .windowsISO(let url)?: url
+        default: nil
+        }
+    }
+
     /// A dropped installer (`InstallMediaKind`): its system and the file, ready to finish in Customize.
     public func use(_ media: URL, kind: InstallMediaKind) {
         switch kind {
@@ -208,12 +208,6 @@ extension WizardModel {
 
     /// The password in use is the one VMPane made up (kept for the person: Copy Password).
     public var usesGeneratedPassword: Bool { generatedPassword.map { $0 == password } ?? false }
-
-    /// The account line for a cloud image whose password VMPane made up (nil otherwise).
-    public var generatedAccountNote: String? {
-        guard isCloudImage, usesGeneratedPassword else { return nil }
-        return "Account \(userName), with a password VMPane keeps for you (Copy Password in the VM's inspector)."
-    }
 
     /// This Mac's short user name when it suits Linux, else "user".
     nonisolated static func defaultUserName(_ macUser: String = NSUserName()) -> String {

@@ -30,7 +30,7 @@ private func image(_ id: String, _ name: String, _ version: String, distro: Stri
     wizard.choose(.ubuntu, catalogs: catalogs)
     #expect(wizard.os == .linux && wizard.isCloudImage && wizard.card == .ubuntu)
     #expect(wizard.problems(in: .summary).isEmpty, "\(wizard.problems(in: .summary))")
-    #expect(!wizard.keepSignInPassword && wizard.password.count == 16 && wizard.generatedAccountNote != nil)
+    #expect(!wizard.keepSignInPassword && wizard.password.count == 16 && wizard.usesGeneratedPassword)
     #expect(wizard.name == "Ubuntu 26.04 2", "a free name")
     #expect(wizard.summaryLine == "Ubuntu 26.04 Server · 4 CPUs · 4 GB · 64 GB · Agents: Off")
     let request = try #require(wizard.request())
@@ -118,4 +118,19 @@ private func image(_ id: String, _ name: String, _ version: String, distro: Stri
     wizard.choose(.windows, catalogs: both)
     wizard.pick(older)
     #expect(wizard.source == nil, "Windows has no catalog image")
+}
+
+/// What each row of the sheet makes: its catalog image (macOS the newest, a distribution its cloud image), ready to
+/// create, except Windows, which waits for Microsoft's ISO; an installer file replaces the image.
+@MainActor @Test func eachCardMakesItsOwnImage() {
+    let wizard = WizardModel(host: .init(cores: 10, memoryGiB: 16), existingNames: [])
+    for card in WizardModel.Card.allCases {
+        wizard.choose(card, catalogs: catalogs)
+        let expected = card == .macos ? catalogs.macOS.last : card.images(in: catalogs).first
+        #expect(wizard.catalogImage == expected && wizard.installerFile == nil, "\(card)")
+        #expect(wizard.problems(in: .summary).isEmpty == (card != .windows), "\(card): \(wizard.problems(in: .summary))")
+    }
+    let iso = URL(fileURLWithPath: "/tmp/Win11_Arm64.iso")
+    wizard.use(iso, kind: .windowsISO)
+    #expect(wizard.installerFile == iso && wizard.catalogImage == nil && wizard.card == .windows)
 }

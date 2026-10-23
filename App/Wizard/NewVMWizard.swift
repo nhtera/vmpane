@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import VMPaneCore
 import VMPaneHost
 import VMPaneUI
@@ -10,15 +11,20 @@ struct NewVMStart: Identifiable {
     var media: (url: URL, kind: InstallMediaKind)?
 }
 
-/// The new-VM sheet: system cards with good defaults and one line saying what Create makes (⌘N, then Return makes
-/// the last card used); Customize… goes through the steps. On Create the sheet closes and the library shows the VM
-/// being made.
+/// The new-VM sheet: the systems in a list and the chosen one's detail, with good defaults (⌘N, then Return makes the
+/// last system used); Customize… goes through the steps, and "Installer file…" takes an .iso or .ipsw from this Mac.
+/// On Create the sheet closes and the library shows the VM being made.
 struct NewVMWizard: View {
     let store: LibraryStore
     @Environment(\.dismiss) private var dismiss
     @AppStorage("newVMCard") private var lastCard = WizardModel.Card.ubuntu.rawValue
     @State private var wizard: WizardModel
     @State private var customizing = false
+    @State private var choice: SystemChoice?
+    /// Why the installer file chosen here cannot be used.
+    @State private var fileProblem: String?
+    /// An installer file is being read (an ISO is mounted for a moment).
+    @State private var reading = false
 
     init(store: LibraryStore, start: NewVMStart = NewVMStart()) {
         self.store = store
@@ -29,12 +35,13 @@ struct NewVMWizard: View {
             let saved = UserDefaults.standard.string(forKey: "newVMCard").flatMap(WizardModel.Card.init(rawValue:))
             wizard.choose(start.card ?? saved ?? .ubuntu)
         }
-        // A dropped installer that needs more (Windows: the account): the first step still to fill in.
-        if start.media != nil, !wizard.canLeave(.summary) {
-            wizard.step = wizard.steps.first(where: { $0 != .os && !wizard.canLeave($0) }) ?? .source
-        }
+        // A dropped installer goes through the steps: the first one still to fill in (Windows: the account), or the
+        // summary.
+        if start.media != nil { wizard.step = Self.firstOpenStep(of: wizard) }
         _wizard = State(initialValue: wizard)
-        _customizing = State(initialValue: start.media != nil && !wizard.canLeave(.summary))
+        _customizing = State(initialValue: start.media != nil)
+        // A file is its own row, whatever system it holds.
+        _choice = State(initialValue: start.media != nil ? .installer : wizard.card.map(SystemChoice.card))
     }
 
     var body: some View {
@@ -46,14 +53,27 @@ struct NewVMWizard: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding()
             } else {
-                QuickCreate(wizard: wizard)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .padding()
+                HStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("New Virtual Machine").font(.headline).padding([.horizontal, .top], 16).padding(.bottom, 4)
+                        // Never nothing: ⌘-click on the chosen row keeps it.
+                        SystemList(selection: Binding(get: { choice }, set: { if let new = $0 { choice = new } }), catalogs: .bundled)
+                    }
+                    .frame(width: 250)
+                    Divider()
+                    SystemDetail(wizard: wizard, choice: choice, catalogs: .bundled)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             Divider()
             footer.padding()
         }
-        .frame(width: 680, height: 540)
+        .frame(width: 780, height: 560)
+        .onChange(of: choice) { _, choice in
+            fileProblem = nil
+            // A row chooses its system again unless it is already what Create makes (keeping a picked version).
+            if case .card(let card)? = choice, card != wizard.card || wizard.installerFile != nil { wizard.choose(card) }
+        }
         .onDisappear { wizard.clearSecrets() }
     }
 
@@ -75,31 +95,44 @@ struct NewVMWizard: View {
         HStack {
             Button("Cancel", role: .cancel) { dismiss() }
                 .keyboardShortcut(.cancelAction)
+                .vmCapsule()
             Spacer()
-            if customizing, let problem = wizard.problems(in: wizard.step).first {
+            if reading {
+                ProgressView().controlSize(.small)
+                Text("Reading the installer…").font(.caption).foregroundStyle(.secondary)
+            } else if let problem = customizing ? wizard.problems(in: wizard.step).first : fileProblem {
                 Text(problem).font(.caption).foregroundStyle(.secondary).lineLimit(2)
             }
             if customizing {
                 Button("Back") {
                     if wizard.step == customSteps.first { customizing = false } else { wizard.back() }
                 }
+                .vmCapsule()
                 if wizard.step == .summary {
                     createButton
                 } else {
                     Button("Continue") { wizard.next() }
                         .keyboardShortcut(.defaultAction)
+                        .vmCapsule(prominent: true)
                         .disabled(!wizard.canLeave(wizard.step))
                 }
+            } else if choice == .installer, wizard.installerFile == nil {
+                Button("Choose File…") { chooseInstaller() }.keyboardShortcut(.defaultAction).vmCapsule(prominent: true)
+                disabledCreate
             } else if wizard.canLeave(.summary) {
-                Button("Customize…") { customize() }
+                if choice == .installer { Button("Choose File…") { chooseInstaller() }.vmCapsule() }
+                Button("Customize…") { customize() }.vmCapsule()
                 createButton
             } else {
                 // Nothing to create yet (Windows needs Microsoft's ISO): Return goes where it is chosen.
-                Button("Customize…") { customize() }.keyboardShortcut(.defaultAction)
-                Button("Create") {}.disabled(true)
+                Button("Customize…") { customize() }.keyboardShortcut(.defaultAction).vmCapsule(prominent: true)
+                disabledCreate
             }
         }
+        .disabled(reading)
     }
+
+    private var disabledCreate: some View { Button("Create") {}.vmCapsule().disabled(true) }
 
     /// The steps, from the first one still to fill in.
     private func customize() {
@@ -107,9 +140,37 @@ struct NewVMWizard: View {
         customizing = true
     }
 
+    /// The first step after the system that still needs something, else the summary.
+    private static func firstOpenStep(of wizard: WizardModel) -> WizardModel.Step {
+        wizard.steps.first { $0 != .os && !wizard.canLeave($0) } ?? .summary
+    }
+
+    /// An installer from this Mac, read like one dropped on the library (an ISO is mounted for a moment, off the main
+    /// thread), then the steps from the first one still open; or why VMPane cannot use it.
+    private func chooseInstaller() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = ["iso", "ipsw"].compactMap { UTType(filenameExtension: $0) }
+        panel.message = "Choose a Linux or Windows 11 Arm64 ISO, or a macOS restore image (.ipsw)"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        reading = true
+        Task {
+            defer { reading = false }
+            do {
+                let kind = try await Blocking.run { try InstallMediaKind.detect(url) }
+                guard choice == .installer else { return }  // the person chose a system meanwhile
+                wizard.use(url, kind: kind)
+                wizard.step = Self.firstOpenStep(of: wizard)
+                customizing = true
+            } catch {
+                fileProblem = String(describing: error)
+            }
+        }
+    }
+
     private var createButton: some View {
         Button("Create") { create() }
             .keyboardShortcut(.defaultAction)
+            .vmCapsule(prominent: true)
             .disabled(!wizard.canLeave(.summary))
     }
 
@@ -119,28 +180,6 @@ struct NewVMWizard: View {
         store.create(request)
         wizard.clearSecrets()
         dismiss()
-    }
-}
-
-/// The sheet's front: the cards, what Create makes, and what is still missing.
-private struct QuickCreate: View {
-    @Bindable var wizard: WizardModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("New Virtual Machine").font(.title2.bold())
-            OSCardGrid(selected: wizard.card) { wizard.choose($0) }
-            VStack(alignment: .leading, spacing: 6) {
-                Text(wizard.summaryLine).font(.headline).accessibilityLabel("Creates \(wizard.summaryLine)")
-                if let note = wizard.generatedAccountNote {
-                    Text(note).font(.callout).foregroundStyle(.secondary)
-                }
-                if let problem = wizard.problems(in: .summary).first {
-                    Label(problem, systemImage: "info.circle").font(.callout).foregroundStyle(.secondary)
-                }
-                Text("AI agents cannot see a VM until you allow it.").font(.callout).foregroundStyle(.secondary)
-            }
-        }
     }
 }
 

@@ -31,6 +31,7 @@ struct LibrarySidebar: View {
     }
 
     private var rows: [LibraryStore.Row] { store.rows.filter(filter.includes) }
+    private var isEmpty: Bool { store.rows.isEmpty && store.creations.isEmpty }
 
     var body: some View {
         Group {
@@ -59,13 +60,23 @@ struct LibrarySidebar: View {
             }
         }
         .safeAreaInset(edge: .top) {
-            Picker("Show", selection: $filter) {
-                ForEach(LibraryFilter.allCases) { Text($0.rawValue).tag($0) }
+            if isEmpty {
+                // Nothing to filter yet: what the sidebar will hold.
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Virtual Machines").font(.headline)
+                    Text("Your VMs appear here, with what each one is doing.").font(.callout).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+            } else {
+                Picker("Show", selection: $filter) {
+                    ForEach(LibraryFilter.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
         }
         .overlay {
             if rows.isEmpty, !store.rows.isEmpty {
