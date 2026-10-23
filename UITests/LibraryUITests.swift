@@ -84,6 +84,51 @@ final class LibraryUITests: XCTestCase {
         XCTAssertTrue(sheet.waitForNonExistence(timeout: 5), "Cancel closes the sheet")
     }
 
+    /// The library with a VM in it (`VMPANE_ITEST_LIBRARY`: a support folder with a stopped "Ubuntu 26.04", made by
+    /// itest/scenarios/library-ui.sh). Skipped without it.
+    @MainActor
+    private func libraryWithAVM() throws -> (XCUIApplication, XCUIElement) {
+        guard let support = AppUnderTest.environment["VMPANE_ITEST_LIBRARY"] else { throw XCTSkip("run by itest/scenarios/library-ui.sh") }
+        let app = AppUnderTest.app(for: self)
+        app.launchEnvironment["VMPANE_SUPPORT_DIR"] = support
+        app.launch()
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 10))
+        return (app, window)
+    }
+
+    /// A VM in the list reads as one sentence; choosing it fills the inspector (Start, its resources to edit); the
+    /// Running filter hides it and lets it go.
+    @MainActor
+    func testALibraryWithAVM() throws {
+        let (_, window) = try libraryWithAVM()
+        let vm = window.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Ubuntu 26.04, Linux, stopped"))
+            .firstMatch
+        XCTAssertTrue(vm.waitForExistence(timeout: 15), "the VM is listed with its system and state")
+        vm.click()
+        XCTAssertTrue(window.buttons["Start"].waitForExistence(timeout: 5), "the inspector offers Start")
+        window.radioButtons["Resources"].click()
+        let apply = window.buttons["Apply"]
+        XCTAssertTrue(apply.waitForExistence(timeout: 10), "a stopped VM's resources can be changed")
+        XCTAssertFalse(apply.isEnabled, "nothing to apply yet")
+        window.staticTexts["Running"].click()
+        XCTAssertTrue(window.staticTexts["No VM Is Running"].waitForExistence(timeout: 5))
+        XCTAssertTrue(window.buttons["Start"].waitForNonExistence(timeout: 5), "a VM the filter hides is no longer chosen")
+        window.staticTexts["All"].click()
+        XCTAssertTrue(vm.waitForExistence(timeout: 5))
+    }
+
+    /// The library with a VM chosen passes the accessibility audit.
+    @MainActor
+    func testALibraryWithAVMPassesTheAccessibilityAudit() throws {
+        let (app, window) = try libraryWithAVM()
+        let vm = window.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Ubuntu 26.04")).firstMatch
+        XCTAssertTrue(vm.waitForExistence(timeout: 15))
+        vm.click()
+        XCTAssertTrue(window.buttons["Start"].waitForExistence(timeout: 5))
+        try AppUnderTest.audit(app, window: window)
+    }
+
     @MainActor
     func testLibraryWizardAndSettingsPassTheAccessibilityAudit() throws {
         let app = launch()

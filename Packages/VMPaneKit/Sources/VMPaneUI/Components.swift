@@ -15,7 +15,7 @@ public struct OSBadge: View {
             .accessibilityLabel(Self.name(os))
     }
 
-    public static func symbol(_ os: GuestOS?) -> String {
+    nonisolated public static func symbol(_ os: GuestOS?) -> String {
         switch os {
         case .macos?: "apple.logo"
         case .linux?: "terminal"
@@ -24,7 +24,7 @@ public struct OSBadge: View {
         }
     }
 
-    public static func name(_ os: GuestOS?) -> String {
+    nonisolated public static func name(_ os: GuestOS?) -> String {
         switch os {
         case .macos?: "macOS"
         case .linux?: "Linux"

@@ -3,7 +3,7 @@ import VMPaneCore
 import VMPaneHost
 import VMPaneUI
 
-/// The VM library: every VM in the sidebar (list or grid, filtered), the selected one on the stage, and its inspector.
+/// The VM library: the filters in the sidebar, their VMs as a list or a grid, and the selected one in the inspector.
 struct LibraryWindow: View {
     @Bindable var store: LibraryStore
     @State private var newVM: NewVMStart?
@@ -19,35 +19,36 @@ struct LibraryWindow: View {
 
     var body: some View {
         NavigationSplitView {
-            LibrarySidebar(store: store, filter: $filter, grid: grid) { row, action in
-                switch action {
-                case .clone:
-                    cloneName = "\(row.name) copy"
-                    cloning = row
-                case .delete: deleting = row
-                case .primary: Task { await store.perform(row.isRunning ? .showWindow : .start(headless: false), on: row.id) }
-                }
-            }
-            .navigationSplitViewColumnWidth(min: 240, ideal: 280)
-            .dropDestination(for: URL.self) { urls, _ in drop(urls) }
-            .onDeleteCommand {
-                if let id = store.selection, let row = store.row(id), !row.isRunning { deleting = row }
-            }
+            LibrarySidebar(store: store, filter: $filter)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 220)
+                .dropDestination(for: URL.self) { urls, _ in drop(urls) }
         } detail: {
-            if let id = store.selection, let row = store.row(id) {
-                LibraryDetail(store: store, row: row) { section in
-                    inspectorSection = section
-                    showInspector = true
-                }
-                .inspector(isPresented: $showInspector) {
-                    VMInspector(store: store, row: row, section: $inspectorSection)
-                }
-            } else if store.rows.isEmpty, store.creations.isEmpty {
+            if store.rows.isEmpty, store.creations.isEmpty {
                 // In the detail area: on the sidebar's translucent background the title fails contrast, and it wraps.
                 EmptyLibrary { newVM = NewVMStart(card: $0) }
                     .dropDestination(for: URL.self) { urls, _ in drop(urls) }
             } else {
-                Text("Select a VM").foregroundStyle(.secondary)
+                LibraryContent(store: store, filter: filter, grid: grid) { row, action in
+                    switch action {
+                    case .clone:
+                        cloneName = "\(row.name) copy"
+                        cloning = row
+                    case .delete: deleting = row
+                    case .primary: Task { await store.perform(row.isRunning ? .showWindow : .start(headless: false), on: row.id) }
+                    }
+                }
+                .dropDestination(for: URL.self) { urls, _ in drop(urls) }
+                .onDeleteCommand {
+                    if let id = store.selection, let row = store.row(id), !row.isRunning { deleting = row }
+                }
+                .inspector(isPresented: $showInspector) {
+                    if let id = store.selection, let row = store.row(id) {
+                        VMInspector(store: store, row: row, section: $inspectorSection).id(row.id)  // nothing of the last VM
+                    } else {
+                        ContentUnavailableView("No VM Selected", systemImage: "sidebar.right")
+                            .inspectorColumnWidth(min: 280, ideal: 300, max: 420)
+                    }
+                }
             }
         }
         .navigationTitle("VMPane")
@@ -74,8 +75,16 @@ struct LibraryWindow: View {
                 Button("Inspector", systemImage: "sidebar.right") { showInspector.toggle() }
                     .help("Show or hide the inspector")
                     .keyboardShortcut("i", modifiers: .command)
-                    .disabled(store.selection == nil)
+                    .disabled(store.rows.isEmpty && store.creations.isEmpty)
             }
+        }
+        // A VM the filter hides is no longer chosen (Delete or Return would act on it); one with a problem shows the
+        // inspector, which has the fix.
+        .onChange(of: filter) { _, filter in
+            if let row = store.selection.flatMap(store.row), !filter.includes(row) { store.selection = nil }
+        }
+        .onChange(of: store.selection) { _, id in
+            if let row = id.flatMap(store.row), row.error != nil { showInspector = true }
         }
         .sheet(item: $newVM) { NewVMWizard(store: store, start: $0) }
         .onChange(of: store.installerToUse, initial: true) { _, installer in
@@ -173,7 +182,7 @@ private func present<T>(_ item: Binding<T?>) -> Binding<Bool> {
     Binding(get: { item.wrappedValue != nil }, set: { if !$0 { item.wrappedValue = nil } })
 }
 
-/// Start/stop and friends, for the context menu and the detail toolbar.
+/// Start/stop and friends, for the context menu and the inspector's More menu.
 struct VMActionMenu: View {
     let store: LibraryStore
     let row: LibraryStore.Row

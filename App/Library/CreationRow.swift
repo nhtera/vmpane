@@ -2,19 +2,20 @@ import SwiftUI
 import VMPaneCore
 import VMPaneUI
 
-/// A VM being made, in the sidebar: its stage and progress with Cancel, or why it failed with Retry and Remove.
+/// A VM being made, in the library's list: its stage and progress with Cancel, or why it failed with Retry and Remove.
 struct CreationRow: View {
     let store: LibraryStore
     let creation: LibraryStore.Creation
 
     var body: some View {
         HStack(spacing: 8) {
-            RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.quaternary)
-                .overlay { Image(systemName: OSBadge.symbol(creation.os)).foregroundStyle(.secondary) }
-                .frame(width: 64, height: 40)
+            RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.quaternary)
+                .overlay { Image(systemName: "display").imageScale(.large).foregroundStyle(.tertiary) }
+                .overlay(alignment: .bottomTrailing) { SystemTile(SystemTile.System(creation.os), size: 22).padding(4) }
+                .frame(width: 96, height: 60)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
-                Text(creation.name).lineLimit(1)
+                Text(creation.name).font(.headline).lineLimit(1)
                 if let failure = creation.failure {
                     Text(failure).font(.caption).foregroundStyle(.red).lineLimit(3)
                     HStack {

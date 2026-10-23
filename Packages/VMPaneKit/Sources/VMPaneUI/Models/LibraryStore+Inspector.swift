@@ -87,6 +87,7 @@ extension LibraryStore {
         let ops = LibraryOps(library: library, identity: .ui)
         let bundle = try VMBundle.open(row.bundleURL)
         try await releaseHelper(of: row) { _ = try ops.updateStopped(bundle) { $0 = settings } }
+        await reload()  // the row's size line
     }
 
     /// The VM's snapshots: through its helper while it runs, else straight on its bundle.

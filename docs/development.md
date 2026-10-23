@@ -62,7 +62,8 @@ hardened runtime: without a team ID, library validation would refuse the app's o
   written to `itest/results/` keyed by the artifact's SHA-256, scenario, chip and macOS build;
   a skipped scenario never counts as a pass.
 - `VMPANE_ITEST_LINUX_ONLY=1` skips the Windows parts (they need the Windows golden, about 25 GiB to build):
-  for a loaded Mac or a gate about Linux; the release tier runs them.
+  for a loaded Mac or a gate about Linux; the release tier runs them. `VMPANE_ITEST_SKIP_AUDITS=1` leaves
+  `library-ui`'s accessibility audit out (an audit that times out on a loaded Mac; the release tier runs it).
 - `import-parallels` imports through the app's UI (needs an unlocked session) and boots the result. Without
   `VMPANE_ITEST_PVM` it makes a `.pvm` from the golden Linux disk; for the release tier, set
   `VMPANE_ITEST_PVM` to a Linux VM made by Parallels Desktop (kept locally, never committed: Parallels licence).

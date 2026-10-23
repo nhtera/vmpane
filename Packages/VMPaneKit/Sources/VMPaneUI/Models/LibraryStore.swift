@@ -31,6 +31,10 @@ public final class LibraryStore {
         /// The AI agent that last used the VM (its audit log), and when.
         public var agentClient: String?
         public var agentLastAt: Date?
+        /// Its processors and memory, and the level AI agents have (its config; nil when it cannot be read).
+        public var cpuCount: Int?
+        public var memoryMiB: Int?
+        public var policy: PolicyLevel?
         /// What its running helper says agents are doing (nil: no helper, or an older one).
         public var agentActing: Bool?
         /// Its install's stage, from its helper (Windows Setup, a cloud image's first boot, a macOS install).
@@ -199,6 +203,7 @@ public final class LibraryStore {
                 id: item.id, name: item.config?.name ?? item.bundle.url.deletingPathExtension().lastPathComponent,
                 os: item.config?.os, bundleURL: item.bundle.url, state: known[item.id]?.state,
                 diskBytes: known[item.id]?.diskBytes, error: item.error ?? unfinishedProblem(item, unfinished))
+            (row.cpuCount, row.memoryMiB, row.policy) = (item.config?.cpu.count, item.config?.memory.mib, item.config?.mcp.policy)
             // What its helper said (it says it again only when it changes).
             (row.agentActing, row.install) = (known[item.id]?.agentActing, known[item.id]?.install)
             return row

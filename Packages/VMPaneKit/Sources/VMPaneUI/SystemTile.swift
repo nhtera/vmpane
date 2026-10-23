@@ -60,7 +60,7 @@ public struct SystemTile: View {
 extension SystemTile {
     /// What a tile shows: a system the new-VM sheet makes, a VM's system, or an installer file from this Mac.
     public enum System: Hashable, Sendable {
-        case macos, ubuntu, debian, fedora, linux, windows, installer
+        case macos, ubuntu, debian, fedora, linux, windows, installer, unknown
 
         public init(_ card: WizardModel.Card) {
             switch card {
@@ -72,7 +72,8 @@ extension SystemTile {
             }
         }
 
-        /// A VM's system; `distro` (a cloud image's: `ubuntu`, `debian`, `fedora`) picks its colours when known.
+        /// A VM's system (nil: unknown, its config unreadable); `distro` (`ubuntu`, `debian`, `fedora`) picks a Linux
+        /// VM's colours when known.
         public init(_ os: GuestOS?, distro: String? = nil) {
             switch os {
             case .macos?: self = .macos
@@ -85,7 +86,7 @@ extension SystemTile {
                     case "fedora": .fedora
                     default: .linux
                     }
-            case nil: self = .installer
+            case nil: self = .unknown
             }
         }
 
@@ -98,6 +99,7 @@ extension SystemTile {
             case .linux: .symbol("terminal.fill")
             case .windows: .panes
             case .installer: .add
+            case .unknown: .symbol("questionmark")
             }
         }
 
@@ -111,6 +113,7 @@ extension SystemTile {
             case .fedora: (0x3C6EB4, 0x22437A)
             case .linux: (0x4B5563, 0x1F2937)
             case .windows: (0x1F8BE8, 0x0A5BB0)
+            case .unknown: (0x6B6B70, 0x3A3A3E)
             case .installer: nil
             }
         }
@@ -127,7 +130,7 @@ extension SystemTile {
 enum SystemGlyph { case symbol(String), letter(String), panes, add }
 
 #Preview("Tiles") {
-    let systems: [SystemTile.System] = [.macos, .ubuntu, .debian, .fedora, .linux, .windows, .installer]
+    let systems: [SystemTile.System] = [.macos, .ubuntu, .debian, .fedora, .linux, .windows, .unknown, .installer]
     Grid(horizontalSpacing: 12, verticalSpacing: 12) {
         ForEach([22, 30, 44, 64, 72] as [CGFloat], id: \.self) { size in
             GridRow { ForEach(systems, id: \.self) { SystemTile($0, size: size) } }

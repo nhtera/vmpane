@@ -2,13 +2,21 @@ import SwiftUI
 import VMPaneCore
 import VMPaneUI
 
-/// Which VMs the sidebar lists.
+/// Which VMs the library shows.
 enum LibraryFilter: String, CaseIterable, Identifiable {
     case all = "All"
     case running = "Running"
     case agents = "Agent active"
 
     var id: String { rawValue }
+
+    var icon: (systemImage: String, color: Color) {
+        switch self {
+        case .all: ("square.stack.3d.up.fill", .gray)
+        case .running: ("play.fill", .green)
+        case .agents: ("sparkles", .blue)
+        }
+    }
 
     func includes(_ row: LibraryStore.Row) -> Bool {
         switch self {
@@ -19,160 +27,54 @@ enum LibraryFilter: String, CaseIterable, Identifiable {
     }
 }
 
-/// The library's sidebar: every VM as a row (thumbnail, name, system, state, agent) or as a card in a grid.
+/// The library's sidebar: the filters as a source list, each with its icon and how many VMs it holds, and a line
+/// on what the library holds. With no VM yet, what it will hold.
 struct LibrarySidebar: View {
-    @Bindable var store: LibraryStore
+    let store: LibraryStore
     @Binding var filter: LibraryFilter
-    let grid: Bool
-    let onAction: (LibraryStore.Row, SidebarAction) -> Void
 
-    enum SidebarAction {
-        case clone, delete, primary
-    }
-
-    private var rows: [LibraryStore.Row] { store.rows.filter(filter.includes) }
     private var isEmpty: Bool { store.rows.isEmpty && store.creations.isEmpty }
 
     var body: some View {
         Group {
-            if grid {
-                ScrollView {
-                    ForEach(store.creations) { CreationRow(store: store, creation: $0).padding(.horizontal, 12) }
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 12)], spacing: 12) {
-                        ForEach(rows) { row in
-                            VMCard(row: row, selected: store.selection == row.id)
-                                .onTapGesture { store.selection = row.id }
-                                .onTapGesture(count: 2) { onAction(row, .primary) }
-                                .contextMenu { menu(row) }
-                        }
-                    }
-                    .padding(12)
-                }
-            } else {
-                List(selection: $store.selection) {
-                    ForEach(store.creations) { CreationRow(store: store, creation: $0) }
-                    ForEach(rows) { row in
-                        VMRowView(row: row)
-                            .tag(row.id)
-                            .contextMenu { menu(row) }
-                    }
-                }
-            }
-        }
-        .safeAreaInset(edge: .top) {
             if isEmpty {
-                // Nothing to filter yet: what the sidebar will hold.
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Virtual Machines").font(.headline)
                     Text("Your VMs appear here, with what each one is doing.").font(.callout).foregroundStyle(.secondary)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .padding(12)
+                .contentShape(Rectangle())  // the whole sidebar takes a dropped installer
             } else {
-                Picker("Show", selection: $filter) {
-                    ForEach(LibraryFilter.allCases) { Text($0.rawValue).tag($0) }
+                List(selection: Binding(get: { filter }, set: { if let new = $0 { filter = new } })) {
+                    Section("Virtual Machines") {
+                        ForEach(LibraryFilter.allCases) { item in
+                            Label {
+                                Text(item.rawValue)
+                            } icon: {
+                                SectionIcon(item.icon.systemImage, color: item.icon.color, size: 20)
+                            }
+                            .badge(store.rows.filter(item.includes).count)
+                            .tag(item)
+                        }
+                    }
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                .listStyle(.sidebar)
             }
         }
-        .overlay {
-            if rows.isEmpty, !store.rows.isEmpty {
-                Text(filter == .running ? "No VM is running." : "No agent is using a VM.").foregroundStyle(.secondary)
+        .safeAreaInset(edge: .bottom) {
+            if !isEmpty {
+                Text(summary).font(.caption).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
             }
         }
     }
 
-    @ViewBuilder private func menu(_ row: LibraryStore.Row) -> some View {
-        VMActionMenu(store: store, row: row)
-        if !row.isRunning {
-            Divider()
-            Button("Clone…") { onAction(row, .clone) }
-            Button("Delete…", role: .destructive) { onAction(row, .delete) }
-        }
-    }
-}
-
-/// One VM in the list: its last picture, its name, system and state, and an agent at work.
-struct VMRowView: View {
-    let row: LibraryStore.Row
-
-    var body: some View {
-        HStack(spacing: 8) {
-            VMThumbnail(row: row).frame(width: 64, height: 40)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(row.name).lineLimit(1)
-                HStack(spacing: 6) {
-                    Text(OSBadge.name(row.os)).font(.caption).foregroundStyle(.secondary)
-                    StateDot(row.state, suspended: row.suspended)
-                }
-                if let install = row.install, install.isActive {
-                    ProgressView(value: Double(install.percent), total: 100).controlSize(.small)
-                    Text(install.message).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
-                if row.agentActive, let client = row.agentClient { AgentBadge(client: client) }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 2)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.spoken(row))
-    }
-
-    /// The row as one sentence ("Debian 13, Linux, running, Claude acting").
-    static func spoken(_ row: LibraryStore.Row) -> String {
-        var parts = [row.name, OSBadge.name(row.os), StateDot.label(row.state, suspended: row.suspended).lowercased()]
-        if let install = row.install, install.isActive { parts.append("installing, \(install.percent) percent") }
-        if row.agentActive, let client = row.agentClient { parts.append("\(client) acting") }
-        if row.error != nil { parts.append("has a problem") }
-        return parts.joined(separator: ", ")
-    }
-}
-
-/// One VM in the grid.
-struct VMCard: View {
-    let row: LibraryStore.Row
-    let selected: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            VMThumbnail(row: row).aspectRatio(16 / 10, contentMode: .fit)
-            Text(row.name).font(.callout).lineLimit(1)
-            StateDot(row.state, suspended: row.suspended)
-            if row.agentActive, let client = row.agentClient { AgentBadge(client: client) }
-        }
-        .padding(6)
-        .background(selected ? Color.accentColor.opacity(0.2) : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(VMRowView.spoken(row))
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-    }
-}
-
-/// The helper's last picture of the guest (reloaded when it changes), else the system's symbol.
-struct VMThumbnail: View {
-    let row: LibraryStore.Row
-    var cornerRadius: CGFloat = 6
-    @State private var image: NSImage?
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).fill(.quaternary)
-            if let image {
-                Image(nsImage: image).resizable().scaledToFit()
-            } else {
-                Image(systemName: OSBadge.symbol(row.os)).imageScale(.large).foregroundStyle(.secondary)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .opacity(row.isRunning || image == nil ? 1 : 0.7)
-        .accessibilityHidden(true)
-        .task(id: row.thumbnailDate) {
-            guard let url = row.thumbnail else { return image = nil }
-            image = await Task.detached { NSImage(contentsOf: url) }.value
-        }
+    /// "4 VMs · 1 being made".
+    private var summary: String {
+        let count = store.rows.count
+        let made = store.creations.count
+        return ["\(count) \(count == 1 ? "VM" : "VMs")", made > 0 ? "\(made) being made" : nil].compactMap { $0 }.joined(separator: " · ")
     }
 }

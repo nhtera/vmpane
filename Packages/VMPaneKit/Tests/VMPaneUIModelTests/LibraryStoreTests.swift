@@ -344,3 +344,20 @@ final class LockedFlag: @unchecked Sendable {
     for _ in 0..<50 where store.row(id)?.agentActive != false { try await Task.sleep(for: .milliseconds(20)) }
     #expect(store.row(id)?.agentActive == false)
 }
+
+/// A library row's tile, system and size: the distribution from the VM's name (only its colour, never its text), the
+/// size from its config.
+@MainActor @Test func aRowSaysItsSystemAndSize() {
+    var row = LibraryStore.Row(id: UUID(), name: "Ubuntu 26.04 2", os: .linux, bundleURL: URL(fileURLWithPath: "/tmp/u.vmpane"))
+    #expect(row.system == .ubuntu && row.systemName == "Linux" && row.spec == nil)
+    (row.cpuCount, row.memoryMiB) = (4, 8192)
+    #expect(row.spec == "4 CPUs · 8 GB")
+    (row.cpuCount, row.memoryMiB) = (1, 512)
+    #expect(row.spec == "1 CPU · 512 MB")
+    row.name = "dev box"
+    #expect(row.system == .linux && row.systemName == "Linux")
+    row.os = .windows
+    #expect(row.system == .windows && row.systemName == "Windows")
+    row.os = nil
+    #expect(row.system == .unknown)
+}

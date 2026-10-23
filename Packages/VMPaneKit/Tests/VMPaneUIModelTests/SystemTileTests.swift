@@ -12,7 +12,7 @@ import Testing
         }
         return 0.2126 * channel(rgb >> 16) + 0.7152 * channel(rgb >> 8) + 0.0722 * channel(rgb)
     }
-    let systems: [SystemTile.System] = [.macos, .ubuntu, .debian, .fedora, .linux, .windows]
+    let systems: [SystemTile.System] = [.macos, .ubuntu, .debian, .fedora, .linux, .windows, .unknown]
     for system in systems {
         let top = try #require(system.stops).top
         let contrast = 1.05 / (luminance(top) + 0.05)
@@ -24,6 +24,6 @@ import Testing
 /// A VM's tile follows its system, and a cloud image's distribution when the VM knows it.
 @Test func aVMsTileFollowsItsSystem() {
     #expect(SystemTile.System(.linux, distro: "fedora") == .fedora && SystemTile.System(.linux) == .linux)
-    #expect(SystemTile.System(.windows) == .windows && SystemTile.System(nil) == .installer)
+    #expect(SystemTile.System(.windows) == .windows && SystemTile.System(nil) == .unknown)
     #expect(SystemTile.System(.debian) == .debian)
 }
