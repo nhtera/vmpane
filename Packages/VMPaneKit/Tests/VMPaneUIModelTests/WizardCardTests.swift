@@ -88,3 +88,34 @@ private func image(_ id: String, _ name: String, _ version: String, distro: Stri
     #expect(try InstallMediaKind.detect(URL(fileURLWithPath: "/tmp/UniversalMac_15.6.1_24G90_Restore.ipsw")) == .macRestoreImage)
     #expect(throws: InstallMediaKind.Refusal.notAnInstaller) { try InstallMediaKind.detect(URL(fileURLWithPath: "/tmp/a.dmg")) }
 }
+
+/// The sheet lists the cards in sections, macOS first; each row says the version Create makes.
+@Test func cardsAreGroupedAndSayTheirVersion() {
+    #expect(WizardModel.CardGroup.allCases.map(\.cards) == [[.macos], [.ubuntu, .debian, .fedora], [.windows]])
+    #expect(WizardModel.Card.allCases.map { $0.versionText(in: catalogs) } == ["Sequoia 15.6.1", "26.04", "13", "44", "11 for Arm"])
+    #expect(WizardModel.Card.ubuntu.images(in: catalogs).map(\.id) == ["ubuntu-cloud"], "cloud images only")
+    #expect(WizardModel.Card.windows.images(in: catalogs).isEmpty)
+    #expect(WizardModel.Card.fedora.versionText(in: .init(macOS: [], linux: [])) == nil, "no image, no version")
+}
+
+/// The bundled catalog's rows read as the design shows them.
+@Test func theBundledCatalogsVersions() {
+    #expect(WizardModel.Card.ubuntu.versionText(in: .bundled) == "26.04 LTS")
+    #expect(WizardModel.Card.macos.versionText(in: .bundled)?.hasPrefix("Sequoia") == true)
+}
+
+/// The version picker: another image of the chosen card replaces the source and the suggested name, nothing else.
+@MainActor @Test func anotherVersionKeepsTheRestOfTheChoice() {
+    let older = image("macos-14", "macOS Sonoma 14.7", "14.7")
+    let both = WizardModel.Catalogs(macOS: [older] + catalogs.macOS, linux: catalogs.linux)
+    let wizard = WizardModel(host: .init(cores: 10, memoryGiB: 16), existingNames: [])
+    wizard.choose(.macos, catalogs: both)
+    #expect(wizard.catalogImage?.id == "macos-15" && wizard.name == "macOS Sequoia 15.6.1", "the newest first")
+    wizard.cpuCount = 2
+    wizard.pick(older)
+    #expect(wizard.source == .macCatalog(older) && wizard.name == "macOS Sonoma 14.7" && wizard.cpuCount == 2)
+    #expect(WizardModel.Card.macos.images(in: both).count == 2)
+    wizard.choose(.windows, catalogs: both)
+    wizard.pick(older)
+    #expect(wizard.source == nil, "Windows has no catalog image")
+}

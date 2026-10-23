@@ -160,3 +160,73 @@ public struct AgentBadge: View {
             .accessibilityLabel(acting ? "\(client) is acting" : "\(client)")
     }
 }
+
+/// A settings section's or sidebar row's icon: a small tile in the section's colour with a white symbol, as in System
+/// Settings. Decoration only: the row carries the title.
+public struct SectionIcon: View {
+    let color: Color
+    let systemImage: String
+    let size: CGFloat
+
+    public init(_ systemImage: String, color: Color, size: CGFloat = 22) {
+        self.systemImage = systemImage
+        self.color = color
+        self.size = size
+    }
+
+    public var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: size * 0.55, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(color.gradient, in: RoundedRectangle(cornerRadius: size * 0.27, style: .continuous))
+            .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Buttons
+
+extension View {
+    /// The capsule buttons of the redesigned sheets and inspector: `prominent` for the one primary action. The system
+    /// draws them (Liquid Glass on macOS 26, Aqua before it); only the shape and size are set here.
+    public func vmCapsule(prominent: Bool = false, large: Bool = true) -> some View {
+        modifier(VMCapsule(prominent: prominent, large: large))
+    }
+}
+
+struct VMCapsule: ViewModifier {
+    let prominent: Bool
+    let large: Bool
+
+    func body(content: Content) -> some View {
+        Group {
+            if prominent { content.buttonStyle(.borderedProminent) } else { content.buttonStyle(.bordered) }
+        }
+        .buttonBorderShape(.capsule)
+        .controlSize(large ? .large : .regular)
+    }
+}
+
+#Preview("Components") {
+    VStack(alignment: .leading, spacing: 12) {
+        HStack {
+            SectionIcon("gearshape.fill", color: .gray)
+            SectionIcon("sparkles", color: .blue)
+            SectionIcon("folder.fill", color: .cyan)
+            SectionIcon("network", color: .indigo)
+        }
+        HStack {
+            StateDot(.running)
+            StateDot(.stopped, suspended: true)
+            StateDot(.stopped)
+            StateDot(.error)
+        }
+        HStack {
+            Button("Cancel") {}.vmCapsule()
+            Button("Create") {}.vmCapsule(prominent: true)
+            Button("Settings…") {}.vmCapsule(large: false)
+        }
+        AgentBadge(client: "Claude Code")
+    }
+    .padding()
+}

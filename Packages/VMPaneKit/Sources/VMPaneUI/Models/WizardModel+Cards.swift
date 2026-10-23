@@ -36,8 +36,63 @@ extension WizardModel {
             }
         }
 
+        /// What Create does, in a sentence or two (the new-VM sheet's detail).
+        public var about: String {
+            switch self {
+            case .macos: "Apple’s restore image, downloaded and installed for you. You finish in macOS Setup Assistant."
+            case .ubuntu, .debian, .fedora:
+                "A cloud image: nothing to click through. SSH on 127.0.0.1 and the guest tools are ready on the first boot."
+            case .windows: "Installed for you from Microsoft’s Windows 11 for Arm ISO, with no clicks, in about 10 minutes."
+            }
+        }
+
         /// A Linux card's cloud image in the catalog (`distro`).
         var distro: String? { os == .linux ? rawValue : nil }
+
+        public var group: CardGroup {
+            switch os {
+            case .macos: .macos
+            case .linux: .linux
+            case .windows: .windows
+            }
+        }
+
+        /// The images Create can make the card from: all of macOS's restore images, a distribution's cloud images
+        /// (none for Windows: Microsoft's ISO). `choose` takes the newest; a picker is worth showing only for more
+        /// than one.
+        public func images(in catalogs: Catalogs) -> [ImageCatalog.Image] {
+            switch self {
+            case .macos: catalogs.macOS
+            case .ubuntu, .debian, .fedora: catalogs.linux.filter { $0.isCloudImage && $0.distro == distro }
+            case .windows: []
+            }
+        }
+
+        /// The version a list row shows under the title ("26.04 LTS", "Sequoia 15.6.1", "11 for Arm"): the image
+        /// `choose` takes, without the name the title already says.
+        public func versionText(in catalogs: Catalogs) -> String? {
+            switch self {
+            case .macos:
+                return catalogs.macOS.last.map { Self.dropping("macOS", from: $0.title) }
+            case .ubuntu, .debian, .fedora:
+                return images(in: catalogs).first.map { Self.dropping(title, from: $0.title) }
+            case .windows:
+                return "11 for Arm"
+            }
+        }
+
+        static func dropping(_ name: String, from title: String) -> String {
+            guard title.hasPrefix(name + " ") else { return title }
+            return String(title.dropFirst(name.count + 1))
+        }
+    }
+
+    /// The new-VM sheet's sections, in order. Installer files from this Mac are a row of their own, after them.
+    public enum CardGroup: String, CaseIterable, Identifiable, Sendable {
+        case macos = "macOS", linux = "Linux", windows = "Windows"
+
+        public var id: String { rawValue }
+        public var cards: [Card] { Card.allCases.filter { $0.group == self } }
     }
 
     /// What a system needs, and what VMPane gives it on a Mac with room (`sized` fits it to this Mac).
@@ -86,6 +141,25 @@ extension WizardModel {
             break  // Microsoft's ISO: the person downloads it (Customize)
         }
         rename(Self.defaultName(card, source: source))
+    }
+
+    /// Another of the card's catalog images (the version picker); the rest of the choice stays.
+    public func pick(_ image: ImageCatalog.Image) {
+        guard let card else { return }
+        switch card.os {
+        case .macos: source = .macCatalog(image)
+        case .linux: source = .linuxCatalog(image)
+        case .windows: return
+        }
+        rename(Self.defaultName(card, source: source))
+    }
+
+    /// The catalog image Create makes the VM from (nil: an installer file, or Windows).
+    public var catalogImage: ImageCatalog.Image? {
+        switch source {
+        case .macCatalog(let image)?, .linuxCatalog(let image)?: image
+        default: nil
+        }
     }
 
     /// A dropped installer (`InstallMediaKind`): its system and the file, ready to finish in Customize.
