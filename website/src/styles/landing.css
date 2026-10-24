@@ -130,8 +130,12 @@
   /* The hero: the app icon, the headline, the copy and the CTA; the Mac follows right under it (the story). */
   .hero { position: relative; padding: 72px 0 56px; }
   .hero .copy { display: grid; justify-items: center; gap: 20px; text-align: center; max-width: 880px; margin-inline: auto; padding-inline: 16px; }
-  .hero-icon { width: 112px; height: 112px; margin-bottom: 4px; filter: var(--shadow-app); }
+  .hero-icon { position: relative; display: block; width: 112px; height: 112px; margin-bottom: 4px; border-radius: 22.4%; filter: var(--shadow-app); }
+  .hero-icon img { display: block; width: 100%; height: 100%; }
   .hero h1 { font-size: clamp(48px, 7vw, 96px); line-height: 1.04; letter-spacing: -.015em; }
+  /* a headline line and its mask (the line rises out of it); the padding keeps descenders inside */
+  .ln { display: block; overflow: clip; padding-bottom: .1em; margin-bottom: -.1em; }
+  .ln > span { display: block; }
   .hero .sub { font-size: clamp(19px, 2vw, 24px); line-height: 1.33; letter-spacing: .009em; color: var(--text-2); max-width: 32em; }
   .hero .cta { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 16px 28px; margin-top: 8px; }
   .hero .fine { font-size: 14px; line-height: 1.43; color: var(--text-3); }
@@ -180,6 +184,10 @@
   .steps code { font-size: .9em; }
   .steps .k { font: 600 13px/1 var(--f-sans); color: var(--t-blue); }
   .story-bar { display: none; }
+
+  /* ---------- the statement: one large sentence ---------- */
+  .statement { padding-block: 120px; }
+  .say { font: 600 clamp(30px, 4.4vw, 56px)/1.18 var(--f-display); letter-spacing: -.005em; max-width: 21em; text-wrap: pretty; }
 
   /* ---------- guests: tabs and media ---------- */
   .guests { display: grid; gap: 40px; grid-template-columns: minmax(0, 1fr); align-items: center; }
@@ -238,13 +246,6 @@
   .lvls button::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
   .lvls button:hover { color: var(--text); }
   .lvls button[aria-pressed="true"] { border-color: var(--c); color: var(--text); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 22%, transparent); }
-  /* an agent session in six steps: a grid of short columns under hairlines, no numbered bubbles */
-  .agent-steps {
-    list-style: none; padding: 0; margin: 72px 0 0;
-    display: grid; gap: 36px 32px; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
-  }
-  .agent-steps li { display: grid; gap: 6px; align-content: start; padding-top: 18px; border-top: 1px solid var(--hair); }
-  .agent-steps b { font: 600 19px/1.26 var(--f-display); letter-spacing: .012em; }
   .transcript { margin: 48px 0 0; }
   .transcript summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 4px; color: var(--t-blue); }
   .transcript summary::-webkit-details-marker { display: none; }
@@ -257,9 +258,69 @@
   }
   .transcript .call { color: var(--text); }
   .transcript .said { color: var(--text); font-weight: 600; }
-  .agent-steps span { color: var(--text-2); font-size: 17px; line-height: 1.47; }
 
-  /* ---------- safety bento ---------- */
+  /* ---------- the clients circling VMPane (the agents section's picture) ---------- */
+  .orbit { position: relative; width: min(100%, 400px); aspect-ratio: 1; justify-self: center; display: grid; place-items: center; container-type: inline-size; }
+  .ring { position: absolute; border-radius: 50%; border: 1px solid var(--hair); }
+  .ring.r1 { inset: 27%; } .ring.r2 { inset: 14%; } .ring.r3 { inset: 1%; opacity: .6; }
+  .orbit-core { position: relative; z-index: 1; display: grid; justify-items: center; gap: 12px; }
+  .orbit-core img { width: 22cqw; height: 22cqw; filter: var(--shadow-app); }
+  .orbit-core code { font: 500 13px/1 var(--f-mono); color: var(--text-2); padding: 6px 10px; border-radius: var(--r-pill); background: var(--band); }
+  .spin { position: absolute; inset: 0; }
+  /* a client sits on the middle ring at its angle, turned back upright */
+  .sat { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform: rotate(var(--a)) translateX(36cqw) rotate(calc(-1 * var(--a))); }
+  .sat > span {
+    position: absolute; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: var(--r-pill);
+    white-space: nowrap; font: 600 14px/1 var(--f-sans); color: var(--text); background: var(--bg); box-shadow: 0 0 0 .5px var(--hair), var(--shadow-lift);
+  }
+  .sat > span::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+  @media (max-width: 959px) { .orbit { width: min(100%, 340px); } }
+
+  /* ---------- one real session: steps on the left, the transcript pinned on the right (wide screens) ---------- */
+  .sess { margin-top: 140px; }
+  .sess-title { font-size: clamp(30px, 3.6vw, 44px); line-height: 1.1; letter-spacing: -.005em; margin-bottom: 40px; max-width: 18em; }
+  .sess-grid { display: grid; gap: 40px; }
+  .sess-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 40px; }
+  .sess-steps li { display: grid; gap: 8px; align-content: center; }
+  .sess-steps .k { font: 500 13px/1 var(--f-mono); color: var(--t-blue); }
+  .sess-steps b { font: 600 24px/1.2 var(--f-display); letter-spacing: .009em; }
+  .sess-steps li > span:not(.k) { color: var(--text-2); font-size: 17px; line-height: 1.47; max-width: 30em; }
+  .sess-steps code { font-size: .9em; }
+  .sess-inline, .sess-out { font: 400 12.5px/1.55 var(--f-mono); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--term-text); background: var(--term-bg); }
+  .sess-inline { margin: 8px 0 0; padding: 14px 16px; border-radius: 12px; }
+  :is(.sess-inline, .sess-out) :is(.reply, .done) { color: var(--term-dim); }
+  :is(.sess-inline, .sess-out) .ask { color: var(--term-blue); }
+  :is(.sess-inline, .sess-out) .said { color: var(--term-green); }
+  .sess-stage { display: none; }
+  .sess-stage .w { font-size: 13px; }
+  .sess-term { inset: 0 9% 13% 0; display: flex; flex-direction: column; }
+  /* the newest line sits above the library window, which overlaps the terminal's lower corner */
+  .sess-out { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; padding: 14px 16px 150px; }
+  .sess-out > span { display: block; }
+  .sess-lib { right: 0; bottom: 0; width: min(340px, 54%); }
+  .sess-lib .group { margin: 12px; }
+  .sess-lib .li { justify-content: flex-start; }
+  .sess-lib .li b { flex: 1; font-weight: 600; }
+  .sess-lib .tile { font-size: .78em; }
+  .sess-lib .li > .sd { color: var(--win-text-2); }
+  .tag.pass { color: var(--win-text); background: color-mix(in srgb, var(--ok) 26%, transparent); font-weight: 600; }
+  .snapnote { display: block; margin: -4px 14px 12px; font-size: .85em; color: var(--win-text-2); }
+  /* With JavaScript on a wide screen the transcript is pinned and follows the step in the middle of the screen;
+     each step's own lines stay for screen readers. Without JavaScript the lines show under each step. */
+  @media (min-width: 960px) {
+    :root[data-theme] .sess-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 64px; }
+    :root[data-theme] .sess-steps { gap: 0; }
+    :root[data-theme] .sess-steps li { min-height: 52vh; color: var(--text-3); transition: color var(--dur); }
+    :root[data-theme] .sess-steps li > span:not(.k) { color: var(--text-3); transition: color var(--dur); }
+    :root[data-theme] .sess-steps li.on { color: var(--text); }
+    :root[data-theme] .sess-steps li.on > span:not(.k) { color: var(--text-2); }
+    :root[data-theme] .sess-inline { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    :root[data-theme] .sess-stage { display: block; position: sticky; top: calc(var(--nav-h) + 40px); height: min(600px, calc(100svh - var(--nav-h) - 80px)); }
+  }
+
+  /* ---------- safety bento: a dark band in both themes (the dark tokens, tokens.css) ---------- */
+  .band.theme-dark { background: var(--bg); color: var(--text); }
+  .theme-dark .cell { background: var(--card); }
   .bento { display: grid; gap: 16px; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-rows: minmax(150px, auto); }
   .cell { position: relative; background: var(--bg); border-radius: var(--r-card); padding: 36px; display: grid; gap: 12px; align-content: start; overflow: hidden; }
   /* Cards and slides do not lift on hover: under a resting pointer, scrolling would make each one jump as it
@@ -315,6 +376,16 @@
   .slide .media .w .term { height: auto; padding: 1.3em; font-size: .95em; }
   .slide h3 { font-size: 21px; letter-spacing: .011em; }
   .slide p { color: var(--text-2); font-size: 17px; margin-top: -8px; }
+  /* under the track: play/pause, and a dot per slide (the current one a pill that fills while the gallery plays) */
+  .car-dots { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 12px; }
+  .car-play { width: 36px; height: 36px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--fill); color: var(--text); cursor: pointer; }
+  .car-play .i { width: 15px; height: 15px; stroke-width: 2.4; }
+  .dots { display: flex; align-items: center; height: 36px; padding: 0 8px; border-radius: var(--r-pill); background: var(--fill); }
+  .dots button { height: 24px; min-width: 24px; display: grid; place-items: center; border: 0; padding: 0; background: none; cursor: pointer; }
+  .dots i { position: relative; display: block; width: 8px; height: 8px; border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--text) 32%, transparent); transition: width var(--dur) var(--ease-out-quart); }
+  .dots [aria-current] i { width: 40px; background: color-mix(in srgb, var(--text) 20%, transparent); }
+  .dots [aria-current] i::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--text); transform-origin: left; }
+  @media (prefers-reduced-motion: reduce) { .car-play { display: none; } }
 
   /* ---------- limits ---------- */
   .sizes { max-width: 960px; }
@@ -330,6 +401,12 @@
   .limits .i { color: var(--text-3); margin-top: 2px; }
   .limits b { font-size: 17px; }
   .limits span { grid-column: 2; color: var(--text-2); font-size: 15px; }
+  /* wide screens: one row per limit, its name on the left and what it means on the right */
+  @media (min-width: 760px) {
+    .limits { grid-template-columns: 1fr; border-top: 1px solid var(--hair); }
+    .limits div { grid-template-columns: 28px minmax(0, 4fr) minmax(0, 7fr); align-items: start; padding: 24px 0; }
+    .limits span { grid-column: 3; font-size: 17px; }
+  }
 
   /* ---------- faq ---------- */
   .faq { max-width: 840px; display: grid; border-top: 1px solid var(--hair); }
@@ -355,6 +432,7 @@
     .hero { padding: 40px 0 40px; }
     .hero .copy { gap: 16px; }
     .hero-icon { width: 88px; height: 88px; }
+    .statement { padding-block: 72px; }
     .hero .cta { flex-direction: column; width: 100%; max-width: 440px; gap: 18px; }
     .hero .cta .btn { width: 100%; min-height: 50px; }
     .hero .fine { font-size: 12px; max-width: 26em; }
@@ -374,6 +452,10 @@
   /* touch screens: 44 px targets */
   @media (pointer: coarse) {
     .tabs button, .lvls button { min-height: 44px; }
+    .car-play { width: 44px; height: 44px; }
+    .transcript summary { min-height: 44px; }
+    .dots { height: 48px; }
+    .dots button { min-height: 44px; min-width: 44px; }
   }
 
   /* Reduce Transparency: no glass blur (the tokens make it solid). */
@@ -385,11 +467,46 @@
   @media (prefers-reduced-motion: no-preference) {
     .stack > * { transition: opacity 400ms var(--ease-out-quart), transform 400ms var(--ease-out-expo), visibility 400ms; }
     .stack > [hidden] { transform: translateY(12px) scale(.985); }
-    /* hero: the icon, then the copy, rise into place */
-    .hero .copy > * { animation: rise var(--dur-enter) var(--ease-out-expo) both; }
-    .hero .copy > :nth-child(2) { animation-delay: 60ms; } .hero .copy > :nth-child(3) { animation-delay: 120ms; }
-    .hero .copy > :nth-child(4) { animation-delay: 180ms; } .hero .copy > :nth-child(5) { animation-delay: 240ms; }
-    @keyframes rise { from { opacity: 0; transform: translateY(16px); } }
+    /* hero: the icon springs in and a light sweeps across it once; each headline line rises out of its mask;
+       then the copy, the buttons and the fine print */
+    .hero-icon { animation: iconin 1000ms var(--ease-spring) both; }
+    @keyframes iconin { from { opacity: 0; transform: translateY(24px) scale(.6); } }
+    .hero-icon::after {
+      content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+      background: var(--sheen) no-repeat; background-size: 300% 100%; background-position: 120% 0; opacity: 0;
+      animation: sheen 1300ms var(--ease-out-quart) 650ms both;
+    }
+    @keyframes sheen { 0% { opacity: 1; background-position: 120% 0; } 90% { opacity: 1; } 100% { opacity: 0; background-position: -20% 0; } }
+    .ln > span { animation: lineup 1100ms var(--ease-out-expo) 120ms both; }
+    .ln + .ln > span { animation-delay: 220ms; }
+    @keyframes lineup { from { transform: translateY(105%); } }
+    .hero .sub, .hero .cta, .hero .fine { animation: rise var(--dur-enter) var(--ease-out-expo) both; }
+    .hero .sub { animation-delay: 340ms; } .hero .cta { animation-delay: 420ms; } .hero .fine { animation-delay: 500ms; }
+    /* a new access level: its activity rows unroll from the top, one after another */
+    .agents-demo .act .li { animation: rowin2 480ms var(--ease-out-expo) both; }
+    .agents-demo .act .li:nth-child(2) { animation-delay: 60ms; } .agents-demo .act .li:nth-child(3) { animation-delay: 120ms; }
+    .agents-demo .act .li:nth-child(4) { animation-delay: 180ms; }
+    @keyframes rowin2 { from { transform: translateY(-10px); clip-path: inset(0 0 100% 0); } }
+    /* the session's transcript: each new line arrives */
+    .sess-out > span { animation: termline 420ms var(--ease-out-expo) both; }
+    @keyframes termline { from { transform: translateY(10px); clip-path: inset(0 0 100% 0); } }
+    /* the clients circle VMPane; each name turns back the other way to stay upright */
+    .spin { animation: orbit 60s linear infinite; }
+    .sat > span { animation: counter 60s linear infinite; }
+    @keyframes orbit { to { transform: rotate(360deg); } }
+    @keyframes counter { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(-360deg); } }
+    /* live pictures: Windows installs, and the chosen guest's terminal types its lines */
+    .install .progress i { transform-origin: left; animation: installing 8s var(--ease-out-quart) infinite; }
+    @keyframes installing { 0% { transform: scaleX(.12); } 75%, 100% { transform: none; } }
+    .media.on .term > span { animation: typein 600ms steps(30, end) both; }
+    .media.on .term > span:nth-child(2) { animation-delay: .7s; } .media.on .term > span:nth-child(3) { animation-delay: 1.4s; }
+    .media.on .term > span:nth-child(4) { animation-delay: 2.1s; } .media.on .term > span:nth-child(5) { animation-delay: 2.8s; }
+    .media.on .term > span:nth-child(6) { animation-delay: 3.5s; }
+    @keyframes typein { from { clip-path: inset(0 100% 0 0); } }
+    /* the gallery's current pill fills while it plays */
+    .dots.run [aria-current] i::after { animation: pillfill 5s linear both; }
+    @keyframes pillfill { from { transform: scaleX(0); } }
+    @keyframes rise { from { transform: translateY(20px); } }
     /* the timeline fills once, when it comes into view (windows-setup.tsx arms it) */
     .timeline.armed .fill { transform: scaleX(0); }
     /* a step rises and its dot lights as the line reaches it; its text keeps full contrast throughout */
@@ -407,9 +524,51 @@
   /* scroll-driven pieces: progressive enhancement where the browser has scroll timelines */
   @supports (animation-timeline: view()) {
     @media (prefers-reduced-motion: no-preference) {
-      .head h2, .car-head h2 { animation: ink linear both; animation-timeline: view(); animation-range: entry 0% cover 30%; }
-      /* a rise, not a fade: a heading keeps its full contrast at every point of the scroll */
-      @keyframes ink { from { transform: translateY(24px); } }
+      /* Everything below moves or unmasks, never fades: text keeps its full contrast at every point of the scroll. */
+      .head h2, .car-head h2, .head p { animation: ink linear both; animation-timeline: view(); animation-range: entry 0% cover 30%; }
+      .head p { animation-range: entry 10% cover 34%; }
+      @keyframes ink { from { transform: translateY(32px); } }
+
+      /* the hero gives way to the Mac: its copy drifts up and settles back as the page scrolls on */
+      .hero .copy { animation: heroout linear both; animation-timeline: view(); animation-range: exit 0% exit 100%; }
+      @keyframes heroout { to { transform: translateY(-14%) scale(.94); } }
+
+      /* the Mac's lid opens as it comes up under the hero, then the library rises out of the Dock */
+      .story .mac { perspective: 2600px; }
+      .mac-lid { transform-origin: 50% 100%; animation: lidopen linear both; animation-timeline: --story; animation-range: entry 0% entry 80%; }
+      @keyframes lidopen { from { transform: rotateX(-38deg) scale(.92); } }
+
+      /* the statement: words light up in reading order as it scrolls into view */
+      .say { view-timeline: --say block; }
+      .say span { animation: lit linear both; animation-timeline: --say; animation-range: cover calc(12% + var(--i) * 38%) cover calc(18% + var(--i) * 38%); }
+      @keyframes lit { from { color: var(--text-3); } }
+
+      /* pictures open up as they arrive: the card's rounded mask widens to its edges while it rises */
+      .media, .track { animation: open linear both; animation-timeline: view(); animation-range: entry 0% cover 40%; }
+      @keyframes open { from { clip-path: inset(7% 5% round var(--r-card)); transform: translateY(48px) scale(.96); } }
+      .track { animation-name: rise2; }
+      @keyframes rise2 { from { transform: translateY(64px); } }
+      /* the carousel's slides grow as they come to the middle of the row */
+      .slide { animation: focus linear both; animation-timeline: view(inline); }
+      @keyframes focus { entry 0% { transform: scale(.9); } entry 100%, exit 0% { transform: none; } exit 100% { transform: scale(.9); } }
+
+      /* cards, steps and rows rise into place, one after another */
+      .bento .cell, .limits > div, .faq details, .sizes, .gcopy, .timeline, .sess-title, .orbit {
+        animation: rise3 linear both; animation-timeline: view(); animation-range: entry 0% cover 30%;
+      }
+      @keyframes rise3 { from { transform: translateY(56px); } }
+      .bento .cell:nth-child(2), .limits > div:nth-child(2n) { animation-range: entry 8% cover 34%; }
+      .bento .cell:nth-child(n+3):nth-child(-n+5) { animation-range: entry 16% cover 38%; }
+      .bento .cell:nth-child(4) { animation-range: entry 22% cover 42%; } .bento .cell:nth-child(5) { animation-range: entry 28% cover 46%; }
+      /* the kill switch's menu drops from the menu bar; the snapshots slide in */
+      .cell.a .menu { transform-origin: 90% 0; animation: menudrop linear both; animation-timeline: view(); animation-range: entry 30% cover 50%; }
+      @keyframes menudrop { from { transform: translateY(-10px) scale(.94); clip-path: inset(0 0 100% 0 round 1.1em); } }
+      .cell.b .snap { animation: snapin linear both; animation-timeline: view(); animation-range: entry 0% cover 40%; }
+      .cell.b .snap:nth-child(2) { animation-range: entry 10% cover 46%; } .cell.b .snap:nth-child(3) { animation-range: entry 20% cover 52%; }
+      @keyframes snapin { from { transform: translateX(28px); } }
+      /* the closing icon lands */
+      .end .app { animation: appin linear both; animation-timeline: view(); animation-range: entry 0% cover 45%; }
+      @keyframes appin { from { transform: translateY(40px) scale(.7) rotate(-6deg); } }
 
       /* the MacBook story: a tall section with a sticky stage; each beat owns a slice of the scroll */
       .story-track { height: 340vh; view-timeline: --story block; }

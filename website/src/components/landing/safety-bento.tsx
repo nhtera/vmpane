@@ -14,7 +14,7 @@ const t = landing.safety;
  */
 export function SafetyBento() {
   return (
-    <section className="band gray" aria-labelledby="safety-title">
+    <section className="band theme-dark" aria-labelledby="safety-title">
       <div className="wrap">
         <div className="head">
           <h2 id="safety-title">

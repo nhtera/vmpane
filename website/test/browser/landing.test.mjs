@@ -393,18 +393,21 @@ test("the header pill stays steady while dark and bright sections scroll under i
 
 test("nothing moves under a resting pointer: cards, slides, buttons and chips keep their place on hover", async () => {
   // A hover lift makes each card jump as the page scrolls under the pointer: it reads as flicker.
+  // Cards do move with the scroll (scroll-driven reveals), and hover() may scroll a little to reach one: so
+  // each one is compared hovered and then rested at the same scroll position, which only a hover can change.
   const { page, context } = await openPage(site, "/", { width: 1440, height: 900, reducedMotion: "no-preference" });
   const moved = [];
   for (const sel of [".bento .cell", ".slide", "main .btn", "#agents .lvls button"]) {
     for (const el of await page.locator(sel).all()) {
       await el.scrollIntoViewIfNeeded();
       const target = sel === ".slide" ? el.locator(".media .w") : el;
-      const before = await target.boundingBox();
       await el.hover();
       await page.waitForTimeout(700);
-      const after = await target.boundingBox();
-      if (Math.abs(after.y - before.y) > 0.5 || Math.abs(after.width - before.width) > 0.5) moved.push(`${sel}: ${before.y}→${after.y}`);
+      const hovered = await target.boundingBox();
       await page.mouse.move(2, 2);
+      await page.waitForTimeout(700);
+      const rested = await target.boundingBox();
+      if (Math.abs(hovered.y - rested.y) > 0.5 || Math.abs(hovered.width - rested.width) > 0.5) moved.push(`${sel}: ${rested.y}→${hovered.y}`);
     }
   }
   assert.deepEqual(moved, []);

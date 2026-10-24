@@ -3,7 +3,7 @@
 // tokens.css is the only place colours live. Every variable the site's CSS,
 // the code highlighter and the components read is a token, a variable the
 // same stylesheet declares, or one of the few a component sets per element
-// (a dot's colour).
+// (a dot's colour, a word's place in the statement, a client's angle on the orbit).
 
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
@@ -17,7 +17,7 @@ const declared = (css: string) => new Set([...css.matchAll(/(--[a-z0-9-]+)\s*:/g
 const defined = declared(tokens);
 
 /** Variables a component sets in a style prop. */
-const ELEMENT_VARIABLES = ["--c"];
+const ELEMENT_VARIABLES = ["--c", "--i", "--a"];
 
 /** Every stylesheet but tokens.css. */
 const CSS = readdirSync(here)
@@ -54,7 +54,8 @@ test("variables the components and the highlighter read are tokens", () => {
 test("tokens.css defines both themes and the Reduce Transparency fallback", () => {
   // light by default: the OS setting never turns the site dark, only the reader's pick (data-theme="dark")
   assert.doesNotMatch(tokens, /prefers-color-scheme/);
-  assert.match(tokens, /:root\[data-theme="dark"\] \{/);
+  // (a section can also take the dark look in either theme, with .theme-dark)
+  assert.match(tokens, /:root\[data-theme="dark"\], \.theme-dark \{/);
   assert.match(tokens, /@media \(prefers-reduced-transparency: reduce\) \{\s*:root \{ --glass: 100% !important; --glass-nav: 100% !important; \}/);
   for (const name of ["--bg", "--band", "--text", "--text-2", "--text-3", "--hair", "--glass", "--rim", "--pin-top", "--f-sans"]) {
     assert.ok(defined.has(name), name);
@@ -62,7 +63,7 @@ test("tokens.css defines both themes and the Reduce Transparency fallback", () =
 });
 
 test("the dark block redefines only names the light theme defines", () => {
-  const blocks = [...tokens.matchAll(/:root\[data-theme="dark"\] \{([^}]*)\}/g)].map((m) => [...declared(m[1])]);
+  const blocks = [...tokens.matchAll(/:root\[data-theme="dark"\], \.theme-dark \{([^}]*)\}/g)].map((m) => [...declared(m[1])]);
   assert.equal(blocks.length, 1);
   const light = declared(tokens.match(/:root \{([^}]*)\}/)?.[1] ?? "");
   assert.deepEqual(blocks[0].filter((n) => !light.has(n)), []);

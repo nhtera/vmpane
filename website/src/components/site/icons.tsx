@@ -15,6 +15,7 @@ const ICONS = {
   macwindow: <><rect x="3" y="4.5" width="18" height="15" rx="3"/><path d="M3 9h18"/></>,
   power: <><path d="M12 3.5v8"/><path d="M7 6.3a7.5 7.5 0 1010 0"/></>,
   play: <><path d="M8 5.5v13l10.5-6.5z"/></>,
+  pause: <><path d="M9 6v12M15 6v12"/></>,
   "clock-arrow": <><path d="M4.5 12a7.5 7.5 0 102.2-5.3L4.5 9"/><path d="M4.5 4.5V9H9M12 8v4.2l2.8 1.8"/></>,
   sliders: <><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></>,
   viewfinder: <><path d="M4 8.5v-2A2.5 2.5 0 016.5 4h2M15.5 4h2A2.5 2.5 0 0120 6.5v2M20 15.5v2a2.5 2.5 0 01-2.5 2.5h-2M8.5 20h-2A2.5 2.5 0 014 17.5v-2"/><circle cx="12" cy="12" r="3"/></>,

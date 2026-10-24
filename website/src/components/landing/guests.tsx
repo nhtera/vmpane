@@ -78,7 +78,7 @@ export function Guests() {
           </div>
           <div className="stack">
             {t.tabs.map((g, i) => (
-              <div key={g.id} className={`media big ${MEDIA[g.id].wall}`} hidden={i !== active}>
+              <div key={g.id} className={`media big ${MEDIA[g.id].wall}${i === active ? " on" : ""}`} hidden={i !== active}>
                 {MEDIA[g.id].scene}
               </div>
             ))}

@@ -71,6 +71,10 @@
   --r-card: 28px; --r-tile: 20px; --r-win: 12px; --r-panel: 14px; --r-row: 12px; --r-ctl: 10px; --r-seg: 7px; --r-pill: 980px;
   /* motion */
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1); --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  /* a soft spring with a little overshoot, for things that arrive (the hero's icon) */
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  /* the light that sweeps once across the hero's icon */
+  --sheen: linear-gradient(115deg, transparent 38%, rgba(255,255,255,.5) 50%, transparent 62%);
   --dur-fast: 150ms; --dur: 250ms; --dur-enter: 700ms;
   /* glass (macOS 26: from clear to tinted), lit glass edges */
   --glass: 72%;
@@ -84,7 +88,7 @@
   color-scheme: light;
 }
 
-:root[data-theme="dark"] {
+:root[data-theme="dark"], .theme-dark {
   --sel: #0A6CF0;
   --bg: #0A0A0B; --band: #141416; --card: #1A1A1C; --text: #F5F5F7; --text-2: #A1A1A6; --text-3: #8E8E93;
   --hair: #38383C; --nav-line: rgba(255,255,255,.1);

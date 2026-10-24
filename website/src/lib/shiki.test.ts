@@ -37,7 +37,7 @@ used.add("--text");
 
 for (const [name, selector] of [
   ["light", ":root {"],
-  ["dark", ':root[data-theme="dark"] {'],
+  ["dark", ':root[data-theme="dark"], .theme-dark {'],
 ] as const) {
   test(`code colours are AA on --band (${name})`, () => {
     const tokens = block(selector);

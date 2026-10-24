@@ -13,11 +13,16 @@ export function Hero() {
   return (
     <section className="hero">
       <div className="copy">
-        <img className="hero-icon" src="/icon.svg" alt="" width="112" height="112" />
+        <span className="hero-icon">
+          <img src="/icon.svg" alt="" width="112" height="112" />
+        </span>
+        {/* each line rises out of its own mask (landing.css) */}
         <h1>
-          {t.title[0]}
-          <br />
-          {t.title[1]}
+          {t.title.map((line) => (
+            <span className="ln" key={line}>
+              <span>{line}</span>
+            </span>
+          ))}
         </h1>
         <p className="sub">{t.sub}</p>
         <div className="cta">

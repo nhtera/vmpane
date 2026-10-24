@@ -73,6 +73,13 @@
   .head p b { color: var(--text); font-weight: 600; }
   .head p code { font-size: .9em; }
   .head.center { justify-items: center; text-align: center; }
+  .head-copy { display: grid; gap: 20px; justify-items: start; }
+  /* wide screens: the headline on the left, its paragraph (or picture) on the right */
+  @media (min-width: 960px) {
+    .head.split { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); column-gap: 64px; align-items: end; justify-items: stretch; }
+    .head.split > p { padding-bottom: .35em; }
+    .head.split > .orbit { align-self: center; justify-self: end; }
+  }
   .band { padding: 140px 0; }
   .band.gray { background: var(--band); }
   @media (max-width: 760px) {

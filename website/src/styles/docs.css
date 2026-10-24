@@ -6,12 +6,13 @@
    contents. Tokens only. */
 @layer components {
   /* ---------- layout: sidebar | article | table of contents ---------- */
-  .docs { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 12px; border-top: 1px solid var(--hair); }
+  /* right under the header bar, whose hairline is the docs' top edge */
+  .docs { display: grid; grid-template-columns: minmax(0, 1fr); }
   @media (min-width: 900px) { .docs { grid-template-columns: 272px minmax(0, 1fr); } }
   @media (min-width: 1200px) { .docs { grid-template-columns: 272px minmax(0, 1fr) 220px; } }
 
   .docs-side {
-    display: none; align-content: start; gap: 18px; position: sticky; top: 76px; height: calc(100vh - 76px); height: calc(100dvh - 76px);
+    display: none; align-content: start; gap: 18px; position: sticky; top: var(--nav-h); height: calc(100vh - var(--nav-h)); height: calc(100dvh - var(--nav-h));
     padding: 18px 12px 24px; background: var(--band); border-right: 1px solid var(--hair);
     font-size: 14px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
   }
@@ -50,11 +51,11 @@
   @media (min-width: 900px) { .article { padding-inline: 32px; } }
   .article > * + * { margin-top: 18px; }
   .crumb { font-size: 14px; color: var(--text-3); }
-  .article h1 { font-size: clamp(34px, 4vw, 44px); letter-spacing: -.03em; line-height: 1.08; margin-top: 6px; }
+  .article h1 { font-size: clamp(34px, 4vw, 44px); letter-spacing: -.009em; line-height: 1.08; margin-top: 6px; }
   .article h1:focus-visible { outline: none; }
   .article .lead { font-size: 21px; line-height: 1.42; color: var(--text-2); }
-  .article h2 { font-size: 28px; letter-spacing: -.02em; line-height: 1.2; margin-top: 44px; }
-  .article h3 { font-size: 19px; letter-spacing: -.015em; margin-top: 28px; }
+  .article h2 { font-size: 28px; letter-spacing: .004em; line-height: 1.2; margin-top: 44px; }
+  .article h3 { font-size: 19px; letter-spacing: .012em; margin-top: 28px; }
   .article p, .article ul, .article ol { max-width: 70ch; }
   .article ul, .article ol { padding-left: 1.3em; }
   .article li + li { margin-top: 6px; }
@@ -119,7 +120,7 @@
   .edit { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 20px; padding-top: 18px; border-top: 1px solid var(--hair); font-size: 14px; color: var(--text-3); max-width: none !important; }
 
   /* ---------- table of contents ---------- */
-  .toc { display: none; align-content: start; align-self: start; gap: 8px; position: sticky; top: 76px; padding: 38px 24px 0 0; font-size: 13px; }
+  .toc { display: none; align-content: start; align-self: start; gap: 8px; position: sticky; top: var(--nav-h); padding: 38px 24px 0 0; font-size: 13px; }
   @media (min-width: 1200px) { .toc { display: grid; } }
   .toc p { font-weight: 600; color: var(--text); }
   .toc a { color: var(--text-2); text-decoration: none; line-height: 1.4; }

@@ -11,6 +11,7 @@ import { Limits } from "@/components/landing/limits";
 import { MacStory } from "@/components/landing/mac-story";
 import { Requirements } from "@/components/landing/requirements";
 import { SafetyBento } from "@/components/landing/safety-bento";
+import { Statement } from "@/components/landing/statement";
 import { WindowsSetup } from "@/components/landing/windows-setup";
 import { FAQ, plainAnswer } from "@/content/faq";
 import { strings } from "@/content/strings";
@@ -40,6 +41,7 @@ function Landing() {
     <main id="main">
       <Hero />
       <MacStory />
+      <Statement />
       <Guests />
       <WindowsSetup />
       <AgentsDemo />

@@ -27,6 +27,12 @@ export const landing = {
       { k: "4", title: "Nothing runs until you say so.", body: "Deny is the default, and the answer goes in the activity log." },
     ],
   },
+  // The statement under the Mac: its words light up one by one as it scrolls into view. Each claim is on the
+  // page (the story's steps, the safety cards).
+  statement: {
+    label: "VMPane in one sentence",
+    text: "Each VM is a Mac app, in its own window and its own process. Agents see only the VMs you open to them, ask before they run a command, and a whole agent session can be undone.",
+  },
   guests: {
     title: ["Three guests.", "Each on the right engine."],
     label: "Guest systems",
@@ -94,18 +100,95 @@ export const landing = {
     defaultLevel: 3,
     // A real session (itest/scenarios/mcp-demo.sh; src/content/demo-transcript.txt is its unedited transcript).
     transcript: {
-      summary: "A real session: Claude Code tests three VMs, one after another",
+      summary: "Read the whole session, unedited",
       note: "Claude Code was asked in plain words to start macOS, Ubuntu and Windows 11 in turn, snapshot Windows, run a small test in each, read the screen and stop it. Unedited, its recoveries included; answers are cut at 400 characters.",
     },
-    // One agent session, as the MCP tools VMPane ships do it (docs/mcp.md).
-    stepsLabel: "An agent session, step by step",
+    // The clients that connect through `vmpane mcp` (docs/mcp.md), circling the app in the section's picture.
+    orbit: {
+      label: "Claude Code, Codex and Gemini connect to VMPane through vmpane mcp.",
+      command: "vmpane mcp",
+      clients: ["Claude Code", "Codex", "Gemini"],
+    },
+  },
+  // One real session, step by step, pinned beside its own transcript (src/content/demo-transcript.txt, from
+  // itest/scenarios/mcp-demo.sh). The lines are the transcript's, in order; long answers end in "…" where they
+  // are cut. Kinds: ask (the request, as the transcript's note words it), call (→), reply (←), said (Claude:).
+  session: {
+    title: ["One real session.", "Claude Code tests three VMs."],
+    label: "A real agent session, step by step",
+    window: "claude — vmpane mcp",
+    library: "VMPane",
+    pass: "PASS",
+    snapshot: "before tests",
+    // The library beside the transcript: each VM's state at each step.
+    vms: ["macOS", "Ubuntu", "Windows 11"],
+    snapshotLabel: "Snapshot",
     steps: [
-      { title: "You ask.", body: "Fix the failing test in the Ubuntu VM, say, in Claude Code." },
-      { title: "It starts the VM and waits.", body: "`vm_power` starts it and, asked to, returns once the guest tools answer." },
-      { title: "It acts, and knows it worked.", body: "`vm_actions` clicks and types in one call, then says whether the screen changed." },
-      { title: "It reads the screen.", body: "`vm_read_screen` gives the text everywhere, and the controls on Windows and macOS, to click by id." },
-      { title: "Its changes can be undone.", body: "VMPane snapshots the VM before the session's first change: Undo This Agent Session." },
-      { title: "You can take over.", body: "Type or click in the VM, or press Take Over: the agent waits until you hand it back." },
+      {
+        title: "You ask.",
+        body: "In plain words, in Claude Code. VMPane's MCP server, `vmpane mcp`, hands it the tools.",
+        state: ["Stopped", "Stopped", "Stopped"],
+        lines: [["ask", "Start macOS, Ubuntu and Windows 11 in turn, snapshot Windows, run a small test in each, read the screen and stop it."]],
+      },
+      {
+        title: "It starts each VM and waits.",
+        body: "`vm_power` starts it and returns once the guest tools answer.",
+        state: ["Running", "Stopped", "Stopped"],
+        lines: [
+          ["call", "vm_list {}"],
+          ["reply", '{"vms":[{"id":"7039e2fd","name":"Ubuntu","os":"linux","state":"stopped"},…'],
+          ["call", 'vm_power {"vm": "macOS", "action": "start", "wait_for": "guest_tools", "timeout_s": 300}'],
+          ["reply", '{"guest":{"os":"macos","osVersion":"15.6.1","toolsVersion":"1.0.0-beta.10"},"state":"running"}'],
+        ],
+      },
+      {
+        title: "It acts, and recovers.",
+        body: "Every answer says what happened. The first command came too early; the agent saw why, waited, and ran it again.",
+        state: ["Running", "Stopped", "Stopped"],
+        pass: [true, false, false],
+        lines: [
+          ["call", 'vm_exec {"vm": "macOS", "argv": ["/bin/zsh", "-c", "if (( 6 * 7 == 42 )); then echo PASS; else echo FAIL; fi"]}'],
+          ["reply", "no user session helper is connected"],
+          ["said", "macOS is up; the first exec failed because the user session helper wasn't connected yet — status now shows a session, retrying."],
+          ["call", 'vm_exec {"vm": "macOS", "argv": ["/bin/zsh", "-c", "if (( 6 * 7 == 42 )); then echo PASS; else echo FAIL; fi"]}'],
+          ["reply", '{"exitCode":0,"stderr":"","stdout":"PASS\\n","timedOut":false,"truncated":false}'],
+        ],
+      },
+      {
+        title: "It reads the screen.",
+        body: "`vm_read_screen` gives the text everywhere, and the controls on Windows and macOS, to click by id.",
+        state: ["Stopped", "Running", "Stopped"],
+        pass: [true, false, false],
+        lines: [
+          ["call", 'vm_read_screen {"vm": "Ubuntu", "max_items": 60}'],
+          ["reply", '{"screen":{"h":983,"scale":1.3673469387755102,"w":1568},"source":"ocr","truncated":true,"untrusted_guest_text":{"ocr":[{"id":"t1","rect":[39,1,412,12],"text":"] Started fstrim.timer - Discard unused filesystem blocks o…'],
+          ["said", "Ubuntu is still booting (systemd log on screen, no user session yet). Waiting a bit longer."],
+        ],
+      },
+      {
+        title: "It snapshots before a change.",
+        body: "One call, before the tests. VMPane also snapshots a VM before an agent's first change on its own: Undo This Agent Session.",
+        state: ["Stopped", "Stopped", "Running"],
+        pass: [true, true, false],
+        snap: true,
+        lines: [
+          ["call", 'vm_power {"vm": "Windows 11", "action": "start", "wait_for": "guest_tools", "timeout_s": 400}'],
+          ["reply", '{"guest":{"os":"windows","osVersion":"10.0.26300.9457","toolsVersion":"1.0.0-beta.1"},"state":"running"}'],
+          ["call", 'vm_snapshot_create {"vm": "Windows 11", "name": "before tests"}'],
+          ["reply", '{"backendVersion":"1.0.0-beta.10","crashConsistent":false,"createdAt":"2026-10-22T12:27:23Z",…'],
+        ],
+      },
+      {
+        title: "It tells you how it went.",
+        body: "Three tests passed, the three VMs are stopped again, and what did not go as planned is in the report.",
+        state: ["Stopped", "Stopped", "Stopped"],
+        pass: [true, true, true],
+        snap: true,
+        lines: [
+          ["said", "All three VMs ran in order, all three tests printed PASS, and all three VMs are stopped again."],
+          ["done", "[done: 44 turns, 390 s]"],
+        ],
+      },
     ],
   },
   safety: {
@@ -135,6 +218,9 @@ export const landing = {
     label: "Features",
     prev: "Previous feature",
     next: "Next feature",
+    pause: "Pause the features",
+    play: "Play the features",
+    show: "Show",
     slides: [
       { scene: "snapshots", wall: "e", title: "Snapshots", body: "Live with memory for a running VM, disks for a stopped one." },
       { scene: "ports", wall: "a", title: "Port forwarding", body: "From this Mac only, unless you let other computers on the network connect." },

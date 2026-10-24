@@ -33,7 +33,7 @@ export function WindowsSetup() {
   return (
     <section className="band gray" aria-labelledby="windows-title">
       <div className="wrap">
-        <div className="head">
+        <div className="head split">
           <h2 id="windows-title">
             <TwoTone text={t.title} />
           </h2>

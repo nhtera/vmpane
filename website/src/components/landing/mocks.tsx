@@ -63,7 +63,7 @@ const Switch = ({ on }: { on: boolean }) => <span className={on ? "sw" : "sw off
 // ---------- the story: the library, the VM's window, the agent's question ----------
 
 /** A system's tile, as the app draws it: a letter, four panes (Windows) or a laptop (macOS), in its colours. */
-function Tile({ v }: { v: (typeof m.vms)[number] }) {
+export function Tile({ v }: { v: (typeof m.vms)[number] }) {
   return (
     <span className={`tile ${v.brand}`}>
       {v.tile === "panes" ? <span className="panes"><i /><i /><i /><i /></span> : v.tile === "mac" ? <Icon name="laptopcomputer" /> : v.tile}
@@ -272,7 +272,8 @@ export function ActivityMock({ level }: { level: number }) {
       </div>
       <div className="body">
         <h3 className="gh">{m.library.activity}</h3>
-        <div className="group act">
+        {/* keyed by level: a new level mounts new rows, and they slide in (landing.css) */}
+        <div className="group act" key={level}>
           {rows.length === 0 ? (
             <div className="li empty">{m.noActivity}</div>
           ) : (
