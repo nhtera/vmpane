@@ -60,6 +60,15 @@ running on the old version until you restart them), suspend them all and resume 
 With Homebrew, `brew upgrade --cask vmpane` works too (VMPane updates itself, so a plain `brew upgrade` skips it
 unless you add `--greedy`).
 
+What an update reaches:
+- **Stopped VMs:** their next start, from the library, `vmpane` or an AI agent, runs on the new version.
+- **Running VMs:** they keep the old version and say **Restart to update** in the library until you shut them
+  down and start them again. A suspended VM resumes on the version that suspended it.
+- **Guest tools:** in Linux and Windows VMs they update by themselves once the VM runs on the new version and no
+  AI agent is at work (**Keep the guest tools up to date** in a VM's settings, General). The VM's window says
+  when it's done.
+- **macOS VMs:** their window offers the newer **VMPane Agent.pkg** to open by hand.
+
 **Betas:** turn on **Settings › General › Updates › Get beta versions**. A beta build always offers the next
 betas.
 

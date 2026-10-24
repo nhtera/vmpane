@@ -27,8 +27,13 @@ only the rest is done by hand.
 - [ ] Update with running VMs (once Sparkle's feed is live): from the previous version, with a Linux and a
       Windows VM running, Check for Updates → Suspend All and Update → after the relaunch both resume where they
       were; Update Now leaves them running on the old helper until restarted.
-      *Tested:* a VM keeps running on the old helper while the app is replaced (update-under-load); a suspended
-      Windows VM resumes with its guest agent (agent-windows). *By hand:* Sparkle's own window.
+      Then each VM, shut down and started again, runs on the new runtime (the library's **Restart to update** goes),
+      and the Linux and Windows guest tools update by themselves to this version (the VM window says so). Windows'
+      update has no itest yet, so this is its check: the previous beta's agent is replaced, not installed beside it
+      (Apps › Installed apps lists one VMPane Guest Agent).
+      *Tested:* a VM keeps running on the old helper while the app is replaced, and its next start uses the new
+      runtime (update-under-load); a suspended Windows VM resumes with its guest agent (agent-windows); a Linux
+      agent older than the app updates itself (agent-linux). *By hand:* Sparkle's own window.
 - [ ] AI agents with the real clients: Claude Code, Codex CLI and Gemini CLI each, after `vmpane mcp config
       <client> --apply` on a clean account: list → screenshot → click → type → exec (the confirmation shows) →
       undo the session. Stop All AI Agents ends a running command.

@@ -185,7 +185,7 @@ answer named is dropped.
   update:
 
   ```
-  sudo mount -t virtiofs vmpane-tools /mnt/vmpane-tools && sudo /mnt/vmpane-tools/install.sh
+  sudo mkdir -p /mnt/vmpane-tools && (mountpoint -q /mnt/vmpane-tools || sudo mount -t virtiofs vmpane-tools /mnt/vmpane-tools) && sudo /mnt/vmpane-tools/install.sh
   ```
 - **macOS:** `guest-tools/build-macos.sh` builds `VMPane Agent.pkg`. It installs the binary in
   `/Library/Application Support/VMPane/Agent`, the LaunchDaemon `app.vmpane.agent` and the LaunchAgent
@@ -195,7 +195,23 @@ answer named is dropped.
   - notarized with `VMPANE_NOTARIZE=1`.
 
   macOS guests find it at `/Volumes/My Shared Files/vmpane-tools`.
-- **Windows:** the agent ships as an MSI on the guest-tools ISO.
+- **Windows:** the agent ships as an MSI on the guest-tools ISO. The app also carries it on its own in
+  `GuestTools/windows` (with `SHA256SUMS`), for updates.
+- **Updates:** a Linux or Windows agent older than the helper's VMPane (`hello.agentVersion`, ordered as SemVer)
+  is updated by the helper through the agent. Gating:
+  - once per helper run;
+  - not while an AI agent's request runs or it changed something in the last 10 s, or while a command, transfer
+    or take-over is under way;
+  - `agent.autoUpdate: false` turns it off, and `vm.tools.update` runs it on demand.
+
+  The files are checked against the runtime's `SHA256SUMS` and pushed with `file.push`. The installer then runs
+  out of the agent's reach, since the install restarts the agent and its commands end with it:
+  - **Linux:** `install.sh`, from a fresh root-only `/var/tmp` folder, in a `systemd-run` unit.
+  - **Windows:** msiexec in a detached PowerShell, from a fresh folder under Program Files, after checking the
+    MSI's hash again, followed by `Start-Service vmpane-agent`.
+
+  The helper waits up to 2 minutes for an agent of its version, and records the result in the VM's audit log and
+  as the `agent.toolsUpdate` notification. macOS agents are updated by hand: the pkg takes the agent down first.
 
 ## Testing
 
