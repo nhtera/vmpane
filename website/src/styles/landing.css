@@ -505,7 +505,7 @@
     @keyframes typein { from { clip-path: inset(0 100% 0 0); } }
     /* the gallery's current pill fills while it plays */
     .dots.run [aria-current] i::after { animation: pillfill 5s linear both; }
-    /* held (pointer or focus on the gallery, or off screen): the pill stops where it is */
+    /* held (paused, keyboard focus in the gallery, or off screen): the pill stops where it is */
     .dots.held [aria-current] i::after { animation-play-state: paused; }
     @keyframes pillfill { from { transform: scaleX(0); } }
     @keyframes rise { from { transform: translateY(20px); } }

@@ -39,9 +39,11 @@ function scrollToSlide(el: HTMLElement | null, i: number, smooth: boolean) {
  * Under the track, a play/pause button and a dot per slide (the current one a
  * pill that fills): while the gallery is on screen it moves on each time the
  * pill fills (landing.css times it), back to the start after the last slide.
- * It holds while the pointer or focus is on it or it is off screen (the pill
- * stops where it is and goes on from there), stops for good when the reader
- * steps it or presses pause, and never starts with reduced motion.
+ * Pause, keyboard focus in it (not a click) and being off screen hold it: the
+ * pill stops where it is and goes on from there. The pointer does not hold it:
+ * the section fills the window, so a resting pointer stopped it for good. It
+ * stops for good when the reader steps it, until Play, and never starts with
+ * reduced motion.
  */
 export function FeatureCarousel() {
   const track = useRef<HTMLDivElement>(null);
@@ -49,10 +51,13 @@ export function FeatureCarousel() {
   const [ends, setEnds] = useState({ start: true, end: false });
   const [current, setCurrent] = useState(0);
   const [playing, setPlaying] = useState(true);
+  // the reader stepped it (a dot or an arrow): no more moving on, and no pill filling, until Play
+  const [stepped, setStepped] = useState(false);
   const [held, setHeld] = useState(false);
   const [seen, setSeen] = useState(false);
   const reduce = useMediaQuery(REDUCED_MOTION);
-  const running = playing && !reduce;
+  const auto = !reduce && (playing || !stepped);
+  const moving = playing && !held && seen;
   useEffect(() => {
     const el = section.current;
     if (!el || !("IntersectionObserver" in window)) return;
@@ -86,6 +91,7 @@ export function FeatureCarousel() {
   /** The reader steps the gallery: it stops moving on its own. */
   const pick = (i: number) => {
     setPlaying(false);
+    setStepped(true);
     scrollToSlide(track.current, i, !reduce);
   };
   const step = (dir: 1 | -1) => pick(current + dir);
@@ -94,9 +100,7 @@ export function FeatureCarousel() {
       className="band"
       aria-labelledby="features-title"
       ref={section}
-      onPointerEnter={() => setHeld(true)}
-      onPointerLeave={() => setHeld(false)}
-      onFocus={() => setHeld(true)}
+      onFocus={(e) => setHeld(e.target.matches(":focus-visible"))}
       onBlur={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHeld(false);
       }}
@@ -144,14 +148,17 @@ export function FeatureCarousel() {
       </div>
       <div className="wrap car-dots">
         {/* hidden with reduced motion (landing.css), where the gallery never moves on its own */}
-        <button type="button" className="car-play" aria-label={playing ? t.pause : t.play} onClick={() => setPlaying((p) => !p)}>
+        <button type="button" className="car-play" aria-label={playing ? t.pause : t.play} onClick={() => {
+            setPlaying((p) => !p);
+            setStepped(false);
+          }}>
           <Icon name={playing ? "pause" : "play"} />
         </button>
         {/* the current pill fills while the gallery plays; when it is full, the next slide comes */}
         <div
-          className={running ? (held || !seen ? "dots run held" : "dots run") : "dots"}
+          className={auto ? (moving ? "dots run" : "dots run held") : "dots"}
           onAnimationEnd={(e) => {
-            if (running && e.animationName === "pillfill") scrollToSlide(track.current, ends.end ? 0 : current + 1, true);
+            if (moving && e.animationName === "pillfill") scrollToSlide(track.current, ends.end ? 0 : current + 1, true);
           }}
         >
           {t.slides.map((s, i) => (
