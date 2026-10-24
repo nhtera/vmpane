@@ -87,6 +87,7 @@ struct VMRowView: View {
                     Text(install.message).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 if row.error != nil { ProblemMark() }
+                if row.restartToUpdate { UpdateMark() }
                 if row.agentActive, let client = row.agentClient { AgentBadge(client: row.agentLine(client)) }
             }
             Spacer(minLength: 0)
@@ -102,6 +103,7 @@ struct VMRowView: View {
         if let install = row.install, install.isActive { parts.append("installing, \(install.percent) percent") }
         if row.agentActive, let client = row.agentClient { parts.append("\(client) acting") }
         if row.error != nil { parts.append("has a problem") }
+        if row.restartToUpdate { parts.append("restart it to update") }
         return parts.joined(separator: ", ")
     }
 }
@@ -153,6 +155,14 @@ struct VMThumbnail: View {
                 guard let url = row.thumbnail else { return image = nil }
                 image = await Task.detached { NSImage(contentsOf: url) }.value
             }
+    }
+}
+
+/// A VM still running on the VMPane it started with, before an update: a restart moves it to this one.
+struct UpdateMark: View {
+    var body: some View {
+        Label("Restart to update", systemImage: "arrow.triangle.2.circlepath").font(.caption).foregroundStyle(.secondary)
+            .help("This VM still runs on the VMPane it started with. Shut it down and start it again to use this version.")
     }
 }
 

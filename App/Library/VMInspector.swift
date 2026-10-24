@@ -32,6 +32,7 @@ struct VMInspector: View {
                 if let error = row.error {
                     ProblemBanner(store: store, row: row, message: error) { section = $0 }
                 }
+                if row.restartToUpdate { UpdateMark() }
                 Picker("Section", selection: $section) {
                     ForEach(Section.allCases) { Text($0.rawValue).tag($0) }
                 }

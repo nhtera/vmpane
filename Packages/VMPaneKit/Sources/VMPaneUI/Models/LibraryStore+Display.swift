@@ -13,6 +13,9 @@ extension LibraryStore.Row {
     /// "macOS", "Linux", "Windows" (the distribution in `system` is a guess: it never shows as text).
     public var systemName: String { OSBadge.name(os) }
 
+    /// Running on a helper from before an app update: a restart (Shut Down, then Start) takes the update.
+    public var restartToUpdate: Bool { outdatedRuntime && isRunning }
+
     /// "4 CPUs · 8 GB" ("1 CPU · 512 MB").
     public var spec: String? {
         guard let cpuCount, let memoryMiB else { return nil }

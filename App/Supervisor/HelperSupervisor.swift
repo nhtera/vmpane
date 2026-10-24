@@ -11,6 +11,11 @@ final class HelperSupervisor {
     private var timer: Timer?
     private var reconciling = false
 
+    /// The runtime this app launches helpers from now (its version and its files' identity, changed by a rebuild).
+    nonisolated static func currentRuntime() -> String {
+        RuntimeStore.version(app: Bundle.main.bundleURL, appVersion: VMPane.version)
+    }
+
     init(paths: VMPanePaths = .standard()) {
         self.paths = paths
     }
@@ -35,8 +40,7 @@ final class HelperSupervisor {
         Task {
             await Blocking.run {
                 RunDirectoryReconciler.reconcile(paths: paths)
-                try? RuntimeStore(paths: paths).garbageCollect(
-                    keep: [RuntimeStore.version(app: Bundle.main.bundleURL, appVersion: VMPane.version)])
+                try? RuntimeStore(paths: paths).garbageCollect(keep: [HelperSupervisor.currentRuntime()])
             }
             reconciling = false
         }

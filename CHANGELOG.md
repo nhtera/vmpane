@@ -5,6 +5,11 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- A VM stopped before an update kept starting on the previous version (its QEMU and guest tools) until VMPane quit:
+  its next start, from the library, `vmpane` or an AI agent, now uses the updated one. A VM still running on the
+  previous version says **Restart to update**; a suspended one resumes on the version that suspended it (#12).
+
 ## [1.0.0-beta.11]
 AI agents act faster and see more, with you able to take over at any moment; Linux VMs are ready in minutes; the
 library and the new-VM sheet are rebuilt; the clipboard keeps formatting and carries files both ways; and Windows VMs

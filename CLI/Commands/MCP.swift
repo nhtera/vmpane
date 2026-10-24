@@ -97,7 +97,7 @@ struct MCPServe: AsyncParsableCommand {
         let session = UUID().uuidString.lowercased()
         let connector = HelperConnector(
             paths: CLI.paths, clientName: "vmpane mcp", clientVersion: VMPane.version, kind: "mcp", operatorClaim: false,
-            sessionId: session, launch: CLI.launchHelper)
+            sessionId: session, currentRuntime: { CLI.currentRuntime }, launch: CLI.launchHelper)
         let ops = LibraryOps(library: CLI.library, identity: .automated).recordingInVMLogs(label: "cli", kind: "mcp", session: session)
         let access = VMAccess(ops: ops, connector: connector)
         // Files to and from VMs live in ~/VMPane Exchange/<vm>/ ($VMPANE_EXCHANGE_DIR for integration tests, in

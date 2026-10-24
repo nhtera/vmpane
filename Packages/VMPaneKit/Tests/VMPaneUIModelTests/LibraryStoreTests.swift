@@ -20,6 +20,8 @@ final class FakeLinks: LiveVMLink, @unchecked Sendable {
     var failure: RPCError?
     /// What the fake helper does on a call (after recording it), e.g. let go of its bundle on `helper.shutdown`.
     var onCall: (@Sendable (String) -> Void)?
+    /// What the fake helper answers, by method (otherwise `{}`).
+    var answers: [String: JSONValue] = [:]
 
     /// Makes `vmID` look like it has a helper in `state`.
     func run(_ vmID: UUID, in state: VMRunState) {
@@ -52,7 +54,7 @@ final class FakeLinks: LiveVMLink, @unchecked Sendable {
             if let failure { throw failure }
         }
         lock.withLock { onCall }?(method)
-        return [:]
+        return lock.withLock { answers[method] } ?? [:]
     }
 
     var methods: [String] { lock.withLock { calls.map(\.method) } }

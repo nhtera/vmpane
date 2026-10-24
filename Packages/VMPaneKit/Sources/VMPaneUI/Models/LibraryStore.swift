@@ -35,6 +35,8 @@ public final class LibraryStore {
         public var cpuCount: Int?
         public var memoryMiB: Int?
         public var policy: PolicyLevel?
+        /// Its helper runs on another runtime than this app's (started before an update): a restart takes the update.
+        public var outdatedRuntime = false
         /// What its running helper says agents are doing (nil: no helper, or an older one).
         public var agentActing: Bool?
         /// Its install's stage, from its helper (Windows Setup, a cloud image's first boot, a macOS install).
@@ -69,6 +71,8 @@ public final class LibraryStore {
 
     /// Asks before a VM starts on a Mac low on memory; nil: starts without asking.
     @ObservationIgnored public var lowMemoryGuard: LowMemoryGuard?
+    /// The runtime this app launches helpers from now (`RuntimeStore.version`); nil: a live helper is always reused.
+    @ObservationIgnored public var currentRuntime: @Sendable () -> String? = { nil }
     @ObservationIgnored let library: VMLibrary
     @ObservationIgnored let links: LiveVMLink
     @ObservationIgnored private let launch: @Sendable (VMBundle, Bool) async throws -> Void
@@ -204,8 +208,9 @@ public final class LibraryStore {
                 os: item.config?.os, bundleURL: item.bundle.url, state: known[item.id]?.state,
                 diskBytes: known[item.id]?.diskBytes, error: item.error ?? unfinishedProblem(item, unfinished))
             (row.cpuCount, row.memoryMiB, row.policy) = (item.config?.cpu.count, item.config?.memory.mib, item.config?.mcp.policy)
-            // What its helper said (it says it again only when it changes).
+            // What its helper said (it says it again only when it changes), and its runtime.
             (row.agentActing, row.install) = (known[item.id]?.agentActing, known[item.id]?.install)
+            row.outdatedRuntime = known[item.id]?.outdatedRuntime ?? false
             return row
         }
         for id in Set(watches.keys).subtracting(rows.map(\.id)) {
@@ -240,6 +245,7 @@ public final class LibraryStore {
         watchTokens[id] = token
         watches[id] = Task { [weak self] in
             if let events = await links.watch(id) {
+                await self?.noteRuntime(of: id)
                 for await event in events {
                     switch event {
                     case .state(let state): self?.setState(state, for: id)
@@ -260,7 +266,7 @@ public final class LibraryStore {
     private func setState(_ state: VMRunState?, for id: UUID) {
         guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
         rows[index].state = state
-        if state == nil { (rows[index].agentActing, rows[index].install) = (nil, nil) }
+        if state == nil { (rows[index].agentActing, rows[index].install, rows[index].outdatedRuntime) = (nil, nil, false) }
         if state == nil || state == .stopped { rows[index].suspended = VMBundle.isSuspended(rows[index].bundleURL) }
     }
 
@@ -271,7 +277,7 @@ public final class LibraryStore {
             case .start(let headless):
                 if let lowMemoryGuard, !row.isRunning, !(await hasMemoryToStart(row, lowMemoryGuard)) { return }
                 var id = id
-                if row.state == nil {
+                if try await needsHelperLaunch(id) {
                     let bundle = try VMBundle.open(row.bundleURL)
                     try await launch(bundle, headless)
                     id = try await attachWhenUp(id, bundle: bundle.url)
@@ -289,14 +295,6 @@ public final class LibraryStore {
         } catch {
             lastError = String(describing: error)
         }
-    }
-
-    /// Whether to start `row`: its memory fits in what the Mac has, or the person said to go ahead.
-    private func hasMemoryToStart(_ row: Row, _ lowMemoryGuard: LowMemoryGuard) async -> Bool {
-        let url = row.bundleURL
-        let mib = await Blocking.run { try? ConfigStore.load(VMBundle.open(url)).memory.mib }
-        guard let mib else { return true }
-        return await lowMemoryGuard.allows(name: row.name, guestMiB: mib)
     }
 
     /// A launched helper takes a moment to listen: attach once it does (up to 10 s). Returns the VM's id, which is
@@ -319,6 +317,14 @@ public final class LibraryStore {
 }
 
 extension LibraryStore {
+    /// Whether to start `row`: its memory fits in what the Mac has, or the person said to go ahead.
+    fileprivate func hasMemoryToStart(_ row: Row, _ lowMemoryGuard: LowMemoryGuard) async -> Bool {
+        let url = row.bundleURL
+        let mib = await Blocking.run { try? ConfigStore.load(VMBundle.open(url)).memory.mib }
+        guard let mib else { return true }
+        return await lowMemoryGuard.allows(name: row.name, guestMiB: mib)
+    }
+
     fileprivate func setActivity(_ activity: AgentActivity, for id: UUID) {
         guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
         if rows[index].agentActing != activity.acting { rows[index].agentActing = activity.acting }

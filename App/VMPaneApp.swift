@@ -46,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             library: VMLibrary(paths: supervisor.paths), links: HelperLinks(paths: supervisor.paths),
             launch: { bundle, headless in try await supervisor.launch(bundle, headless: headless) })
         store.lowMemoryGuard = .alert { NSApp.keyWindow }
+        store.currentRuntime = { HelperSupervisor.currentRuntime() }
         return store
     }()
 

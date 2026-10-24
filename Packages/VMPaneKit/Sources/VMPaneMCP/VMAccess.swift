@@ -80,7 +80,10 @@ public actor VMAccess {
     }
 
     private func session(_ item: VMLibrary.Item, launching: Bool) async throws -> HelperDiscovery.Session {
-        if let cached = sessions[item.id], cached.client.isOpen { return cached }
+        if let cached = sessions[item.id], cached.client.isOpen {
+            // A start goes through `connectLaunching` again when the helper is from before an update (#12).
+            guard launching, connector.isOutdated(cached) else { return cached }
+        }
         let session: HelperDiscovery.Session
         do {
             session = launching ? try await connector.connectLaunching(item) : try await connector.connect(item.id)
@@ -88,6 +91,14 @@ public actor VMAccess {
             throw ToolFailure("\(item.config?.name ?? "the VM") is not running (vm_power start)")
         } catch let error as RPCError {
             throw ToolFailure(error.message)
+        }
+        if let old = sessions[item.id] {
+            // The old helper stayed (its VM runs): its cached session stays, with any calls in flight on it.
+            if old.client.isOpen, connector.isOutdated(session) {
+                session.client.close()
+                return old
+            }
+            old.client.close()
         }
         sessions[item.id] = session
         return session

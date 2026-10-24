@@ -53,6 +53,14 @@ public struct RuntimeStore: Sendable {
         }.joined(separator: "\n")
     }
 
+    /// Whether a live helper reporting runtime `helper` is from another build than `current` (an app update or a
+    /// rebuild), so a stopped VM's next start should get a helper from `current` (#12). A helper started from the app
+    /// bundle itself (development) reports the bare app version and is never outdated.
+    public static func isOutdated(_ helper: String, current: String?) -> Bool {
+        guard let current, helper != current, let code = helper.split(separator: "-").last else { return false }
+        return code.count == 9 && code.first == "h" && code.dropFirst().allSatisfy(\.isHexDigit)
+    }
+
     private static func shortHash(_ data: Data) -> String {
         SHA256.hash(data: data).prefix(4).map { String(format: "%02x", $0) }.joined()
     }

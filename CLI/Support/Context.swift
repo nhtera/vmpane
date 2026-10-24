@@ -23,12 +23,19 @@ enum CLI {
 
     static let connector = HelperConnector(
         paths: paths, clientName: "vmpane", clientVersion: VMPane.version, kind: "cli", operatorClaim: identity == .operator,
-        launch: launchHelper)
+        currentRuntime: { currentRuntime }, launch: launchHelper)
+
+    /// The runtime the VMPane.app this vmpane lives in launches helpers from now (nil outside one).
+    static var currentRuntime: String? { enclosingApp.map { RuntimeStore.version(app: $0, appVersion: VMPane.version) } }
+
+    static var enclosingApp: URL? {
+        let executable = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+        return LaunchCoordinator.enclosingApp(of: Bundle.main.executableURL ?? executable)
+    }
 
     /// Starts a VM's helper headless from the VMPane.app this vmpane lives in.
     @Sendable static func launchHelper(_ bundle: VMBundle) throws {
-        let executable = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
-        guard let app = LaunchCoordinator.enclosingApp(of: Bundle.main.executableURL ?? executable) else {
+        guard let app = enclosingApp else {
             throw RPCError(.backendUnavailable, "this vmpane is not inside VMPane.app, so it cannot start VMs")
         }
         try LaunchCoordinator.launch(bundle, app: app, appVersion: VMPane.version, paths: paths, headless: true)

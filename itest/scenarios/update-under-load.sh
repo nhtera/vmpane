@@ -1,8 +1,9 @@
 # An app update while a VM runs (Red Team #5), without Sparkle's UI: `vmpane start` launches the helper from a
 # versioned runtime copy; the app bundle is then replaced by a different version (its runtime version changes);
 # the VM keeps running, and the new app's vmpane drives the old helper (info, pause, resume, screenshot, stop).
-# Started again, the VM runs from the new version's runtime copy. Needs an app with the Linux guest tools (they
-# are part of the runtime version). Sourced by scripts/itest.sh with $APP set.
+# Stopped, then started again by the new vmpane, the VM runs from the new version's runtime copy: the old helper,
+# alive with its VM stopped, makes way by itself (issue #12). Needs an app with the Linux guest tools (they are part
+# of the runtime version). Sourced by scripts/itest.sh with $APP set.
 
 source "$VMPANE_ROOT/itest/lib/common.sh"
 IT_SCENARIO=update-under-load
@@ -76,14 +77,15 @@ scenario_run() {
         || it_fail "the guest stopped ticking" || return 1
     echo "update-under-load: after the update the VM runs on; the new vmpane pauses, resumes and screenshots it"
 
-    # 4. Stopped and started again, it runs from the new version.
+    # 4. Stopped and started again, it runs from the new version: its old helper (still alive, its VM stopped)
+    # quits for the start, which launches one from the new runtime.
     "$cli" stop "$vm" --force >/dev/null || it_fail "vmpane stop failed" || return 1
     it_wait_for 30 bash -c "[[ \$('$cli' info '$vm' --json 2>/dev/null | jq -r .state) == stopped ]]" || it_fail "the VM did not stop" || return 1
     pid=$(uul_helper_pid)
-    it_rpc "$(it_socket "$bundle")" helper.shutdown >/dev/null 2>&1 || true
-    it_wait_exit "$pid" 30 || it_fail "the old helper did not exit" || return 1
-    pid=
+    kill -0 "$pid" 2>/dev/null || it_fail "the old helper is gone before the start (nothing to test)" || return 1
     "$cli" start "$vm" >/dev/null || it_fail "vmpane start after the update failed" || return 1
+    ! kill -0 "$pid" 2>/dev/null || it_fail "the old helper still runs after the start" || return 1
+    pid=
     it_wait_for 60 bash -c "grep -c VMPANE-ITEST-READY '$bundle/logs/serial.log' | grep -qv '^1$'" || it_fail "no ready marker after the restart" || return 1
     new_path=$(uul_helper_path)
     [[ $new_path == "$VMPANE_SUPPORT_DIR/runtime/"* && $new_path != "$old_path" ]] \
