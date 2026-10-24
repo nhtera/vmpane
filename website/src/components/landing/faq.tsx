@@ -4,6 +4,7 @@ import { Icon } from "@/components/site/icons";
 import { FAQ } from "@/content/faq";
 import { landing } from "@/content/landing";
 import { RichText } from "./rich-text";
+import { TwoTone } from "./two-tone";
 
 const t = landing.faq;
 
@@ -14,9 +15,7 @@ export function FaqSection() {
       <div className="wrap">
         <div className="head">
           <h2 id="faq-title">
-            {t.title[0]}
-            <br />
-            <span className="hl-blue">{t.title[1]}</span>
+            <TwoTone text={t.title} />
           </h2>
         </div>
         <div className="faq">

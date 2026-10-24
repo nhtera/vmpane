@@ -5,14 +5,14 @@
    tokens.css is imported without a layer: it only defines custom properties.
    The site's own rules are the `components` layer. Tailwind's preflight is
    not imported: the site's base below is the draft's.
-   House rules (the draft's): at most one eyebrow per three sections, one dot
-   per line, one label per CTA intent, no gradient text, solid glass when the
-   viewer asks for less transparency. */
+   House rules: Apple's marketing idiom. One accent (the button blue), headings
+   in two tones (the text colour, then grey), no eyebrows, no decorative
+   stickers or handwriting, one label per CTA intent, no gradient text, solid
+   glass when the viewer asks for less transparency. */
 @layer theme, base, components, utilities;
 
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
-@import "./fonts.css";
 @import "./tokens.css";
 @import "./landing.css";
 @import "./docs.css";
@@ -21,7 +21,7 @@
   /* ---------- base ---------- */
   *, *::before, *::after { box-sizing: border-box; }
   /* anchors (in-page links, the docs headings) land below the floating nav */
-  html { -webkit-text-size-adjust: 100%; overflow-x: clip; scroll-padding-top: 76px; }
+  html { -webkit-text-size-adjust: 100%; overflow-x: clip; scroll-padding-top: calc(var(--nav-h) + 12px); }
   @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
   body {
     margin: 0; overflow-x: clip;
@@ -29,7 +29,7 @@
     font: 400 17px/1.5 var(--f-sans); letter-spacing: -.011em;
     -webkit-font-smoothing: antialiased;
   }
-  h1, h2, h3, h4 { font-family: var(--f-display); font-weight: 600; margin: 0; text-wrap: balance; }
+  h1, h2, h3, h4 { font-family: var(--f-display); font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: -.005em; }
   p { margin: 0; text-wrap: pretty; }
   a { color: var(--t-blue); text-decoration: none; }
   a:hover { text-decoration: underline; }
@@ -47,79 +47,78 @@
   kbd { display: inline-block; padding: 1px 6px; min-width: 1.5em; text-align: center; border-radius: 5px; border: 1px solid var(--hair); background: var(--bg); font-size: .82em; color: var(--text); box-shadow: 0 1px 0 var(--hair); white-space: nowrap; }
 
   /* ---------- shared components ---------- */
+  /* Apple's pill buttons: the blue primary, an outlined secondary; no icons, no shadows */
   .btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px;
-    border-radius: var(--r-pill); font: 500 17px/1 var(--f-sans); padding: 16px 28px; border: 0; cursor: pointer;
+    border-radius: var(--r-pill); font: 400 17px/1.18 var(--f-sans); padding: 12px 22px; border: 1px solid transparent; cursor: pointer;
     text-decoration: none !important;
-    transition: transform var(--dur) var(--ease-out-quart), background-color var(--dur), box-shadow var(--dur);
+    transition: transform var(--dur) var(--ease-out-quart), background-color var(--dur), color var(--dur), border-color var(--dur);
   }
   /* No hover lift: a control that moves when the page scrolls under a resting pointer reads as flicker. */
   .btn:active { transform: scale(.98); transition-duration: 100ms; }
-  .btn-dark { background: var(--pill); color: var(--pill-text); box-shadow: 0 8px 20px -8px color-mix(in srgb, var(--pill) 60%, transparent); }
-  .btn-light { background: var(--fill); color: var(--text); box-shadow: var(--rim); backdrop-filter: blur(12px); }
-  .btn-sm { font-size: 13px; padding: 8px 14px; min-height: 36px; font-weight: 600; }
-  .btn-sm .i { width: 15px; height: 15px; }
-  .eyebrow { font: 600 17px/1.3 var(--f-sans); letter-spacing: -.01em; }
-  .meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 10px; font: 500 13px/1.4 var(--f-sans); color: var(--text-3); }
-  .meta span + span { padding-left: 10px; border-left: 1px solid var(--hair); }
-  .hl-blue { color: var(--t-blue); } .hl-orange { color: var(--t-orange); } .hl-green { color: var(--t-green); }
-  .hl-purple { color: var(--t-purple); } .hl-red { color: var(--t-red); }
-  .badge { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: var(--on-color); flex: none; background: var(--c); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--on-color) 35%, transparent), 0 4px 10px -4px var(--c); }
-  .badge .i { width: 20px; height: 20px; stroke-width: 2; }
-  .head { display: grid; justify-items: center; gap: 16px; text-align: center; margin-bottom: 56px; }
-  .head h2 { font-size: clamp(40px, 6vw, 72px); line-height: 1.05; letter-spacing: -.035em; }
-  .head p { font-size: clamp(19px, 2vw, 21px); line-height: 1.42; color: var(--text-2); max-width: 640px; }
+  .btn-primary { background: var(--accent); color: var(--on-color); }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { background: transparent; color: var(--t-blue); border-color: currentColor; }
+  .btn-secondary:hover { background: var(--accent); border-color: var(--accent); color: var(--on-color); }
+  .btn-sm { font-size: 12px; padding: 4px 12px; min-height: 28px; }
+  /* Apple's "Learn more ›" link */
+  .more { display: inline-flex; align-items: center; gap: 2px; font-size: 17px; color: var(--t-blue); }
+  .more .i { width: 14px; height: 14px; stroke-width: 2; }
+  /* Headings in two tones: the statement, then its second sentence in grey, on a line of its own. */
+  .tone { display: block; color: var(--text-2); }
+  /* A section's header, Apple's way: the headline and its intro paragraph, flush left. */
+  .head { display: grid; justify-items: start; gap: 20px; margin-bottom: 64px; }
+  .head h2 { font-size: clamp(40px, 5.6vw, 64px); line-height: 1.0625; letter-spacing: -.009em; max-width: 15em; }
+  .head p { font-size: clamp(19px, 2vw, 21px); line-height: 1.381; letter-spacing: .011em; color: var(--text-2); max-width: 34em; }
   .head p b { color: var(--text); font-weight: 600; }
   .head p code { font-size: .9em; }
-  .band { padding: 128px 0; }
+  .head.center { justify-items: center; text-align: center; }
+  .band { padding: 140px 0; }
   .band.gray { background: var(--band); }
-  .hand { font: 600 26px/1 var(--f-hand); color: var(--t-blue); white-space: nowrap; display: inline-flex; align-items: flex-end; gap: 2px; }
-  .hand svg { width: 46px; height: 40px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
   @media (max-width: 760px) {
-    .band { padding: 80px 0; }
-    .head { margin-bottom: 36px; gap: 12px; }
+    .band { padding: 88px 0; }
+    .head { margin-bottom: 40px; gap: 14px; }
     .head h2 { font-size: clamp(32px, 9.2vw, 40px); }
-    .head p { font-size: 17px; }
+    .head p { font-size: 17px; letter-spacing: 0; }
   }
 
-  /* ---------- header: a floating glass pill; logo and a menu button on phones ---------- */
-  .nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; padding: 10px 16px 0; }
+  /* ---------- header: Apple's full-width frosted bar; logo and a menu button on phones ---------- */
+  .nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30; }
   .nav-in {
-    max-width: 1040px; margin-inline: auto; display: flex; align-items: center; gap: 20px; padding: 8px 8px 8px 16px; border-radius: 22px;
-    background: color-mix(in srgb, var(--bg) var(--glass-nav), transparent); box-shadow: var(--rim);
-    backdrop-filter: blur(20px); border: 1px solid var(--nav-line);
+    height: var(--nav-h); display: flex; align-items: center; gap: 18px; padding-inline: max(22px, calc((100% - 1024px) / 2));
+    background: color-mix(in srgb, var(--bg) var(--glass-nav), transparent);
+    backdrop-filter: saturate(180%) blur(20px); border-bottom: 1px solid var(--nav-line);
   }
-  .logo { display: inline-flex; align-items: center; gap: 9px; color: var(--text); font: 700 19px/1 var(--f-display); letter-spacing: -.02em; text-decoration: none !important; }
-  .logo img { width: 28px; height: 28px; }
-  .nav-links { display: flex; gap: 26px; margin-inline: auto; font-size: 14px; }
-  .nav-links a { color: var(--text-2); transition: color var(--dur); }
+  .logo { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font: 600 17px/1 var(--f-display); letter-spacing: -.01em; text-decoration: none !important; }
+  .logo img { width: 24px; height: 24px; }
+  .nav-links { display: flex; gap: 28px; margin-inline: auto; font-size: 13px; }
+  .nav-links a { color: color-mix(in srgb, var(--text) 80%, transparent); transition: color var(--dur); }
   .nav-links a:hover, .nav-links a[aria-current="page"] { color: var(--text); text-decoration: none; }
   .nav-links .nav-dl { display: none; }
-  .icon-btn { width: 40px; height: 40px; display: grid; place-items: center; flex: none; border: 0; border-radius: 12px; background: transparent; color: var(--text-2); cursor: pointer; }
+  .icon-btn { width: 36px; height: 36px; display: grid; place-items: center; flex: none; border: 0; border-radius: 12px; background: transparent; color: var(--text-2); cursor: pointer; }
   .icon-btn:hover { background: var(--fill); color: var(--text); }
-  .icon-btn .i { width: 20px; height: 20px; }
+  .icon-btn .i { width: 18px; height: 18px; }
   .theme-sun { display: none; }
   [data-theme="dark"] .theme-sun { display: block; }
   [data-theme="dark"] .theme-moon { display: none; }
   .menu-btn { display: none; color: var(--text); }
   .menu-btn .i { width: 22px; height: 22px; }
   @media (max-width: 760px) {
-    .nav { padding: 8px 12px 0; }
-    .nav-in { position: relative; gap: 4px; padding: 6px 6px 6px 14px; }
+    .nav-in { position: relative; gap: 4px; padding-inline: 16px 8px; }
     .nav-in > .btn { display: none; }
     .nav-in > .theme-btn { display: none; }
     .menu-btn { display: grid; margin-left: auto; }
     .nav-links { display: none; }
     .nav.open .nav-links {
-      display: grid; position: absolute; left: 0; right: 0; top: calc(100% + 8px); gap: 0; margin: 0; padding: 4px 16px 16px; font-size: 17px;
-      border-radius: 22px; border: 1px solid var(--nav-line); background: color-mix(in srgb, var(--bg) 97%, var(--text));
+      display: grid; position: absolute; left: 12px; right: 12px; top: calc(100% + 8px); gap: 0; margin: 0; padding: 4px 16px 16px; font-size: 17px;
+      border-radius: 18px; border: 1px solid var(--nav-line); background: color-mix(in srgb, var(--bg) 97%, var(--text));
       box-shadow: var(--rim), var(--shadow-pop); transform-origin: 50% 0;
     }
     .nav.open .nav-links a { padding: 13px 2px; color: var(--text); border-top: 1px solid var(--hair); }
     .nav.open .nav-links a:first-child { border-top: 0; }
     .nav.open .nav-links .nav-dl {
       display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; padding: 14px; border: 0;
-      border-radius: var(--r-pill); background: var(--pill); color: var(--pill-text); font-weight: 600;
+      border-radius: var(--r-pill); background: var(--accent); color: var(--on-color);
     }
     .nav-dl .i { width: 17px; height: 17px; }
     .nav.open .nav-links .nav-theme {
@@ -128,17 +127,18 @@
     }
     /* Without JavaScript (no data-theme on <html>) the menu cannot open: the links wrap under the logo. */
     :root:not([data-theme]) .menu-btn { display: none; }
-    :root:not([data-theme]) .nav-in { flex-wrap: wrap; }
+    :root:not([data-theme]) .nav-in { flex-wrap: wrap; height: auto; padding-block: 10px; }
     :root:not([data-theme]) .nav-links { display: flex; flex-wrap: wrap; gap: 4px 18px; width: 100%; padding: 4px 0 6px; font-size: 15px; }
   }
   .nav-links .nav-theme { display: none; }
 
   /* ---------- footer ---------- */
-  .foot { border-top: 1px solid var(--hair); padding: 32px 0 44px; font-size: 13px; color: var(--text-3); }
+  .foot { background: var(--band); border-top: 1px solid var(--hair); padding: 32px 0 44px; font-size: 12px; line-height: 1.33; color: var(--text-3); }
   .foot .wrap { display: grid; gap: 24px; }
   .foot .cols { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-  .foot h2 { font: 600 13px/1.3 var(--f-sans); color: var(--text); margin-bottom: 8px; letter-spacing: 0; }
-  .foot ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  .foot h2 { font: 600 12px/1.3 var(--f-sans); color: var(--text); margin-bottom: 8px; letter-spacing: 0; }
+  /* rows 24 px apart at least, so each small link keeps its own target */
+  .foot ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
   .foot a { color: var(--text-2); }
   .foot .logo { font-size: 16px; }
   .foot .logo img { width: 22px; height: 22px; }
@@ -147,7 +147,7 @@
   /* ---------- 404 ---------- */
   .not-found { display: grid; gap: 18px; justify-items: center; text-align: center; padding-block: clamp(96px, 14vw, 160px); }
   .not-found-code { font: 500 13px/1 var(--f-mono); color: var(--text-3); }
-  .not-found h1 { font-size: clamp(40px, 6vw, 64px); line-height: 1.05; letter-spacing: -.035em; }
+  .not-found h1 { font-size: clamp(40px, 6vw, 64px); line-height: 1.0625; letter-spacing: -.009em; }
   .not-found p { color: var(--text-2); max-width: 36em; font-size: 19px; }
   .not-found .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 8px; }
 
@@ -158,24 +158,18 @@
     .foot a { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
     .foot ul { gap: 0; }
     .copy-btn { min-height: 44px; }
+    .more { min-height: 44px; }
   }
 
   /* Reduce Transparency: no glass blur anywhere (the tokens make it solid). */
   @media (prefers-reduced-transparency: reduce) {
-    .btn-light, .nav-in { backdrop-filter: none; }
+    .nav-in { backdrop-filter: none; }
   }
 
   /* ---------- motion: everything above is the visible final state ---------- */
   @media (prefers-reduced-motion: no-preference) {
     .nav.open .nav-links { animation: menuin 220ms var(--ease-out-quart); }
     @keyframes menuin { from { opacity: 0; transform: translateY(-6px) scale(.98); } }
-  }
-  @supports (animation-timeline: view()) {
-    @media (prefers-reduced-motion: no-preference) {
-      /* the nav gains depth once the page scrolls */
-      .nav-in { animation: navlift linear both; animation-timeline: scroll(root); animation-range: 0 120px; }
-      @keyframes navlift { to { box-shadow: var(--rim), var(--shadow-nav); } }
-    }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }

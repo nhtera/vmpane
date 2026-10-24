@@ -4,6 +4,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/site/icons";
 import { landing } from "@/content/landing";
 import { ClipboardMock, ImportMock, PortsMock, SharingMock, SnapshotsMock, Win } from "./mocks";
+import { TwoTone } from "./two-tone";
 
 const t = landing.features;
 type Scene = NonNullable<(typeof t.slides)[number]["scene"]>;
@@ -51,9 +52,7 @@ export function FeatureCarousel() {
     <section className="band" aria-labelledby="features-title">
       <div className="wrap car-head">
         <h2 id="features-title">
-          {t.title[0]}
-          <br />
-          <span className="hl-purple">{t.title[1]}</span>
+          <TwoTone text={t.title} />
         </h2>
         <div className="car-nav">
           <button type="button" aria-label={t.prev} disabled={ends.start} onClick={() => step(-1)}>

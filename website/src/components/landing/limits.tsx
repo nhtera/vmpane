@@ -2,6 +2,7 @@
 
 import { Icon, type IconName } from "@/components/site/icons";
 import { landing } from "@/content/landing";
+import { TwoTone } from "./two-tone";
 
 const t = landing.limits;
 
@@ -11,11 +12,8 @@ export function Limits() {
     <section className="band gray" aria-labelledby="limits-title">
       <div className="wrap">
         <div className="head">
-          <span className="eyebrow">{t.eyebrow}</span>
           <h2 id="limits-title">
-            {t.title[0]}
-            <br />
-            <span className="hl-red">{t.title[1]}</span>
+            <TwoTone text={t.title} />
           </h2>
         </div>
         <div className="limits">

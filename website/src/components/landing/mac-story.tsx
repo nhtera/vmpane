@@ -7,8 +7,8 @@ import { RichText } from "./rich-text";
 const t = landing.story;
 
 /**
- * The MacBook story (draft v5): a tall section whose stage stays pinned under
- * the nav (its title scrolls away first) while four beats play on the scroll:
+ * The MacBook story: right under the hero, a tall section whose stage stays
+ * pinned under the nav while four beats play on the scroll:
  * the library rises out of the Dock, the VM's window, the agent's typed
  * request, the approval dialog with the cursor on Deny, and the denied row in
  * the activity, in HTML windows (mocks.tsx). All of it is CSS scroll-driven
@@ -18,13 +18,6 @@ const t = landing.story;
 export function MacStory() {
   return (
     <section className="story" id="story" aria-label={t.label}>
-      <div className="head story-head">
-        <h2>
-          {t.title[0]}
-          <br />
-          <span className="hl-blue">{t.title[1]}</span>
-        </h2>
-      </div>
       <div className="story-track">
         <div className="story-stage">
           <div className="mac">

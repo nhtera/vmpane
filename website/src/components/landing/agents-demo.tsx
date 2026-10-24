@@ -5,6 +5,7 @@ import { landing } from "@/content/landing";
 import transcript from "@/content/demo-transcript.txt?raw";
 import { RichText } from "./rich-text";
 import { ActivityMock, SettingsMock } from "./mocks";
+import { TwoTone } from "./two-tone";
 
 const t = landing.agents;
 
@@ -20,11 +21,8 @@ export function AgentsDemo() {
     <section className="band" id="agents" aria-labelledby="agents-title">
       <div className="wrap">
         <div className="head">
-          <span className="eyebrow hl-orange">{t.eyebrow}</span>
           <h2 id="agents-title">
-            {t.title[0]}
-            <br />
-            <span className="hl-orange">{t.title[1]}</span>
+            <TwoTone text={t.title} />
           </h2>
           <p>
             <RichText text={t.lead[0]} />
@@ -47,14 +45,6 @@ export function AgentsDemo() {
               {l.chip}
             </button>
           ))}
-        </div>
-        <div className="demo-hand">
-          <span className="hand">
-            <svg viewBox="0 0 46 40" aria-hidden="true">
-              <path d="M4 4c10 4 22 14 26 30M30 34l-8-4M30 34l3-9" />
-            </svg>
-            {t.hand}
-          </span>
         </div>
         <ol className="agent-steps" aria-label={t.stepsLabel}>
           {t.steps.map((s) => (

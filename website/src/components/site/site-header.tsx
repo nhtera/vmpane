@@ -11,16 +11,16 @@ import { ThemeToggle } from "./theme-toggle";
 const t = strings.nav;
 
 /**
- * The floating glass pill. On phones (≤ 760 px) the links fold into a menu
- * button: the card drops below the pill without moving the page, and closes
+ * Apple's full-width frosted bar. On phones (≤ 760 px) the links fold into a menu
+ * button: the card drops below the bar without moving the page, and closes
  * on a link, a tap outside or Esc (which returns focus to the button). The
  * links follow the button in the markup, so Tab goes from it into the open
  * menu, and focus leaving the menu closes it. On phones the theme switch is
  * the menu's last row; on desktop the button is hidden, the switch sits in
- * the pill and the tab order is the visual one. Without JavaScript the
+ * the bar and the tab order is the visual one. Without JavaScript the
  * phone shows the links as a row instead (site.css).
  * In-page links are plain anchors; CSS scrolls them smoothly (unless the
- * reader asks for reduced motion) and lands each section below the pill.
+ * reader asks for reduced motion) and lands each section below the bar.
  */
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
@@ -92,8 +92,7 @@ export function SiteHeader() {
             <ThemeToggle className="nav-theme" labelled />
           </nav>
           <ThemeToggle />
-          <a className="btn btn-dark btn-sm" href={RELEASES_URL}>
-            <Icon name="download" />
+          <a className="btn btn-primary btn-sm" href={RELEASES_URL}>
             {t.cta}
           </a>
         </div>

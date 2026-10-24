@@ -127,19 +127,14 @@
   .wall-d { background: var(--wall-d); } .wall-e { background: var(--wall-e); }
 
   /* ---------- hero ---------- */
-  .hero { position: relative; padding: 112px 0 72px; overflow: hidden; }
-  .hero .copy { position: relative; z-index: 2; display: grid; justify-items: center; gap: 24px; text-align: center; max-width: 820px; margin-inline: auto; padding-inline: 16px; }
-  .hero h1 { font-size: clamp(48px, 7.4vw, 88px); line-height: 1.02; letter-spacing: -.04em; }
-  .underline { position: relative; display: inline-block; color: var(--t-blue); }
-  .underline svg { position: absolute; left: -2%; bottom: -.12em; width: 104%; height: .32em; overflow: visible; }
-  .underline path { fill: none; stroke: var(--yellow); stroke-width: 7; stroke-linecap: round; opacity: .9; }
-  .hero .sub { font-size: clamp(19px, 2vw, 22px); line-height: 1.42; color: var(--text-2); max-width: 600px; }
-  .hero .cta { position: relative; margin-top: 12px; }
-  .stickers { position: absolute; inset: 24px 0 0; pointer-events: none; z-index: 1; }
-  .st { position: absolute; filter: var(--shadow-sticker); }
-  @media (max-width: 1080px) { .stickers { display: none; } }
-  /* room for the lowest sticker (and its shadow) above the hero's clipped edge */
-  @media (min-width: 1081px) { .hero { padding-bottom: 142px; } }
+  /* The hero: the app icon, the headline, the copy and the CTA; the Mac follows right under it (the story). */
+  .hero { position: relative; padding: 72px 0 56px; }
+  .hero .copy { display: grid; justify-items: center; gap: 20px; text-align: center; max-width: 880px; margin-inline: auto; padding-inline: 16px; }
+  .hero-icon { width: 112px; height: 112px; margin-bottom: 4px; filter: var(--shadow-app); }
+  .hero h1 { font-size: clamp(48px, 7vw, 96px); line-height: 1.04; letter-spacing: -.015em; }
+  .hero .sub { font-size: clamp(19px, 2vw, 24px); line-height: 1.33; letter-spacing: .009em; color: var(--text-2); max-width: 32em; }
+  .hero .cta { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 16px 28px; margin-top: 8px; }
+  .hero .fine { font-size: 14px; line-height: 1.43; color: var(--text-3); }
 
   /* ---------- the MacBook ---------- */
   .mac { max-width: 1040px; margin-inline: auto; }
@@ -169,7 +164,6 @@
   /* No overflow clip on the story or any other box around its sticky stage (html and body already clip
      sideways): with one, Safari (iPhone and Mac) shakes the pinned stage up and down a few pixels on
      every frame of a scroll. */
-  .story-head { padding: 24px 0 40px; }
   .story .mac { padding-inline: 16px; }
   .s-lib { left: 5cqw; top: 6.5cqw; width: 54cqw; height: 38cqw; z-index: 1; }
   .s-vm { right: 5cqw; top: 13cqw; width: 45cqw; height: 32cqw; z-index: 2; }
@@ -181,7 +175,7 @@
   .s-alert { right: 15cqw; top: 20cqw; z-index: 4; }
   .steps { list-style: none; margin: 40px auto 0; padding: 0 16px; max-width: 1040px; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
   .steps li { display: grid; gap: 6px; }
-  .steps b { font: 600 21px/1.25 var(--f-display); letter-spacing: -.02em; }
+  .steps b { font: 600 21px/1.25 var(--f-display); letter-spacing: .011em; }
   .steps span { color: var(--text-2); font-size: 15px; }
   .steps code { font-size: .9em; }
   .steps .k { font: 600 13px/1 var(--f-sans); color: var(--t-blue); }
@@ -198,10 +192,10 @@
   .tabs button[aria-selected="true"] { background: var(--bg); color: var(--text); box-shadow: var(--rim), var(--shadow-lift); }
   .tabs .i { width: 18px; height: 18px; }
   .gcopy { min-width: 0; display: grid; gap: 22px; align-content: start; }
-  .gcopy h3 { font-size: clamp(30px, 3.4vw, 40px); letter-spacing: -.03em; line-height: 1.1; }
+  .gcopy h3 { font-size: clamp(28px, 3.2vw, 40px); letter-spacing: 0; line-height: 1.1; }
   .facts { list-style: none; margin: 20px 0 0; padding: 0; display: grid; gap: 12px; }
   .facts li { display: flex; gap: 12px; align-items: flex-start; font-size: 17px; }
-  .facts .i { color: var(--green); margin-top: 2px; }
+  .facts .i { color: var(--text-3); margin-top: 2px; }
   .facts li.dim { color: var(--text-2); }
   .facts li.dim .i { color: var(--text-3); }
   .stack { display: grid; }
@@ -214,12 +208,12 @@
   /* ---------- Windows setup timeline ---------- */
   .timeline { position: relative; display: grid; gap: 24px; grid-template-columns: repeat(4, minmax(0, 1fr)); padding-top: 34px; }
   .timeline::before, .timeline .fill { content: ""; position: absolute; top: 9px; left: 10px; right: 10px; height: 4px; border-radius: 4px; background: var(--fill); }
-  .timeline .fill { background: linear-gradient(90deg, var(--orange), var(--pink)); transform-origin: left; }
+  .timeline .fill { background: var(--blue); transform-origin: left; }
   .tstep { position: relative; display: grid; gap: 8px; align-content: start; }
-  .tstep::before { content: ""; position: absolute; top: -34px; left: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--band); border: 4px solid var(--orange); box-sizing: border-box; }
-  .tstep b { font: 600 21px/1.25 var(--f-display); letter-spacing: -.02em; }
+  .tstep::before { content: ""; position: absolute; top: -34px; left: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--band); border: 4px solid var(--blue); box-sizing: border-box; }
+  .tstep b { font: 600 21px/1.25 var(--f-display); letter-spacing: .011em; }
   .tstep span { color: var(--text-2); font-size: 15px; }
-  .tstep .k { font: 600 13px/1 var(--f-sans); color: var(--t-orange); }
+  .tstep .k { font: 600 12px/1 var(--f-sans); color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; }
   .tstep .min { font: 500 13px/1 var(--f-mono); color: var(--text-3); }
   @media (max-width: 760px) {
     .timeline { grid-template-columns: 1fr; padding: 0 0 0 40px; }
@@ -244,20 +238,18 @@
   .lvls button::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
   .lvls button:hover { color: var(--text); }
   .lvls button[aria-pressed="true"] { border-color: var(--c); color: var(--text); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 22%, transparent); }
-  .demo-hand { display: flex; justify-content: center; margin-top: 14px; }
-  .demo-hand .hand svg { transform: translateY(-10px) rotate(180deg); }
+  /* an agent session in six steps: a grid of short columns under hairlines, no numbered bubbles */
   .agent-steps {
-    counter-reset: step; list-style: none; padding: 0; margin: 40px auto 0; max-width: 960px;
-    display: grid; gap: 14px 32px; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+    list-style: none; padding: 0; margin: 72px 0 0;
+    display: grid; gap: 36px 32px; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   }
-  .agent-steps li { counter-increment: step; display: grid; grid-template-columns: 30px 1fr; gap: 2px 12px; align-items: baseline; }
-  .agent-steps li::before {
-    content: counter(step); grid-row: span 2; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
-    font: 600 13px/1 var(--f-sans); color: var(--t-orange); background: color-mix(in srgb, var(--orange) 18%, transparent);
-  }
-  .agent-steps b { font-size: 16px; }
-  .transcript { max-width: 960px; margin: 32px auto 0; }
-  .transcript summary { cursor: pointer; font-weight: 600; color: var(--text); }
+  .agent-steps li { display: grid; gap: 6px; align-content: start; padding-top: 18px; border-top: 1px solid var(--hair); }
+  .agent-steps b { font: 600 19px/1.26 var(--f-display); letter-spacing: .012em; }
+  .transcript { margin: 48px 0 0; }
+  .transcript summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 4px; color: var(--t-blue); }
+  .transcript summary::-webkit-details-marker { display: none; }
+  .transcript summary::after { content: "›"; font-size: 1.2em; line-height: 1; transition: transform var(--dur) var(--ease-out-quart); }
+  .transcript[open] summary::after { transform: rotate(90deg); }
   .transcript p { color: var(--text-2); font-size: 15px; margin: 10px 0; }
   .transcript pre {
     font: 400 12.5px/1.55 var(--f-mono); background: var(--band); border-radius: 12px; padding: 14px 16px; margin: 0;
@@ -265,22 +257,23 @@
   }
   .transcript .call { color: var(--text); }
   .transcript .said { color: var(--text); font-weight: 600; }
-  .agent-steps span { grid-column: 2; color: var(--text-2); font-size: 15px; }
+  .agent-steps span { color: var(--text-2); font-size: 17px; line-height: 1.47; }
 
   /* ---------- safety bento ---------- */
   .bento { display: grid; gap: 16px; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-rows: minmax(150px, auto); }
-  .cell { position: relative; background: var(--bg); border-radius: var(--r-tile); padding: 28px; display: grid; gap: 12px; align-content: start; overflow: hidden; }
+  .cell { position: relative; background: var(--bg); border-radius: var(--r-card); padding: 36px; display: grid; gap: 12px; align-content: start; overflow: hidden; }
   /* Cards and slides do not lift on hover: under a resting pointer, scrolling would make each one jump as it
      passes (a flicker as sections come into view). */
-  .cell h3 { font-size: 24px; letter-spacing: -.02em; line-height: 1.15; }
-  .cell p { color: var(--text-2); font-size: 15px; }
+  .cell h3 { font-size: 24px; letter-spacing: .009em; line-height: 1.17; }
+  .cell p { color: var(--text-2); font-size: 17px; line-height: 1.47; }
   .cell p code { font-size: .9em; }
-  .cell.a { grid-column: span 4; grid-row: span 2; }
+  /* the kill switch's menu bar scene fills the card to its bottom edge */
+  .cell.a { grid-column: span 4; grid-row: span 2; grid-template-rows: auto auto 1fr; }
   .cell.b { grid-column: span 2; grid-row: span 2; }
   .cell.c, .cell.d, .cell.e { grid-column: span 2; }
   .cell.f, .cell.g { grid-column: span 3; }
   @media (max-width: 900px) { .bento { grid-template-columns: 1fr; } .cell.a, .cell.b, .cell.c, .cell.d, .cell.e, .cell.f, .cell.g { grid-column: auto; grid-row: auto; } }
-  .cell .scene { position: relative; margin: 8px -28px -28px; min-height: 280px; container-type: inline-size; }
+  .cell .scene { position: relative; margin: 12px -36px -36px; min-height: 280px; container-type: inline-size; }
   .mbar {
     position: absolute; inset: 0 0 auto; height: 30px; display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding-inline: 16px;
     font-size: 13px; color: var(--menubar-text); background: var(--menubar-bg); backdrop-filter: blur(20px);
@@ -302,7 +295,7 @@
 
   /* ---------- feature carousel ---------- */
   .car-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 40px; }
-  .car-head h2 { font-size: clamp(40px, 5.4vw, 64px); line-height: 1.05; letter-spacing: -.035em; }
+  .car-head h2 { font-size: clamp(40px, 5.6vw, 64px); line-height: 1.0625; letter-spacing: -.009em; max-width: 15em; }
   .car-nav { display: flex; gap: 10px; }
   .car-nav button {
     width: 44px; height: 44px; border-radius: 50%; border: 0; box-shadow: var(--rim); background: var(--fill); color: var(--text); display: grid; place-items: center; cursor: pointer;
@@ -320,11 +313,11 @@
   .slide .media { aspect-ratio: 4 / 3; }
   .slide .media .w { left: 8cqw; right: 8cqw; top: 8cqw; font-size: 2.7cqw; border-radius: 2.6cqw; }
   .slide .media .w .term { height: auto; padding: 1.3em; font-size: .95em; }
-  .slide h3 { font-size: 22px; letter-spacing: -.02em; }
-  .slide p { color: var(--text-2); font-size: 16px; margin-top: -8px; }
+  .slide h3 { font-size: 21px; letter-spacing: .011em; }
+  .slide p { color: var(--text-2); font-size: 17px; margin-top: -8px; }
 
   /* ---------- limits ---------- */
-  .sizes { max-width: 960px; margin-inline: auto; }
+  .sizes { max-width: 960px; }
   .sizes table { width: 100%; border-collapse: collapse; font-size: 15px; }
   .sizes caption { text-align: left; color: var(--text-2); padding-bottom: 10px; }
   .sizes th, .sizes td { text-align: left; padding: 12px 10px; border-bottom: 1px solid var(--hair); }
@@ -332,52 +325,47 @@
   .sizes tbody th { font-weight: 600; }
   .sizes .scroll { overflow-x: auto; }
   .sizes p { color: var(--text-2); font-size: 15px; margin-top: 14px; }
-  .limits { display: grid; gap: 0 48px; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); max-width: 960px; margin-inline: auto; }
+  .limits { display: grid; gap: 0 48px; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); }
   .limits div { display: grid; grid-template-columns: 28px 1fr; gap: 4px 12px; padding: 22px 0; border-bottom: 1px solid var(--hair); }
   .limits .i { color: var(--text-3); margin-top: 2px; }
   .limits b { font-size: 17px; }
   .limits span { grid-column: 2; color: var(--text-2); font-size: 15px; }
 
   /* ---------- faq ---------- */
-  .faq { max-width: 760px; margin-inline: auto; display: grid; }
+  .faq { max-width: 840px; display: grid; border-top: 1px solid var(--hair); }
   .faq details { border-bottom: 1px solid var(--hair); }
-  .faq summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 22px 0; min-height: 44px; font: 600 19px/1.3 var(--f-display); letter-spacing: -.015em; }
+  .faq summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 24px 0; min-height: 44px; font: 600 21px/1.3 var(--f-display); letter-spacing: .011em; }
   .faq summary::-webkit-details-marker { display: none; }
   .faq summary .i { transition: transform var(--dur) var(--ease-out-quart); color: var(--text-3); }
-  .faq details[open] summary .i { transform: rotate(45deg); color: var(--t-blue); }
+  .faq details[open] summary .i { transform: rotate(45deg); }
   .faq details p { color: var(--text-2); padding: 0 40px 24px 0; font-size: 17px; }
   .faq code { font-size: .9em; background: var(--band); padding: 1px 6px; border-radius: 5px; }
 
   /* ---------- the end band ---------- */
-  .end { position: relative; padding: 140px 16px 120px; text-align: center; display: grid; justify-items: center; gap: 24px; overflow: hidden; }
+  .end { padding: 64px 16px 140px; text-align: center; display: grid; justify-items: center; gap: 24px; }
   .end .app { width: 128px; height: 128px; filter: var(--shadow-app); }
-  .end h2 { font-size: clamp(44px, 6.4vw, 76px); letter-spacing: -.04em; line-height: 1.03; }
-  .end p { color: var(--text-2); font-size: 19px; max-width: 560px; }
-  .end .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
-  .collage { position: absolute; inset: 0; pointer-events: none; }
-  .collage .tile { position: absolute; width: 190px; aspect-ratio: 4 / 3; border-radius: 18px; overflow: hidden; box-shadow: var(--shadow-win); container-type: inline-size; }
-  .collage .tile .w, .collage .tile .menu { left: 10cqw; top: 14cqw; right: 10cqw; bottom: -6cqw; width: auto; font-size: 5cqw; }
-  .collage .tile .menu { bottom: auto; }
-  @media (max-width: 1080px) { .collage { display: none; } }
+  .end h2 { font-size: clamp(40px, 5.6vw, 64px); letter-spacing: -.009em; line-height: 1.0625; max-width: 12em; }
+  .end p { color: var(--text-2); font-size: 21px; line-height: 1.381; letter-spacing: .011em; max-width: 30em; }
+  .end .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; margin-top: 8px; }
   .brew { font: 400 14px/1 var(--f-mono); color: var(--text-2); display: inline-flex; gap: 10px; align-items: center; padding: 10px 14px; border-radius: 12px; background: var(--band); }
   .brew .d { color: var(--text-3); }
 
-  /* ---------- phones (≤ 760 px), the way tryonenotch.com does it ---------- */
+  /* ---------- phones (≤ 760 px) ---------- */
   @media (max-width: 760px) {
-    .hero { padding: 48px 0 56px; }
-    .hero .copy { gap: 20px; }
-    .hero .meta { font-size: 12px; gap: 4px 8px; }
-    .hero .meta span + span { padding-left: 8px; }
-    .hero .cta { width: 100%; max-width: 440px; margin-top: 16px; }
-    .hero .cta .btn { width: 100%; justify-content: center; min-height: 54px; }
+    .hero { padding: 40px 0 40px; }
+    .hero .copy { gap: 16px; }
+    .hero-icon { width: 88px; height: 88px; }
+    .hero .cta { flex-direction: column; width: 100%; max-width: 440px; gap: 18px; }
+    .hero .cta .btn { width: 100%; min-height: 50px; }
+    .hero .fine { font-size: 12px; max-width: 26em; }
     .car-head h2 { font-size: clamp(32px, 9.2vw, 40px); }
     .car-head { margin-bottom: 24px; gap: 16px; }
-    .end { padding: 88px 16px 80px; }
+    .end { padding: 40px 16px 80px; }
     .end .app { width: 96px; height: 96px; }
     .end h2 { font-size: clamp(36px, 10vw, 44px); }
     .end p { font-size: 17px; }
     .end .row { width: 100%; max-width: 440px; flex-direction: column; }
-    .end .row .btn { justify-content: center; min-height: 52px; }
+    .end .row .btn { min-height: 50px; }
     .brew { max-width: 100%; font-size: 12.5px; white-space: nowrap; overflow-x: auto; scrollbar-width: none; }
     .tabs { justify-self: stretch; }
     .tabs button { flex: 1; justify-content: center; padding: 8px 6px; gap: 6px; font-size: 14px; }
@@ -397,14 +385,10 @@
   @media (prefers-reduced-motion: no-preference) {
     .stack > * { transition: opacity 400ms var(--ease-out-quart), transform 400ms var(--ease-out-expo), visibility 400ms; }
     .stack > [hidden] { transform: translateY(12px) scale(.985); }
-    /* hero: stickers pop in, then drift; the headline's underline draws itself */
-    .st { animation: pop 700ms var(--ease-out-expo) both, drift 7s ease-in-out 900ms infinite; animation-delay: calc(var(--d, 0) * 50ms + 150ms), calc(var(--d, 0) * 50ms + 900ms); }
-    @keyframes pop { from { opacity: 0; transform: translateY(18px) scale(.6) rotate(var(--r, 0deg)); } }
-    @keyframes drift { 50% { transform: translateY(-8px) rotate(calc(var(--r, 0deg) * -.5)); } }
-    .underline path { stroke-dasharray: 1; stroke-dashoffset: 0; animation: draw 900ms var(--ease-out-quart) 500ms both; }
-    @keyframes draw { from { stroke-dashoffset: 1; } }
+    /* hero: the icon, then the copy, rise into place */
     .hero .copy > * { animation: rise var(--dur-enter) var(--ease-out-expo) both; }
-    .hero .copy > :nth-child(2) { animation-delay: 60ms; } .hero .copy > :nth-child(3) { animation-delay: 120ms; } .hero .copy > :nth-child(4) { animation-delay: 180ms; }
+    .hero .copy > :nth-child(2) { animation-delay: 60ms; } .hero .copy > :nth-child(3) { animation-delay: 120ms; }
+    .hero .copy > :nth-child(4) { animation-delay: 180ms; } .hero .copy > :nth-child(5) { animation-delay: 240ms; }
     @keyframes rise { from { opacity: 0; transform: translateY(16px); } }
     /* the timeline fills once, when it comes into view (windows-setup.tsx arms it) */
     .timeline.armed .fill { transform: scaleX(0); }
@@ -413,7 +397,7 @@
     .timeline.armed .tstep::before { border-color: var(--hair); }
     .timeline.run .fill { transform: none; transition: transform 2400ms var(--ease-out-quart); }
     .timeline.run .tstep { transform: none; transition: transform 500ms var(--ease-out-expo); }
-    .timeline.run .tstep::before { border-color: var(--orange); transition: border-color 300ms; }
+    .timeline.run .tstep::before { border-color: var(--blue); transition: border-color 300ms; }
     .timeline.run .tstep:nth-of-type(2), .timeline.run .tstep:nth-of-type(2)::before { transition-delay: 600ms; }
     .timeline.run .tstep:nth-of-type(3), .timeline.run .tstep:nth-of-type(3)::before { transition-delay: 1200ms; }
     .timeline.run .tstep:nth-of-type(4), .timeline.run .tstep:nth-of-type(4)::before { transition-delay: 1800ms; }
@@ -485,7 +469,7 @@
     @media (prefers-reduced-motion: no-preference) and (max-width: 760px) {
       /* the camera follows the action: the library, the agent's dialog on the right, then back */
       .story-track { height: 320vh; }
-      .story-stage { top: 58px; height: calc(100svh - 58px); gap: 14px; padding-top: 16px; grid-template-columns: minmax(0, 1fr); }
+      .story-stage { top: var(--pin-top); height: calc(100svh - var(--pin-top)); gap: 14px; padding-top: 16px; grid-template-columns: minmax(0, 1fr); }
       .story .mac {
         --mw: clamp(600px, calc((100svh - 290px) * 1.6), 880px); width: var(--mw); max-width: none; padding-inline: 0; margin-left: 50%; justify-self: start;
         animation: pan linear both; animation-timeline: --story; animation-range: contain 0% contain 100%;

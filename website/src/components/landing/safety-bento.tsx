@@ -1,18 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import type { CSSProperties } from "react";
-import { Icon, type IconName } from "@/components/site/icons";
+import { Icon } from "@/components/site/icons";
 import { landing } from "@/content/landing";
 import { RichText } from "./rich-text";
 import { MenuMock, SnapshotsMock } from "./mocks";
+import { TwoTone } from "./two-tone";
 
 const t = landing.safety;
-
-const Badge = ({ icon, c }: { icon: IconName; c: string }) => (
-  <span className="badge" style={{ "--c": `var(--${c})` } as CSSProperties} aria-hidden="true">
-    <Icon name={icon} />
-  </span>
-);
 
 /**
  * Seven cells: the kill switch (menu capture), undo (snapshots capture), ask first, off by default, the record, take
@@ -24,14 +18,11 @@ export function SafetyBento() {
       <div className="wrap">
         <div className="head">
           <h2 id="safety-title">
-            {t.title[0]}
-            <br />
-            <span className="hl-green">{t.title[1]}</span>
+            <TwoTone text={t.title} />
           </h2>
         </div>
         <div className="bento">
           <div className="cell a">
-            <Badge icon="stop" c="red" />
             <h3>{t.stop.title}</h3>
             <p>
               {t.stop.body[0]}
@@ -51,13 +42,11 @@ export function SafetyBento() {
             </div>
           </div>
           <div className="cell b">
-            <Badge icon="arrow-uturn" c="purple" />
             <h3>{t.undo.title}</h3>
             <p>{t.undo.body}</p>
             <SnapshotsMock />
           </div>
           <div className="cell c">
-            <Badge icon="question" c="blue" />
             <h3>{t.ask.title}</h3>
             <p>{t.ask.body}</p>
             <div className="mini-ask" aria-hidden="true">
@@ -66,7 +55,6 @@ export function SafetyBento() {
             </div>
           </div>
           <div className="cell d">
-            <Badge icon="lock" c="gray" />
             <h3>{t.off.title}</h3>
             <p>
               <RichText text={t.off.body} />
@@ -80,7 +68,6 @@ export function SafetyBento() {
             </div>
           </div>
           <div className="cell e">
-            <Badge icon="list" c="teal" />
             <h3>{t.record.title}</h3>
             <p>{t.record.body}</p>
             <pre className="json">
@@ -94,7 +81,6 @@ export function SafetyBento() {
             </pre>
           </div>
           <div className="cell f">
-            <Badge icon="hand" c="orange" />
             <h3>{t.takeOver.title}</h3>
             <p>{t.takeOver.body}</p>
             <div className="mini-pill" aria-hidden="true">
@@ -104,7 +90,6 @@ export function SafetyBento() {
             </div>
           </div>
           <div className="cell g">
-            <Badge icon="shield" c="green" />
             <h3>{t.signIn.title}</h3>
             <p>{t.signIn.body}</p>
           </div>

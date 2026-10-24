@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { landing } from "@/content/landing";
+import { TwoTone } from "./two-tone";
 
 const t = landing.windows;
 
@@ -34,9 +35,7 @@ export function WindowsSetup() {
       <div className="wrap">
         <div className="head">
           <h2 id="windows-title">
-            {t.title[0]}
-            <br />
-            <span className="hl-orange">{t.title[1]}</span>
+            <TwoTone text={t.title} />
           </h2>
           <p>
             {t.lead[0]}

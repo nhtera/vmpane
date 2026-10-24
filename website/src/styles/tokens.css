@@ -10,7 +10,9 @@
 :root {
   /* surfaces and text; --text-3 is AA on --band too (the draft's #86868B was not), so small print stays readable */
   --bg: #FFFFFF; --band: #F5F5F7; --card: #F5F5F7; --text: #1D1D1F; --text-2: #6E6E73; --text-3: #707075;
-  --hair: #D2D2D7; --pill: #1D1D1F; --pill-text: #FFFFFF; --nav-line: rgba(0,0,0,.08);
+  --hair: #D2D2D7; --nav-line: rgba(0,0,0,.08);
+  /* the one accent: Apple's button blue (white on it is AA), for every primary action */
+  --accent: #0071E3; --accent-hover: #0077ED;
   --fill: color-mix(in srgb, var(--text) 6%, transparent);
   --scrim: rgba(0,0,0,.32);
   /* macOS system colours (fills, badges, dots) */
@@ -58,16 +60,13 @@
   --shadow-win: 0 0 0 .5px rgba(0,0,0,.18), 0 10px 30px rgba(0,0,0,.16), 0 30px 60px -20px rgba(0,0,0,.24);
   --shadow-lift: 0 1px 2px rgba(29,29,31,.06), 0 8px 24px rgba(29,29,31,.08);
   --shadow-pop: 0 24px 48px -20px rgba(0,0,0,.45);
-  --shadow-nav: 0 10px 30px -12px rgba(0,0,0,.25);
-  --shadow-sticker: drop-shadow(0 14px 18px rgba(0,0,0,.14));
   --shadow-app: drop-shadow(0 24px 30px rgba(31,79,216,.35));
   --shadow-mac: 0 50px 90px -40px rgba(0,0,0,.45);
   --shadow-cursor: drop-shadow(0 .3cqw .4cqw rgba(0,0,0,.35));
-  /* type: the system font (SF Pro on Apple devices); Caveat for the one handwritten note */
+  /* type: the system font (SF Pro on Apple devices), which tracks itself by size: headings only tighten a little */
   --f-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --f-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --f-mono: ui-monospace, "SF Mono", Menlo, "JetBrains Mono", monospace;
-  --f-hand: "Caveat", "Bradley Hand", "Segoe Print", cursive;
   /* shape */
   --r-card: 28px; --r-tile: 20px; --r-win: 12px; --r-panel: 14px; --r-row: 12px; --r-ctl: 10px; --r-seg: 7px; --r-pill: 980px;
   /* motion */
@@ -75,11 +74,12 @@
   --dur-fast: 150ms; --dur: 250ms; --dur-enter: 700ms;
   /* glass (macOS 26: from clear to tinted), lit glass edges */
   --glass: 72%;
-  /* the header pill: mostly opaque, so dark and bright sections passing under it do not make it blink */
+  /* the header bar: mostly opaque, so dark and bright sections passing under it do not make it blink */
   --glass-nav: 90%;
   --rim: inset 0 1px 0 rgba(255,255,255,.65), inset 0 0 0 .5px rgba(255,255,255,.25);
-  /* layout: where pinned scenes sit (below the floating nav), the content width */
-  --pin-top: 66px;
+  /* layout: the header bar's height (pinned scenes sit below it), the content width */
+  --nav-h: 52px;
+  --pin-top: var(--nav-h);
   --wrap: 1120px;
   color-scheme: light;
 }
@@ -87,7 +87,7 @@
 :root[data-theme="dark"] {
   --sel: #0A6CF0;
   --bg: #0A0A0B; --band: #141416; --card: #1A1A1C; --text: #F5F5F7; --text-2: #A1A1A6; --text-3: #8E8E93;
-  --hair: #38383C; --pill: #F5F5F7; --pill-text: #1D1D1F; --nav-line: rgba(255,255,255,.1);
+  --hair: #38383C; --nav-line: rgba(255,255,255,.1);
   --scrim: rgba(0,0,0,.55);
   --blue: #0A84FF; --green: #30D158; --orange: #FF9F0A; --red: #FF453A; --purple: #BF5AF2; --indigo: #5E5CE6;
   --teal: #40C8E0; --yellow: #FFD60A; --pink: #FF375F; --gray: #98989D;
@@ -100,8 +100,8 @@
   color-scheme: dark;
 }
 
-/* Phones: the header pill spans the screen, so the full-width black button and the dark Mac pass under all of
-   it; nearly solid there keeps it from darkening and clearing as they go by. */
+/* Phones: the dark Mac pans under all of the header bar; nearly solid there keeps it from darkening and
+   clearing as it goes by. */
 @media (max-width: 760px) {
   :root { --glass-nav: 96%; }
 }

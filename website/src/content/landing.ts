@@ -10,13 +10,13 @@ export type Tint = "blue" | "orange" | "green" | "purple" | "red";
 
 export const landing = {
   hero: {
-    meta: ["Free and open source", "macOS 15 or later", "Apple silicon"],
     title: ["Three systems.", "One Mac."],
     sub: "Run macOS, Linux and Windows 11 in native Mac windows. Lend one to an AI agent, within limits you set.",
+    docs: "Read the docs",
+    meta: "Free and open source. Requires macOS 15 or later and a Mac with Apple silicon.",
   },
   story: {
     label: "How VMPane feels: a VM on your Mac and an agent asking first",
-    title: ["Native windows.", "Your rules."],
     menubar: ["VMPane", "File", "Edit", "View", "Window", "Help"],
     clock: "Mon Oct 12 9:41 PM",
     typed: { agent: "claude-code", verb: "wants to run", command: "sudo apt upgrade -y" },
@@ -80,7 +80,6 @@ export const landing = {
     ],
   },
   agents: {
-    eyebrow: "AI agents",
     title: ["Agents do the work.", "You hold the keys."],
     lead: ["Claude Code, Codex and Gemini connect through `vmpane mcp`. Every VM starts at ", "Off", ", and you choose how far each one opens."],
     levelsLabel: "Pick an access level",
@@ -93,7 +92,6 @@ export const landing = {
       { chip: "Full control", title: "Full control", explain: "Agents can also run commands as administrator, shut it down and delete snapshots.", c: "red" },
     ],
     defaultLevel: 3,
-    hand: "Try a level, watch the log",
     // A real session (itest/scenarios/mcp-demo.sh; src/content/demo-transcript.txt is its unedited transcript).
     transcript: {
       summary: "A real session: Claude Code tests three VMs, one after another",
@@ -159,8 +157,7 @@ export const landing = {
     ],
   },
   limits: {
-    eyebrow: "Good to know",
-    title: ["What VMPane", "does not do."],
+    title: ["Good to know.", "What VMPane does not do."],
     items: [
       { icon: "cpu", title: "Arm guests only", body: "No x86 or x86-64 systems. There is no emulation." },
       { icon: "pc", title: "2D graphics for Windows", body: "No DirectX or GPU acceleration, and no Hyper-V or WSL2 inside it." },
@@ -171,7 +168,6 @@ export const landing = {
   // What the new-VM sheet gives each system on a Mac with room (WizardModel.Recommended); on a smaller Mac it gives
   // at most half its processors and memory, never less than the minimum.
   requirements: {
-    eyebrow: "Sizing",
     title: ["What a VM gets.", "And what it needs."],
     caption: "What VMPane gives a new VM, and the least memory it needs",
     columns: ["System", "Processors", "Memory", "Disk", "Memory at least"],
@@ -317,19 +313,6 @@ export const landing = {
       note: "You can leave this running; VMPane restarts the VM when it is done.",
     },
   },
-  stickers: [
-    { src: "term", w: 140, h: 112, side: "left", x: "5%", y: 56, d: 0, r: -8 },
-    { src: "power", w: 100, h: 100, side: "left", x: "15%", y: 236, d: 2, r: 10 },
-    { src: "folder", w: 124, h: 104, side: "left", x: "4%", y: 372, d: 4, r: -6 },
-    { src: "star-yellow", w: 40, h: 40, side: "left", x: "20%", y: 446, d: 6, r: 12 },
-    { src: "star-green", w: 22, h: 22, side: "left", x: "22%", y: 92, d: 5, r: 0 },
-    { src: "disk", w: 120, h: 96, side: "left", x: "11%", y: 500, d: 7, r: -4 },
-    { src: "shield", w: 112, h: 128, side: "right", x: "5%", y: 60, d: 1, r: 8 },
-    { src: "clock", w: 108, h: 108, side: "right", x: "16%", y: 250, d: 3, r: -10 },
-    { src: "chip", w: 112, h: 112, side: "right", x: "3%", y: 388, d: 5, r: 6 },
-    { src: "cursor", w: 72, h: 84, side: "right", x: "20%", y: 460, d: 7, r: -12 },
-    { src: "star-teal", w: 28, h: 28, side: "right", x: "24%", y: 118, d: 6, r: 0 },
-  ],
   end: {
     title: ["Give your Mac", "a few more computers."],
     body: "A notarized DMG on GitHub Releases, with checksums and the source of the bundled QEMU.",

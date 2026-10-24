@@ -13,10 +13,10 @@ export function NotFound() {
       <h1>{t.title}</h1>
       <p>{t.body}</p>
       <div className="row">
-        <Link className="btn btn-dark" to="/">
+        <Link className="btn btn-primary" to="/">
           {t.home}
         </Link>
-        <Link className="btn btn-light" to="/docs/$" params={{ _splat: "" }}>
+        <Link className="btn btn-secondary" to="/docs/$" params={{ _splat: "" }}>
           {t.docs}
         </Link>
       </div>

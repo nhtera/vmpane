@@ -4,7 +4,7 @@
 // phone menu (opens without moving the page; closes on a link, a tap outside
 // or Esc, which returns focus to the button); the story's end state with
 // reduced motion; the guest tabs, level chips and carousel by keyboard; the
-// Windows timeline; the handwritten font; no sideways scrolling at any
+// Windows timeline; no sideways scrolling at any
 // width; and privacy: every request goes to the site itself, no cookie.
 
 import assert from "node:assert/strict";
@@ -23,7 +23,7 @@ test("the page is complete without JavaScript", async () => {
   const text = await page.locator("main").innerText();
   for (const s of ["Three systems.", "One Mac.", "Download for Mac", "Every VM is a Mac app.", "Nothing runs until you say so.", "Set up Windows.", "One switch stops every agent.", "What VMPane", "Common questions.", "brew install --cask nhtera/tap/vmpane"]) assert.ok(text.includes(s), s);
   // VMPane's windows are drawn in HTML: each picture says what it shows.
-  // (the ones a screen reader can reach: not in a hidden tab or the decorative collage)
+  // (the ones a screen reader can reach: not in a hidden tab)
   const pictures = await page
     .locator("main [role=img]")
     .evaluateAll((els) => els.filter((el) => !el.closest("[hidden], [aria-hidden=true]")).map((el) => el.getAttribute("aria-label") ?? ""));
@@ -291,20 +291,6 @@ test("the Windows timeline fills when it comes into view (motion allowed), and i
   await still.context.close();
 });
 
-test("the hero's stickers sit inside it, so its clipped edges never cut one", async () => {
-  for (const width of [1100, 1440, 1920]) {
-    const { page, context } = await openPage(site, "/", { width, height: 900 });
-    const outside = await page.evaluate(() => {
-      const hero = document.querySelector(".hero").getBoundingClientRect();
-      return [...document.querySelectorAll(".hero .st")]
-        .filter((s) => { const r = s.getBoundingClientRect(); return r.left < hero.left || r.right > hero.right || r.top < hero.top || r.bottom > hero.bottom - 8; })
-        .map((s) => s.getAttribute("src") || s.outerHTML.slice(0, 60));
-    });
-    assert.deepEqual(outside, [], `${width}px`);
-    await context.close();
-  }
-});
-
 // The pinned story's captions at every point of the scroll, down and back up, with the viewport's height
 // changing in between (a phone browser's toolbar collapsing): exactly one caption shows, fully opaque. Two
 // captions on top of each other are unreadable (three stacked on Safari for iPhone with per-caption in and out
@@ -422,14 +408,6 @@ test("nothing moves under a resting pointer: cards, slides, buttons and chips ke
     }
   }
   assert.deepEqual(moved, []);
-  await context.close();
-});
-
-test("the handwritten note's font loads from the site", async () => {
-  const { page, context } = await openPage(site, "/");
-  await page.evaluate(() => document.fonts.ready);
-  assert.ok(await page.evaluate(() => document.fonts.check('600 26px "Caveat"')));
-  assert.equal(await page.locator(".demo-hand .hand").evaluate((el) => getComputedStyle(el).fontFamily.split(",")[0].replaceAll('"', "")), "Caveat");
   await context.close();
 });
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { landing } from "@/content/landing";
+import { TwoTone } from "./two-tone";
 
 const t = landing.requirements;
 
@@ -10,11 +11,8 @@ export function Requirements() {
     <section className="band" aria-labelledby="sizes-title">
       <div className="wrap">
         <div className="head">
-          <span className="eyebrow">{t.eyebrow}</span>
           <h2 id="sizes-title">
-            {t.title[0]}
-            <br />
-            <span className="hl-blue">{t.title[1]}</span>
+            <TwoTone text={t.title} />
           </h2>
         </div>
         <div className="sizes">

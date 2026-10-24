@@ -3,7 +3,7 @@
 // tokens.css is the only place colours live. Every variable the site's CSS,
 // the code highlighter and the components read is a token, a variable the
 // same stylesheet declares, or one of the few a component sets per element
-// (a dot's colour, a sticker's delay and tilt).
+// (a dot's colour).
 
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
@@ -17,7 +17,7 @@ const declared = (css: string) => new Set([...css.matchAll(/(--[a-z0-9-]+)\s*:/g
 const defined = declared(tokens);
 
 /** Variables a component sets in a style prop. */
-const ELEMENT_VARIABLES = ["--c", "--d", "--r"];
+const ELEMENT_VARIABLES = ["--c"];
 
 /** Every stylesheet but tokens.css. */
 const CSS = readdirSync(here)
@@ -56,7 +56,7 @@ test("tokens.css defines both themes and the Reduce Transparency fallback", () =
   assert.doesNotMatch(tokens, /prefers-color-scheme/);
   assert.match(tokens, /:root\[data-theme="dark"\] \{/);
   assert.match(tokens, /@media \(prefers-reduced-transparency: reduce\) \{\s*:root \{ --glass: 100% !important; --glass-nav: 100% !important; \}/);
-  for (const name of ["--bg", "--band", "--text", "--text-2", "--text-3", "--hair", "--glass", "--rim", "--pin-top", "--f-sans", "--f-hand"]) {
+  for (const name of ["--bg", "--band", "--text", "--text-2", "--text-3", "--hair", "--glass", "--rim", "--pin-top", "--f-sans"]) {
     assert.ok(defined.has(name), name);
   }
 });
@@ -73,7 +73,7 @@ const CSS_COLOUR = /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch
 const CODE_COLOUR = /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})\b(?!-)|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\(|\b(?:bg|text|border|fill|stroke)-(?:white|black|(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3})\b/g;
 
 test("no colour values outside tokens.css", () => {
-  assert.ok(CSS.includes("./site.css") && CSS.includes("./fonts.css"));
+  assert.ok(CSS.includes("./site.css") && CSS.includes("./landing.css"));
   for (const file of CSS) assert.deepEqual(read(file).match(CSS_COLOUR) ?? [], [], file);
   for (const url of sourceFiles(new URL("../", here))) {
     assert.deepEqual(readFileSync(url, "utf8").match(CODE_COLOUR) ?? [], [], url.pathname);

@@ -46,8 +46,7 @@ npm run check         # build:site + check-links + the browser suites (needs: np
   yet links to `/docs`.
 - **Look:** `src/styles/tokens.css` is the only file with colours (draft v5's tokens: Apple's marketing neutrals
   and the macOS system colours, light and dark; a test fails on a colour anywhere else). Text uses the system font
-  (SF Pro on Apple devices); the one web font is Caveat (OFL-1.1, from `@fontsource/caveat`) for the agents
-  demo's handwritten note. The logo, `public/icon.svg`, is `Config/AppIcon.svg` cropped to its square (a test keeps
+  (SF Pro on Apple devices); there is no web font. The logo, `public/icon.svg`, is `Config/AppIcon.svg` cropped to its square (a test keeps
   them in step); `public/favicon.svg` is its small-size variant and `public/apple-touch-icon.png` is rendered
   from it with `rsvg-convert`. `public/og.png` is captured from `/og-card` by `npm run og`. Copy lives in
   `src/content/*.ts`.

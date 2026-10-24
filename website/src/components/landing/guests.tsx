@@ -4,6 +4,7 @@ import { type KeyboardEvent, type ReactNode, useRef, useState } from "react";
 import { Icon, type IconName } from "@/components/site/icons";
 import { landing } from "@/content/landing";
 import { InstallMock, MacGuestMock, SharesMock } from "./mocks";
+import { TwoTone } from "./two-tone";
 
 const t = landing.guests;
 const MEDIA: Record<string, { scene: ReactNode; wall: string }> = {
@@ -33,9 +34,7 @@ export function Guests() {
       <div className="wrap">
         <div className="head">
           <h2 id="guests-title">
-            {t.title[0]}
-            <br />
-            <span className="hl-blue">{t.title[1]}</span>
+            <TwoTone text={t.title} />
           </h2>
         </div>
         <div className="guests">
