@@ -581,7 +581,12 @@
          captions' visibility never depends on several animations or ranges composing (two captions stacked
          on Safari for iPhone with an out-animation and an in-animation per caption). If the animations
          never run, only the first caption shows. */
-      .steps li { grid-area: 1 / 1; animation: linear both; animation-timeline: --story; animation-range: contain 0% contain 100%; }
+      /* Longhands, not `animation: linear both`: the build expands a shorthand without a name to fill-mode none, and
+         past the story's end the first caption came back. */
+      .steps li {
+        grid-area: 1 / 1; animation-timing-function: linear; animation-fill-mode: both; animation-timeline: --story;
+        animation-range: contain 0% contain 100%;
+      }
       .steps li + li { opacity: 0; }
       .steps li:nth-child(1) { animation-name: cap1; }
       .steps li:nth-child(2) { animation-name: cap2; }
