@@ -63,7 +63,8 @@
   .btn-sm { font-size: 12px; padding: 4px 12px; min-height: 28px; }
   /* Apple's "Learn more ›" link */
   .more { display: inline-flex; align-items: center; gap: 2px; font-size: 17px; color: var(--t-blue); }
-  .more .i { width: 14px; height: 14px; stroke-width: 2; }
+  /* centred on the lowercase letters, as a typed "›" sits (flex centring put it 1.3 px high, off the baseline) */
+  .more .i { width: 14px; height: 14px; stroke-width: 2; position: relative; top: .08em; }
   /* Headings in two tones: the statement, then its second sentence in grey, on a line of its own. */
   .tone { display: block; color: var(--text-2); }
   /* A section's header, Apple's way: the headline and its intro paragraph, flush left. */

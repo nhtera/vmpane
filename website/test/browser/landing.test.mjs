@@ -216,6 +216,26 @@ test("motion allowed: the pinned stage holds the Mac, the caption and the bar at
   }
 });
 
+test("the hero's Read the docs chevron sits on the line: centred on the lowercase letters", async () => {
+  const { page, context } = await openPage(site, "/", { width: 1440, height: 900, reducedMotion: "reduce" });
+  const off = await page.locator(".hero .more").evaluate((a) => {
+    const svg = a.querySelector("svg");
+    const range = document.createRange();
+    range.selectNodeContents(a.firstChild);
+    const text = range.getBoundingClientRect();
+    const ctx = document.createElement("canvas").getContext("2d");
+    ctx.font = getComputedStyle(a).font;
+    const m = ctx.measureText("x");
+    const baseline = text.top + (text.height - (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent)) / 2 + m.fontBoundingBoxAscent;
+    const xMid = baseline - m.actualBoundingBoxAscent / 2;
+    const box = svg.getBoundingClientRect();
+    const g = svg.getBBox();
+    return box.top + (g.y + g.height / 2) * (box.height / 24) - xMid;
+  });
+  assert.ok(Math.abs(off) <= 0.75, `the chevron is ${off.toFixed(2)}px off the middle of the lowercase letters`);
+  await context.close();
+});
+
 test("guest tabs: click and arrow keys move selection and focus; one panel and one window shown", async () => {
   const { page, context } = await openPage(site, "/");
   const tabs = page.locator('#guests [role="tab"]');
