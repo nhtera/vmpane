@@ -278,6 +278,40 @@ test("carousel: Next and Previous step through and turn off at the ends", async 
   await context.close();
 });
 
+test("gallery: plays on screen, holds its pill where it is under the pointer, and a dot lands on its slide", async () => {
+  // Held, the pill once jumped to full (its animation was removed) beside a Pause button; and slides were measured
+  // shrunk (they scale down away from the middle), so jumps landed short.
+  const { page, context } = await openPage(site, "/", { width: 1440, height: 900, reducedMotion: "no-preference" });
+  await page.evaluate(() => (document.documentElement.style.scrollBehavior = "auto"));
+  await page.mouse.move(2, 2);
+  await page.locator("[aria-labelledby=features-title]").evaluate((el) => scrollTo(0, el.getBoundingClientRect().top + scrollY - 60));
+  const current = () => page.locator(".dots button").evaluateAll((bs) => bs.findIndex((b) => b.hasAttribute("aria-current")));
+  const fill = () => page.locator(".dots [aria-current] i").evaluate((el) => getComputedStyle(el, "::after").transform);
+  await page.waitForFunction(() => document.querySelectorAll(".dots button")[1].hasAttribute("aria-current"), null, { timeout: 8000 });
+  // held: the pill stops part-way, not full, and stays put
+  await page.waitForTimeout(1500);
+  await page.locator(".track").hover();
+  await page.waitForTimeout(300);
+  const a = await fill();
+  await page.waitForTimeout(1200);
+  assert.equal(await fill(), a, "the pill stays where it stopped");
+  const scale = Number(/matrix\(([^,]+)/.exec(a)?.[1]);
+  assert.ok(scale > 0.05 && scale < 0.95, `the pill stopped part-way (${a})`);
+  assert.equal(await current(), 1);
+  // let go: it goes on to the next slide
+  await page.mouse.move(2, 2);
+  await page.waitForFunction(() => document.querySelectorAll(".dots button")[2].hasAttribute("aria-current"), null, { timeout: 8000 });
+  // a dot: its slide at the start of the row (layout positions; the row snaps to them)
+  await page.locator(".dots button").nth(3).click();
+  await page.waitForFunction(() => {
+    const t = document.querySelector(".track");
+    const s = [...t.querySelectorAll(".slide")];
+    return Math.abs(t.scrollLeft - (s[3].offsetLeft - s[0].offsetLeft)) <= 2;
+  }, null, { timeout: 4000 });
+  assert.equal(await current(), 3);
+  await context.close();
+});
+
 test("the Windows timeline fills when it comes into view (motion allowed), and is full with reduced motion", async () => {
   const moving = await openPage(site, "/", { reducedMotion: "no-preference" });
   const timeline = moving.page.locator(".timeline");

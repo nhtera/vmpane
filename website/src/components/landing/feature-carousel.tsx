@@ -17,14 +17,19 @@ const SCENES: Record<Scene, ReactNode> = {
   clipboard: <ClipboardMock />,
 };
 
-/** How long each slide stays before the gallery moves on by itself (the progress pill fills in this time). */
-const DWELL = 5000;
+/**
+ * The distance from one slide to the next (slides are 20 px apart). Layout width, not the drawn one: the slides
+ * shrink as they leave the middle of the row (landing.css), and a shrunk first slide made every jump land short.
+ */
+function slideStep(el: HTMLElement) {
+  const slide = el.querySelector<HTMLElement>(".slide");
+  return slide ? slide.offsetWidth + 20 : 0;
+}
 
-/** Scroll the track to slide `i` (slides are 20 px apart). */
+/** Scroll the track to slide `i`. */
 function scrollToSlide(el: HTMLElement | null, i: number, smooth: boolean) {
-  const slide = el?.querySelector(".slide");
-  if (!el || !slide) return;
-  el.scrollTo({ left: i * (slide.getBoundingClientRect().width + 20), behavior: smooth ? "smooth" : "auto" });
+  if (!el) return;
+  el.scrollTo({ left: i * slideStep(el), behavior: smooth ? "smooth" : "auto" });
 }
 
 /**
@@ -32,10 +37,11 @@ function scrollToSlide(el: HTMLElement | null, i: number, smooth: boolean) {
  * focusable (arrow keys scroll it); the buttons step one slide and turn off at
  * either end. The scroll listener only updates the buttons and the dots.
  * Under the track, a play/pause button and a dot per slide (the current one a
- * pill that fills): while the gallery is on screen it moves on every few
- * seconds, back to the start after the last slide. It holds while the pointer
- * or focus is on it, stops for good when the reader steps it or presses pause,
- * and never starts with reduced motion.
+ * pill that fills): while the gallery is on screen it moves on each time the
+ * pill fills (landing.css times it), back to the start after the last slide.
+ * It holds while the pointer or focus is on it or it is off screen (the pill
+ * stops where it is and goes on from there), stops for good when the reader
+ * steps it or presses pause, and never starts with reduced motion.
  */
 export function FeatureCarousel() {
   const track = useRef<HTMLDivElement>(null);
@@ -46,7 +52,7 @@ export function FeatureCarousel() {
   const [held, setHeld] = useState(false);
   const [seen, setSeen] = useState(false);
   const reduce = useMediaQuery(REDUCED_MOTION);
-  const running = playing && !reduce && !held && seen;
+  const running = playing && !reduce;
   useEffect(() => {
     const el = section.current;
     if (!el || !("IntersectionObserver" in window)) return;
@@ -55,20 +61,17 @@ export function FeatureCarousel() {
     return () => obs.disconnect();
   }, []);
   useEffect(() => {
-    if (!running) return;
-    const timer = setTimeout(() => scrollToSlide(track.current, ends.end ? 0 : current + 1, true), DWELL);
-    return () => clearTimeout(timer);
-  }, [running, current, ends.end]);
-  useEffect(() => {
     const el = track.current;
     if (!el) return;
     let frame = 0;
     const sync = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        setEnds({ start: el.scrollLeft < 8, end: el.scrollLeft + el.clientWidth > el.scrollWidth - 8 });
-        const slide = el.querySelector(".slide");
-        if (slide) setCurrent(Math.round(el.scrollLeft / (slide.getBoundingClientRect().width + 20)));
+        const end = el.scrollLeft + el.clientWidth > el.scrollWidth - 8;
+        setEnds({ start: el.scrollLeft < 8, end });
+        // at the end of the row the last slide is the current one, though it cannot scroll to the start
+        const step = slideStep(el);
+        if (step) setCurrent(end ? t.slides.length - 1 : Math.round(el.scrollLeft / step));
       });
     };
     sync();
@@ -144,7 +147,13 @@ export function FeatureCarousel() {
         <button type="button" className="car-play" aria-label={playing ? t.pause : t.play} onClick={() => setPlaying((p) => !p)}>
           <Icon name={playing ? "pause" : "play"} />
         </button>
-        <div className={running ? "dots run" : "dots"}>
+        {/* the current pill fills while the gallery plays; when it is full, the next slide comes */}
+        <div
+          className={running ? (held || !seen ? "dots run held" : "dots run") : "dots"}
+          onAnimationEnd={(e) => {
+            if (running && e.animationName === "pillfill") scrollToSlide(track.current, ends.end ? 0 : current + 1, true);
+          }}
+        >
           {t.slides.map((s, i) => (
             <button key={s.title} type="button" aria-label={`${t.show} ${s.title}`} aria-current={i === current ? "true" : undefined} onClick={() => pick(i)}>
               {/* keyed by the slide, so the pill's fill starts over on each one */}
