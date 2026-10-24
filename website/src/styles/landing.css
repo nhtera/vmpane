@@ -98,8 +98,13 @@
   /* its font is .96 of the window's: the 3.6em title bar is 3.75em here */
   .term { height: calc(100% - 3.75em); padding: 1em 1.2em; overflow: hidden; white-space: pre; font: 400 .96em/1.55 var(--f-mono); background: var(--term-bg); color: var(--term-text); }
   .term .g { color: var(--term-green); } .term .b { color: var(--term-blue); } .term .d { color: var(--term-dim); }
-  .desk { height: calc(100% - 3.6em); display: grid; place-items: center; background: var(--mac-desk); }
-  .desk span { font: 600 4em/1 var(--f-display); letter-spacing: -.03em; color: var(--on-color); text-shadow: 0 .2em .8em var(--desk-shadow); }
+  .desk { position: relative; height: calc(100% - 3.6em); display: grid; place-items: center; padding-top: 2em; background: var(--mac-desk); }
+  .desk-bar {
+    position: absolute; inset: 0 0 auto; height: 2em; display: flex; align-items: center; gap: 1.2em; padding-inline: 1em;
+    font-size: .85em; color: var(--menubar-text); background: var(--menubar-bg); backdrop-filter: blur(20px);
+  }
+  /* inside the guest's window, so it outranks the sizes .media.big .w gives a window placed on a picture */
+  .w .desk .w.desk-term { position: relative; inset: auto; width: 78%; height: 72%; font-size: .9em; }
   .install { height: calc(100% - 3.6em); display: grid; place-items: center; background: var(--win-setup); }
   .install .panel { width: 62%; display: grid; gap: .7em; padding: 1.4em; border-radius: .9em; text-align: center; background: color-mix(in srgb, var(--win) 92%, transparent); box-shadow: var(--shadow-win); }
   .install small { font-size: .8em; color: var(--win-text-2); }
@@ -177,12 +182,13 @@
   }
   .s-typed .y { color: var(--yellow); } .s-typed .d { opacity: .65; }
   .s-alert { right: 15cqw; top: 20cqw; z-index: 4; }
+  /* the camera: the desktop under the menu bar, which moves in on a window (motion, wide screens only) */
+  .cam { position: absolute; inset: 0; }
   .steps { list-style: none; margin: 40px auto 0; padding: 0 16px; max-width: 1040px; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
   .steps li { display: grid; gap: 6px; }
   .steps b { font: 600 21px/1.25 var(--f-display); letter-spacing: .011em; }
   .steps span { color: var(--text-2); font-size: 15px; }
   .steps code { font-size: .9em; }
-  .steps .k { font: 600 13px/1 var(--f-sans); color: var(--t-blue); }
   .story-bar { display: none; }
 
   /* ---------- the statement: one large sentence ---------- */
@@ -221,8 +227,7 @@
   .tstep::before { content: ""; position: absolute; top: -34px; left: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--band); border: 4px solid var(--blue); box-sizing: border-box; }
   .tstep b { font: 600 21px/1.25 var(--f-display); letter-spacing: .011em; }
   .tstep span { color: var(--text-2); font-size: 15px; }
-  .tstep .k { font: 600 12px/1 var(--f-sans); color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; }
-  .tstep .min { font: 500 13px/1 var(--f-mono); color: var(--text-3); }
+  .tstep .min { font-size: 13px; color: var(--text-3); }
   @media (max-width: 760px) {
     .timeline { grid-template-columns: 1fr; padding: 0 0 0 40px; }
     .timeline::before, .timeline .fill { top: 6px; bottom: 6px; left: 9px; right: auto; width: 4px; height: auto; transform-origin: top; }
@@ -273,7 +278,6 @@
     position: absolute; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: var(--r-pill);
     white-space: nowrap; font: 600 14px/1 var(--f-sans); color: var(--text); background: var(--bg); box-shadow: 0 0 0 .5px var(--hair), var(--shadow-lift);
   }
-  .sat > span::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
   @media (max-width: 959px) { .orbit { width: min(100%, 340px); } }
 
   /* ---------- one real session: steps on the left, the transcript pinned on the right (wide screens) ---------- */
@@ -282,9 +286,8 @@
   .sess-grid { display: grid; gap: 40px; }
   .sess-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 40px; }
   .sess-steps li { display: grid; gap: 8px; align-content: center; }
-  .sess-steps .k { font: 500 13px/1 var(--f-mono); color: var(--t-blue); }
   .sess-steps b { font: 600 24px/1.2 var(--f-display); letter-spacing: .009em; }
-  .sess-steps li > span:not(.k) { color: var(--text-2); font-size: 17px; line-height: 1.47; max-width: 30em; }
+  .sess-steps li > span { color: var(--text-2); font-size: 17px; line-height: 1.47; max-width: 30em; }
   .sess-steps code { font-size: .9em; }
   .sess-inline, .sess-out { font: 400 12.5px/1.55 var(--f-mono); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--term-text); background: var(--term-bg); }
   .sess-inline { margin: 8px 0 0; padding: 14px 16px; border-radius: 12px; }
@@ -311,7 +314,7 @@
     :root[data-theme] .sess-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 64px; }
     :root[data-theme] .sess-steps { gap: 0; }
     :root[data-theme] .sess-steps li { min-height: 52vh; color: var(--text-3); transition: color var(--dur); }
-    :root[data-theme] .sess-steps li > span:not(.k) { color: var(--text-3); transition: color var(--dur); }
+    :root[data-theme] .sess-steps li > span { color: var(--text-3); transition: color var(--dur); }
     :root[data-theme] .sess-steps li.on { color: var(--text); }
     :root[data-theme] .sess-steps li.on > span:not(.k) { color: var(--text-2); }
     :root[data-theme] .sess-inline { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -353,6 +356,11 @@
   .mini-pill .btn-like { padding: 6px 12px; border-radius: var(--r-pill); font: 600 13px/1 var(--f-sans); background: var(--fill); box-shadow: var(--rim); }
   .json { font: 400 12.5px/1.6 var(--f-mono); background: var(--band); border-radius: 12px; padding: 12px 14px; overflow-x: auto; white-space: pre; color: var(--text-2); margin: 0; }
   .json b { color: var(--t-orange); font-weight: 500; }
+  .mini-lock { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-top: 4px; padding: 10px 14px; border-radius: var(--r-pill); background: var(--band); font-size: 14px; color: var(--text-2); }
+  .mini-lock .i { width: 16px; height: 16px; color: var(--text-3); }
+  .mini-lock .pw { flex: 1; display: flex; gap: 6px; min-width: 0; overflow: hidden; }
+  .mini-lock .pw i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--text); }
+  .mini-lock .by { font-weight: 600; color: var(--text); }
 
   /* ---------- feature carousel ---------- */
   .car-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 40px; }
@@ -387,26 +395,27 @@
   .dots [aria-current] i::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--text); transform-origin: left; }
   @media (prefers-reduced-motion: reduce) { .car-play { display: none; } }
 
-  /* ---------- limits ---------- */
-  .sizes { max-width: 960px; }
-  .sizes table { width: 100%; border-collapse: collapse; font-size: 15px; }
-  .sizes caption { text-align: left; color: var(--text-2); padding-bottom: 10px; }
-  .sizes th, .sizes td { text-align: left; padding: 12px 10px; border-bottom: 1px solid var(--hair); }
-  .sizes thead th { color: var(--text-2); font-weight: 500; font-size: 13px; }
-  .sizes tbody th { font-weight: 600; }
-  .sizes .scroll { overflow-x: auto; }
-  .sizes p { color: var(--text-2); font-size: 15px; margin-top: 14px; }
-  .limits { display: grid; gap: 0 48px; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); }
-  .limits div { display: grid; grid-template-columns: 28px 1fr; gap: 4px 12px; padding: 22px 0; border-bottom: 1px solid var(--hair); }
+  /* ---------- good to know: the limits beside what a VM gets ---------- */
+  .know { display: grid; gap: 56px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+  /* side by side, the limits' heading lines up with the card's */
+  @media (min-width: 1024px) { .know { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 64px; } .know > :first-child { padding-top: 36px; } }
+  .know h3 { font-size: 24px; letter-spacing: .009em; line-height: 1.17; margin-bottom: 28px; }
+  .limits { display: grid; gap: 28px; }
+  .limits div { display: grid; grid-template-columns: 28px 1fr; gap: 4px 12px; }
   .limits .i { color: var(--text-3); margin-top: 2px; }
   .limits b { font-size: 17px; }
-  .limits span { grid-column: 2; color: var(--text-2); font-size: 15px; }
-  /* wide screens: one row per limit, its name on the left and what it means on the right */
-  @media (min-width: 760px) {
-    .limits { grid-template-columns: 1fr; border-top: 1px solid var(--hair); }
-    .limits div { grid-template-columns: 28px minmax(0, 4fr) minmax(0, 7fr); align-items: start; padding: 24px 0; }
-    .limits span { grid-column: 3; font-size: 17px; }
-  }
+  .limits span { grid-column: 2; color: var(--text-2); font-size: 17px; line-height: 1.47; }
+  .sizes { background: var(--bg); border-radius: var(--r-card); padding: 36px; }
+  .sizes table { width: 100%; border-collapse: collapse; font-size: 15px; font-variant-numeric: tabular-nums; }
+  .sizes caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .sizes th, .sizes td { text-align: left; padding: 12px 10px 12px 0; border-bottom: 1px solid var(--hair); }
+  .sizes td { white-space: nowrap; }
+  .sizes thead th { color: var(--text-2); font-weight: 500; font-size: 13px; }
+  .sizes tbody tr:last-child > * { border-bottom: 0; }
+  .sizes tbody th { font-weight: 600; }
+  .sizes .scroll { overflow-x: auto; }
+  .sizes p { color: var(--text-2); font-size: 15px; margin-top: 16px; }
+  @media (max-width: 760px) { .sizes { padding: 24px 20px; } }
 
   /* ---------- faq ---------- */
   .faq { max-width: 840px; display: grid; border-top: 1px solid var(--hair); }
@@ -460,7 +469,7 @@
 
   /* Reduce Transparency: no glass blur (the tokens make it solid). */
   @media (prefers-reduced-transparency: reduce) {
-    .menubar, .dock, .mbar, .alert, .menu { backdrop-filter: none; }
+    .menubar, .dock, .mbar, .alert, .menu, .desk-bar { backdrop-filter: none; }
   }
 
   /* ================= motion: everything above is the visible final state ================= */
@@ -581,7 +590,12 @@
          captions' visibility never depends on several animations or ranges composing (two captions stacked
          on Safari for iPhone with an out-animation and an in-animation per caption). If the animations
          never run, only the first caption shows. */
-      .steps li { grid-area: 1 / 1; animation: linear both; animation-timeline: --story; animation-range: contain 0% contain 100%; }
+      /* Longhands, not `animation: linear both`: the build expands a shorthand without a name to fill-mode none, and
+         past the story's end the first caption came back. */
+      .steps li {
+        grid-area: 1 / 1; animation-timing-function: linear; animation-fill-mode: both; animation-timeline: --story;
+        animation-range: contain 0% contain 100%;
+      }
       .steps li + li { opacity: 0; }
       .steps li:nth-child(1) { animation-name: cap1; }
       .steps li:nth-child(2) { animation-name: cap2; }
@@ -605,7 +619,12 @@
       .story-bar i { display: block; height: 100%; background: var(--blue); transform-origin: left; animation: grow linear both; animation-timeline: --story; animation-range: contain 0% contain 100%; }
       @keyframes grow { from { transform: scaleX(0); } }
       /* the library rises out of the Dock as the Mac scrolls in */
-      .s-lib { transform-origin: 50% 120%; animation: libin linear both; animation-timeline: --story; animation-range: entry 20% entry 75%; }
+      /* and comes to the front (as a click would) as the refusal lands in its activity */
+      .s-lib {
+        transform-origin: 50% 120%; animation: libin linear both, libfront step-end both; animation-timeline: --story, --story;
+        animation-range: entry 20% entry 75%, contain 72% contain 74%;
+      }
+      @keyframes libfront { to { z-index: 3; } }
       /* it grows out of the Dock like a window opening, without fading: its text keeps full contrast */
       @keyframes libin { from { transform: translateY(18cqw) scale(.2); } }
       .s-vm { animation: vmin linear both; animation-timeline: --story; animation-range: contain 4% contain 18%; }
@@ -622,6 +641,22 @@
       @keyframes press { 50% { transform: scale(.92); box-shadow: 0 0 0 .5em color-mix(in srgb, var(--alert-default) 35%, transparent); } }
       .s-row { animation: rowin linear both; animation-timeline: --story; animation-range: contain 74% contain 82%; }
       @keyframes rowin { from { opacity: 0; transform: translateY(-1em); background: color-mix(in srgb, var(--orange) 30%, transparent); } }
+      /* The camera: the whole desktop while the library and the VM arrive (step 1), then in on the VM's window
+         (step 2), down a little to the agent's question and the cursor on Deny (steps 3 and 4), and back to the
+         library, now in front, as the refusal lands in its activity. At 1.6× a window's text reads at about the page's small print. It
+         maps a point p of the screen to t + 1.6 p (origin top left), with t kept so the desktop always fills the
+         16:10 screen (100 × 62.5 cqw): -60 cqw ≤ tx ≤ 0, -37.5 cqw ≤ ty ≤ 0. */
+      .cam { transform-origin: 0 0; animation: cam linear both; animation-timeline: --story; animation-range: contain 0% contain 100%; }
+      @keyframes cam {
+        0%, 18% { transform: translate(0, 0) scale(1); }
+        28%, 42% { transform: translate(-60cqw, -15cqw) scale(1.6); }
+        50%, 72% { transform: translate(-60cqw, -21cqw) scale(1.6); }
+        80%, 100% { transform: translate(-20cqw, -9cqw) scale(1.6); }
+      }
+
+      /* VMPane types the password: the field's dots arrive one by one as the card comes in */
+      .mini-lock .pw i { animation: keyin linear both; animation-timeline: view(); animation-range: entry calc(40% + var(--i) * 50%) entry calc(44% + var(--i) * 50%); }
+      @keyframes keyin { from { transform: scale(0); } }
     }
   }
   @supports (animation-timeline: view()) {
@@ -638,6 +673,7 @@
         15%, 70% { transform: translateX(calc(50vw - 12px - var(--mw))); }
         78%, 100% { transform: translateX(calc(12px - 50vw)); }
       }
+      .cam { animation: none; }
       .steps { padding-inline: 20px; min-height: 104px; }
       .steps b { font-size: 19px; }
     }

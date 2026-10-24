@@ -46,8 +46,7 @@ export function WindowsSetup() {
         <div className="timeline" ref={timeline}>
           <span className="fill" aria-hidden="true" />
           {t.steps.map((s) => (
-            <div className="tstep" key={s.k}>
-              <span className="k">{s.k}</span>
+            <div className="tstep" key={s.title}>
               <b>{s.title}</b>
               <span>{s.body}</span>
               {"min" in s ? <span className="min">{s.min}</span> : null}

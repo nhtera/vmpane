@@ -21,17 +21,17 @@ export const landing = {
     clock: "Mon Oct 12 9:41 PM",
     typed: { agent: "claude-code", verb: "wants to run", command: "sudo apt upgrade -y" },
     steps: [
-      { k: "1", title: "Every VM is a Mac app.", body: "It sits in your Dock and opens in its own window." },
-      { k: "2", title: "Each one runs on its own.", body: "Its own process, so a crash takes down one VM, not VMPane." },
-      { k: "3", title: "An agent asks to run a command.", body: "claude-code wants `sudo apt upgrade -y` as administrator." },
-      { k: "4", title: "Nothing runs until you say so.", body: "Deny is the default, and the answer goes in the activity log." },
+      { title: "Every VM is a Mac app.", body: "It sits in your Dock and opens in its own window." },
+      { title: "Each one runs on its own.", body: "Its own process, so a crash takes down one VM, not VMPane." },
+      { title: "An agent asks to run a command.", body: "claude-code wants `sudo apt upgrade -y` as administrator." },
+      { title: "Nothing runs until you say so.", body: "Deny is the default, and the answer goes in the activity log." },
     ],
   },
-  // The statement under the Mac: its words light up one by one as it scrolls into view. Each claim is on the
-  // page (the story's steps, the safety cards).
+  // The statement under the Mac: its words light up one by one as it scrolls into view. It says what the story
+  // above has not (each claim is on the page, in the safety cards).
   statement: {
     label: "VMPane in one sentence",
-    text: "Each VM is a Mac app, in its own window and its own process. Agents see only the VMs you open to them, ask before they run a command, and a whole agent session can be undone.",
+    text: "Agents see only the VMs you open to them, ask before they run a command, and a whole agent session can be undone.",
   },
   guests: {
     title: ["Three guests.", "Each on the right engine."],
@@ -79,10 +79,10 @@ export const landing = {
     title: ["Set up Windows.", "Without touching it."],
     lead: ["Pick the edition, an account name and a password. VMPane does the rest ", "in about 10 minutes, with no clicks.", " No Microsoft account needed."],
     steps: [
-      { k: "Install", title: "Setup runs offline", body: "From your ISO, with no network, so Windows makes the local account you chose." },
-      { k: "Eject", title: "The ISO comes out", body: "At the first restart, so Setup can never start over and wipe the disk." },
-      { k: "Sign in", title: "Guest tools go in", body: "Windows signs in once, removes the stored password and installs VMPane's drivers." },
-      { k: "Finish", title: "Network and display", body: "Added, then Windows starts again. A quit or a Mac restart never loses your place.", min: "about 10 min · 7 on an M4 Pro" },
+      { title: "Setup runs offline", body: "From your ISO, with no network, so Windows makes the local account you chose." },
+      { title: "The ISO comes out", body: "At the first restart, so Setup can never start over and wipe the disk." },
+      { title: "Guest tools go in", body: "Windows signs in once, removes the stored password and installs VMPane's drivers." },
+      { title: "Network and display", body: "Added, then Windows starts again. A quit or a Mac restart never loses your place.", min: "About 10 minutes in all, 7 on an M4 Pro." },
     ],
   },
   agents: {
@@ -125,16 +125,11 @@ export const landing = {
     snapshotLabel: "Snapshot",
     steps: [
       {
-        title: "You ask.",
-        body: "In plain words, in Claude Code. VMPane's MCP server, `vmpane mcp`, hands it the tools.",
-        state: ["Stopped", "Stopped", "Stopped"],
-        lines: [["ask", "Start macOS, Ubuntu and Windows 11 in turn, snapshot Windows, run a small test in each, read the screen and stop it."]],
-      },
-      {
-        title: "It starts each VM and waits.",
-        body: "`vm_power` starts it and returns once the guest tools answer.",
+        title: "You ask. It starts each VM.",
+        body: "In plain words, in Claude Code: `vmpane mcp` hands it the tools. `vm_power` starts a VM and returns once its guest tools answer.",
         state: ["Running", "Stopped", "Stopped"],
         lines: [
+          ["ask", "Start macOS, Ubuntu and Windows 11 in turn, snapshot Windows, run a small test in each, read the screen and stop it."],
           ["call", "vm_list {}"],
           ["reply", '{"vms":[{"id":"7039e2fd","name":"Ubuntu","os":"linux","state":"stopped"},…'],
           ["call", 'vm_power {"vm": "macOS", "action": "start", "wait_for": "guest_tools", "timeout_s": 300}'],
@@ -166,25 +161,16 @@ export const landing = {
         ],
       },
       {
-        title: "It snapshots before a change.",
-        body: "One call, before the tests. VMPane also snapshots a VM before an agent's first change on its own: Undo This Agent Session.",
-        state: ["Stopped", "Stopped", "Running"],
-        pass: [true, true, false],
+        title: "It snapshots, then reports.",
+        body: "One call saves Windows before its test. At the end: three passes, three VMs stopped again, and what did not go as planned in the report.",
+        state: ["Stopped", "Stopped", "Stopped"],
+        pass: [true, true, true],
         snap: true,
         lines: [
           ["call", 'vm_power {"vm": "Windows 11", "action": "start", "wait_for": "guest_tools", "timeout_s": 400}'],
           ["reply", '{"guest":{"os":"windows","osVersion":"10.0.26300.9457","toolsVersion":"1.0.0-beta.1"},"state":"running"}'],
           ["call", 'vm_snapshot_create {"vm": "Windows 11", "name": "before tests"}'],
           ["reply", '{"backendVersion":"1.0.0-beta.10","crashConsistent":false,"createdAt":"2026-10-22T12:27:23Z",…'],
-        ],
-      },
-      {
-        title: "It tells you how it went.",
-        body: "Three tests passed, the three VMs are stopped again, and what did not go as planned is in the report.",
-        state: ["Stopped", "Stopped", "Stopped"],
-        pass: [true, true, true],
-        snap: true,
-        lines: [
           ["said", "All three VMs ran in order, all three tests printed PASS, and all three VMs are stopped again."],
           ["done", "[done: 44 turns, 390 s]"],
         ],
@@ -211,6 +197,8 @@ export const landing = {
     signIn: {
       title: "Sign-in without showing the password.",
       body: "VMPane types it at the lock screen itself; agents never see it. If they can run commands, it asks you first.",
+      // the lock screen's password field as VMPane fills it: one dot per typed character
+      field: { dots: 12, by: "Typed by VMPane" },
     },
   },
   features: {
@@ -242,8 +230,10 @@ export const landing = {
       [{ t: "pf-1" }],
     ],
   },
+  // One section: what VMPane does not do, beside what a new VM gets (the requirements below).
   limits: {
-    title: ["Good to know.", "What VMPane does not do."],
+    title: ["Good to know.", "Before you install."],
+    heading: "What VMPane does not do",
     items: [
       { icon: "cpu", title: "Arm guests only", body: "No x86 or x86-64 systems. There is no emulation." },
       { icon: "pc", title: "2D graphics for Windows", body: "No DirectX or GPU acceleration, and no Hyper-V or WSL2 inside it." },
@@ -254,7 +244,7 @@ export const landing = {
   // What the new-VM sheet gives each system on a Mac with room (WizardModel.Recommended); on a smaller Mac it gives
   // at most half its processors and memory, never less than the minimum.
   requirements: {
-    title: ["What a VM gets.", "And what it needs."],
+    heading: "What a VM gets",
     caption: "What VMPane gives a new VM, and the least memory it needs",
     columns: ["System", "Processors", "Memory", "Disk", "Memory at least"],
     rows: [
@@ -378,7 +368,22 @@ export const landing = {
       rows: [["Clipboard", "Both ways"]],
       toggles: [{ label: "Sound output", on: true }, { label: "Microphone", on: false }],
     },
-    macos: { label: "A macOS VM in its own window.", name: "macOS 26", hello: "hello" },
+    // A macOS guest's desktop: Finder's menu bar and Terminal, with text copied on the Mac pasted in the VM (the
+    // guest tools share the clipboard).
+    macos: {
+      label: "A macOS 26 VM in its own window: Terminal shows its version and arm64, and pastes text copied on the Mac.",
+      name: "macOS 26",
+      menubar: ["Finder", "File", "Edit", "View", "Go", "Window", "Help"],
+      terminal: "Terminal",
+      lines: [
+        ["% ", "sw_vers -productVersion"],
+        ["", "26.0"],
+        ["% ", "uname -m"],
+        ["", "arm64"],
+        ["% ", "pbpaste"],
+        ["", "Copied on the Mac, pasted in the VM."],
+      ],
+    },
     shares: {
       label: "Ubuntu's terminal: the Mac's shared folders mounted over virtiofs, one of them read only.",
       lines: [

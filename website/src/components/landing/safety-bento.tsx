@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
+import type { CSSProperties } from "react";
 import { Icon } from "@/components/site/icons";
 import { landing } from "@/content/landing";
 import { RichText } from "./rich-text";
@@ -10,7 +11,7 @@ const t = landing.safety;
 
 /**
  * Seven cells: the kill switch (menu capture), undo (snapshots capture), ask first, off by default, the record, take
- * over (the VM window's agent pill) and sign-in.
+ * over (the VM window's agent pill) and sign-in (the lock screen's password field, filled dot by dot as it scrolls in).
  */
 export function SafetyBento() {
   return (
@@ -92,6 +93,15 @@ export function SafetyBento() {
           <div className="cell g">
             <h3>{t.signIn.title}</h3>
             <p>{t.signIn.body}</p>
+            <div className="mini-lock" aria-hidden="true">
+              <Icon name="lock" />
+              <span className="pw">
+                {Array.from({ length: t.signIn.field.dots }, (_, i) => (
+                  <i key={i} style={{ "--i": (i / (t.signIn.field.dots - 1)).toFixed(3) } as CSSProperties} />
+                ))}
+              </span>
+              <span className="by">{t.signIn.field.by}</span>
+            </div>
           </div>
         </div>
       </div>
