@@ -463,28 +463,11 @@ export function ClipboardMock({ className }: { className?: string }) {
 
 // ---------- the guests ----------
 
-/** A macOS guest's desktop: Finder's menu bar and a Terminal window (its lines type in while the tab shows). */
 export function MacGuestMock({ className, decorative = false }: { className?: string; decorative?: boolean }) {
   return (
     <Win className={className} title={m.macos.name} label={decorative ? undefined : m.macos.label}>
       <div className="desk">
-        <div className="desk-bar">
-          <b>{m.macos.menubar[0]}</b>
-          {m.macos.menubar.slice(1).map((s) => (
-            <span key={s}>{s}</span>
-          ))}
-        </div>
-        <Win className="desk-term" title={m.macos.terminal}>
-          <div className="term">
-            {m.macos.lines.map(([p, text], i) => (
-              <span key={i}>
-                {p ? <span className="d">{p}</span> : null}
-                {text}
-                {"\n"}
-              </span>
-            ))}
-          </div>
-        </Win>
+        <span>{m.macos.hello}</span>
       </div>
     </Win>
   );

@@ -48,7 +48,7 @@
   --popup-chevrons: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M5 6.5l3-3 3 3M5 9.5l3 3 3-3' fill='none' stroke='%23fff' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   /* a guest's screen: a Linux terminal (Ubuntu's aubergine for the library's thumbnail), the macOS desktop, Windows Setup */
   --term-bg: #1B1B1D; --term-text: #E6E6E6; --term-green: #6FE38A; --term-blue: #79B8FF; --term-dim: #8B8B90; --term-thumb: #300A24;
-  --mac-desk: radial-gradient(80% 90% at 20% 0%, #F7EFFF, transparent), linear-gradient(160deg, #EDE4FF, #B79BFF 60%, #7B57E8);
+  --mac-desk: radial-gradient(80% 90% at 20% 0%, #F7EFFF, transparent), linear-gradient(160deg, #EDE4FF, #B79BFF 60%, #7B57E8); --desk-shadow: rgba(60,20,140,.35);
   --win-setup: radial-gradient(70% 80% at 30% 20%, #1E5BB8, transparent), linear-gradient(160deg, #0B2E6F, #071A3D);
   /* wallpapers: CSS gradients, never Apple's images */
   --wall-a: radial-gradient(70% 90% at 0% 100%, #1F4CFF 0%, transparent 60%), radial-gradient(60% 70% at 100% 0%, #8FD8FF 0%, transparent 65%), radial-gradient(70% 80% at 70% 90%, #6B45FF 0%, transparent 60%), linear-gradient(155deg, #DCEBFF 0%, #6FA5FF 40%, #2F5BEA 70%, #24288F 100%);
@@ -103,10 +103,6 @@
   --win-text: rgba(255,255,255,.88); --win-text-2: rgba(255,255,255,.56); --win-group: #262628;
   color-scheme: dark;
 }
-
-/* The dark band (the safety cards) in the dark theme: a step lighter than the page, its cards a step lighter still,
-   so it still reads as its own section. */
-:root[data-theme="dark"] .theme-dark { --bg: #161618; --card: #242427; }
 
 /* Phones: the dark Mac pans under all of the header bar; nearly solid there keeps it from darkening and
    clearing as it goes by. */

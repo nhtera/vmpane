@@ -52,6 +52,7 @@ export function AgentSession() {
               }}
               className={i === active ? "on" : undefined}
             >
+              <span className="k">{String(i + 1).padStart(2, "0")}</span>
               <b>{s.title}</b>
               <span>
                 <RichText text={s.body} />

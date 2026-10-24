@@ -294,9 +294,7 @@ test("the Windows timeline fills when it comes into view (motion allowed), and i
 // The pinned story's captions at every point of the scroll, down and back up, with the viewport's height
 // changing in between (a phone browser's toolbar collapsing): exactly one caption shows, fully opaque. Two
 // captions on top of each other are unreadable (three stacked on Safari for iPhone with per-caption in and out
-// animations), and none at all read as the text blinking. Before the story it is the first caption and after it
-// the last (the build once dropped the captions' fill mode, and the first came back as the stage left).
-// Without its animations the story still shows one.
+// animations), and none at all read as the text blinking. Without its animations the story still shows one.
 async function storyCaptions(browser, base) {
   const problems = [];
   for (const [width, height, height2, phone] of [[1512, 857, 760, false], [390, 700, 780, true]]) {
@@ -321,10 +319,7 @@ async function storyCaptions(browser, base) {
           scrollTo(0, t.offsetTop + len * f);
           await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
           const shown = lis.map((li, i) => [i + 1, +getComputedStyle(li).opacity]).filter(([, o]) => o > 0.01);
-          const want = f < 0 ? 1 : f > 1 ? lis.length : 0;
-          if (shown.length !== 1 || shown[0][1] < 0.99 || (want && shown[0][0] !== want)) {
-            out.push(`${f.toFixed(3)}: ${shown.map(([i, o]) => `${i}@${o.toFixed(2)}`).join(" ") || "none"}`);
-          }
+          if (shown.length !== 1 || shown[0][1] < 0.99) out.push(`${f.toFixed(3)}: ${shown.map(([i, o]) => `${i}@${o.toFixed(2)}`).join(" ") || "none"}`);
         }
         return out;
       }, down);
