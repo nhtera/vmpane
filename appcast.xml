@@ -6,6 +6,73 @@
         <description>VMPane updates</description>
         <language>en</language>
         <item>
+            <title>1.0.0-beta.11</title>
+            <pubDate>Sat, 24 Oct 2026 10:39:43 +0700</pubDate>
+            <link>https://github.com/nhtera/vmpane</link>
+            <sparkle:fullReleaseNotesLink>https://github.com/nhtera/vmpane/releases/tag/v1.0.0-beta.11</sparkle:fullReleaseNotesLink>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:version>11</sparkle:version>
+            <sparkle:shortVersionString>1.0.0-beta.11</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[AI agents act faster and see more, with you able to take over at any moment; Linux VMs are ready in minutes; the
+library and the new-VM sheet are rebuilt; the clipboard keeps formatting and carries files both ways; and Windows VMs
+get a microphone.
+
+### Added
+- `vm_actions`: up to 50 keys, typing, clicks, drags, scrolls and waits in one call, each decided and audited as
+  its own request, and every input tool says whether the screen changed (`verified`, with where). `vm_power start`
+  can wait for the guest tools.
+- `vm_read_screen`: the text on any guest's screen (recognised on the Mac), and its controls on Windows (UI
+  Automation) and macOS (Accessibility), to click by id; marked as the guest's text, never instructions.
+- `vm_exec` with `desktop` opens an app on the signed-in user's desktop (all three guests); `vm_sign_in` signs a
+  locked guest in with a password VMPane keeps and types itself, never shown to the agent (off per VM; at Run
+  commands and Full control you are asked first).
+- Linux VMs from Ubuntu 26.04, Debian 13 and Fedora 44 cloud images: nothing to click through, guest tools and SSH
+  (on 127.0.0.1) ready on the first boot, with an optional GNOME desktop.
+- The VM's window shows an AI agent at work: who, at what level, what it just did, with **Take Over** and **Stop**.
+  Typing or clicking in the VM while an agent acts takes over too; agents wait (`takenOver`) until you resume. Agents' questions appear
+  in the VM's window.
+- A new library, in the style of macOS 26 (and Sequoia's on macOS 15): filters with their counts in the sidebar, the
+  VMs as a list or a grid with each system's own tile, and an inspector with the chosen VM's actions, its problem
+  and fix, and its system, resources (a stopped VM's processors, memory, display and disk change without starting
+  it), snapshots and agent activity.
+- New VM is one sheet: the systems listed by kind (macOS, Linux, Windows, an installer file from this Mac) and the
+  chosen one's detail, sized for your Mac (⌘N, then Return makes another of the last one), made in the background
+  with each stage in the library. Drop an .iso or .ipsw on the library or the Dock icon to start from it. A Linux
+  VM made from the sheet gets a password VMPane keeps for you (**Copy Password** in the inspector).
+- A VM's settings are sections in a sidebar, as in System Settings (General, Hardware, Display, Sharing, AI agents,
+  Network, Port Forwarding); the agents' levels are a list that says what each allows.
+- The clipboard of macOS and Windows VMs keeps formatting: bold, links, colours, fonts and tables copied in Word,
+  Outlook, Excel or a browser paste formatted on the other side (HTML and RTF, with plain text alongside; **Keep text
+  formatting** in Settings › Sharing turns it off) (#6).
+- Files and folders copy and paste both ways: ⌘C in Finder, Ctrl-V in Explorer pastes them into the open folder, and
+  files copied in the VM paste where you press ⌘V in Finder (up to 1000 files and 2 GB a copy) (#6).
+- Files dragged out of a Windows VM's window drop in Finder, copied from the VM; nothing moves in Windows (#6).
+
+### Changed
+- Files copied in a VM no longer land in `~/Downloads/VMPane/<VM>`: they wait in a staging folder until pasted,
+  and the next copy replaces them.
+- Downloads can be cancelled and resume later; a VM appears in the library only once its downloads are done, so a
+  quit midway leaves none behind.
+- Keys or mouse buttons an agent left held down are let go when you take over or the agent leaves.
+
+### Fixed
+- Windows VMs had no microphone: QEMU's CoreAudio backend only plays sound, so Windows got a speaker and nothing to
+  record from. Their sound now goes over SPICE to the VM's own window process, which plays it and, with Microphone
+  on, gives Windows a microphone fed by the Mac's; QEMU no longer reaches the Mac's audio at all (#7). macOS asks
+  once whether "VMPane VM" may use the microphone, the first time Windows records. A Windows VM suspended or
+  snapshotted before this version with Microphone on may show its microphone only after Windows restarts.
+- Cancelling a Parallels import or a cloud-image create just before its conversion started could crash VMPane.
+
+
+### Not checked before this release
+- `agent-hud`: https://github.com/nhtera/vmpane/issues/10
+- `mcp-actions`: https://github.com/nhtera/vmpane/issues/11
+]]></description>
+            <enclosure url="https://github.com/nhtera/vmpane/releases/download/v1.0.0-beta.11/VMPane-1.0.0-beta.11.dmg" length="29345261" type="application/octet-stream" sparkle:edSignature="hsmSdSVqZ236mOvw78i8lG90wPMkqOeGJzphGW0QSKN658N+pPXNQROmIPsMYm/9i0wF50Nf6/ZL1rsQ/MCHDA=="/>
+        </item>
+        <item>
             <title>1.0.0-beta.10</title>
             <pubDate>Wed, 21 Oct 2026 23:28:13 +0700</pubDate>
             <link>https://github.com/nhtera/vmpane</link>
