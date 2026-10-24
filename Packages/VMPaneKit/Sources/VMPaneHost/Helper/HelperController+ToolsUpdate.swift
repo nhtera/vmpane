@@ -26,18 +26,19 @@ extension HelperController {
         return agent < helper
     }
 
-    /// Whether the connected agent (`peer`) is due an update from this helper's tools.
-    func toolsUpdateDue(_ peer: AgentConnection.Peer) -> Bool {
-        guard config.agent.updatesTools, !toolsUpdate.running, !toolsUpdate.tried,
+    /// Whether the connected agent (`peer`) is due an update from this helper's tools (`manual`: the person asked,
+    /// whatever the VM's switch says).
+    func toolsUpdateDue(_ peer: AgentConnection.Peer, manual: Bool = false) -> Bool {
+        guard manual || config.agent.updatesTools, !toolsUpdate.running, !toolsUpdate.tried,
             peer.hello.caps?.contains(AgentCap.exec) == true, peer.hello.caps?.contains(AgentCap.file) == true,
             let os = GuestOS(rawValue: peer.hello.os), GuestToolsPackage.installer(for: os) != nil
         else { return false }
         return Self.toolsOutdated(peer.hello.agentVersion)
     }
 
-    /// After a connect: updates an older agent once nothing uses it.
-    func updateToolsIfOlder(_ connection: AgentConnection, peer: AgentConnection.Peer) async {
-        guard toolsUpdateDue(peer), let os = GuestOS(rawValue: peer.hello.os) else { return }
+    /// After a connect (or when the person asks, `manual`): updates an older agent once nothing uses it.
+    func updateToolsIfOlder(_ connection: AgentConnection, peer: AgentConnection.Peer, manual: Bool = false) async {
+        guard toolsUpdateDue(peer, manual: manual), let os = GuestOS(rawValue: peer.hello.os) else { return }
         toolsUpdate.running = true
         defer { toolsUpdate.running = false }
         let package: GuestToolsPackage
@@ -47,9 +48,9 @@ extension HelperController {
             Self.log.notice("guest tools not updated: \(String(describing: error), privacy: .public)")
             return
         }
-        try? await Task.sleep(for: toolsUpdate.settle)
+        if !manual { try? await Task.sleep(for: toolsUpdate.settle) }
         // The agent reconnected meanwhile (a reboot, a restore): the update goes on with the new connection.
-        guard await waitUntilAgentIsFree(connection) else { return await updateOnCurrentConnection() }
+        guard await waitUntilAgentIsFree(connection, manual: manual) else { return await updateOnCurrentConnection(manual: manual) }
         toolsUpdate.tried = true
         Self.log.notice("updating the guest tools from \(peer.hello.agentVersion, privacy: .public) to \(VMPane.version, privacy: .public)")
         let started = ContinuousClock.now
@@ -58,7 +59,7 @@ extension HelperController {
             let launch =
                 os == .windows
                 ? try await stageWindowsTools(package, on: connection) : try await stageLinuxTools(package, on: connection)
-            guard await waitUntilAgentIsFree(connection) else {
+            guard await waitUntilAgentIsFree(connection, manual: manual) else {
                 throw RPCError(.agentUnavailable, "the guest agent reconnected before the update could start")
             }
             toolsUpdate.installing = true
@@ -94,19 +95,71 @@ extension HelperController {
     }
 
     /// Waits while something uses the agent; false when `connection` is no longer the agent's or the update was
-    /// turned off meanwhile.
-    private func waitUntilAgentIsFree(_ connection: AgentConnection) async -> Bool {
+    /// turned off meanwhile (unless the person asked for it).
+    private func waitUntilAgentIsFree(_ connection: AgentConnection, manual: Bool) async -> Bool {
         while await toolsUpdateMustWait() {
             guard await agentHub.connection === connection else { return false }
             try? await Task.sleep(for: .seconds(10))
         }
-        return await agentHub.connection === connection && config.agent.updatesTools
+        return await agentHub.connection === connection && (manual || config.agent.updatesTools)
     }
 
     /// Starts over on the agent connected now, if any (a later connect starts it otherwise).
-    private func updateOnCurrentConnection() async {
+    private func updateOnCurrentConnection(manual: Bool) async {
         guard let connection = await agentHub.connection, let peer = await agentHub.status.peer else { return }
-        Task { await self.updateToolsIfOlder(connection, peer: peer) }  // runs once this one has returned
+        Task { await self.updateToolsIfOlder(connection, peer: peer, manual: manual) }  // runs once this one has returned
+    }
+
+    /// `vm.tools.update` or `vm.tools.attach`, the VM menu's Update and Install Guest Tools.
+    func toolsRequest(_ method: String) async -> Result<JSONValue, RPCError> {
+        method == ControlMethod.vmToolsAttach.rawValue ? await toolsAttachRequest() : await toolsUpdateRequest()
+    }
+
+    /// `vm.tools.update` (Update Guest Tools in the VM's window): an older Linux or Windows agent updates now, even
+    /// after a failed try or with the VM's switch off.
+    private func toolsUpdateRequest() async -> Result<JSONValue, RPCError> {
+        guard let connection = await agentHub.connection, let peer = await agentHub.status.peer else {
+            return .failure(RPCError(.agentUnavailable, "the guest tools are not running in this VM: install them first"))
+        }
+        guard let os = GuestOS(rawValue: peer.hello.os), GuestToolsPackage.installer(for: os) != nil else {
+            return .failure(RPCError(.invalidState, "a macOS VM updates its guest tools by hand (VMPane Agent.pkg)"))
+        }
+        guard peer.toolsOutdated else { return .success(["started": false, "version": .string(peer.hello.agentVersion)]) }
+        guard peer.hello.caps?.contains(AgentCap.exec) == true, peer.hello.caps?.contains(AgentCap.file) == true else {
+            return .failure(RPCError(.agentUnavailable, "these guest tools are too old to update themselves: install them again"))
+        }
+        if !toolsUpdate.running {
+            toolsUpdate.tried = false
+            Task { await self.updateToolsIfOlder(connection, peer: peer, manual: true) }
+        }
+        return .success(["started": true, "version": .string(peer.hello.agentVersion)])
+    }
+
+    /// `vm.tools.attach` (Install Guest Tools in a Windows VM's window): the guest-tools disc from the VM's next
+    /// start (a running QEMU VM takes no new disc, and a restart of Windows keeps the same QEMU).
+    private func toolsAttachRequest() async -> Result<JSONValue, RPCError> {
+        guard config.os == .windows, config.backend == .qemu else {
+            return .failure(RPCError(.invalidState, "only Windows VMs take the guest-tools disc"))
+        }
+        guard config.install == nil, [.stopped, .running, .paused, .error].contains(state) else {
+            return .failure(
+                RPCError(.invalidState, "the guest-tools disc can be attached once the VM is installed and not starting or stopping"))
+        }
+        let disc = toolsRuntime.appendingPathComponent("GuestTools/vmpane-guest-tools-windows.iso")
+        guard FileManager.default.fileExists(atPath: disc.path) else {
+            return .failure(RPCError(.backendUnavailable, "this VMPane has no Windows guest-tools disc"))
+        }
+        let lock = prepared.lock
+        do {
+            let iso = try await Blocking.run { try WindowsInstall.placeTools(disc, in: lock.bundle) }
+            // From the config as it is now: anything applied during the copy stays.
+            let updated = WindowsInstall.withTools(config, iso: iso)
+            try await Blocking.run { try ConfigStore.save(updated, holding: lock) }
+            config = updated
+            return .success(["nextBoot": .bool(state != .stopped)])
+        } catch {
+            return .failure(RPCError(.internalError, "the guest-tools disc could not be attached: \(ErrorText.readable(error))"))
+        }
     }
 
     /// A graceful `vm.stop` while the installer runs waits for it: a Windows guest stopped mid-install can be left

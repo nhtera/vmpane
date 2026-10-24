@@ -44,6 +44,11 @@ logged in), and, for AI agents, running commands and copying files. VMPane share
 or later in the VM). It installs the agent in `/Library/Application Support/VMPane/Agent`, with a launch daemon
 (`app.vmpane.agent`, logging to `/Library/Logs/VMPane/agent.log`) and a launch agent for each login.
 
+A macOS VM that has run a while without them says so at the top of its window (**Not Now**, or **Don't Ask
+Again** for that VM); **VM › Install Guest Tools…** shows how again. A macOS VM's tools do not update by
+themselves: when VMPane is newer, its window says so (**VM › Update Guest Tools**), and you open the newer
+**VMPane Agent.pkg** from the same folder.
+
 The display follows the window size without the guest tools.
 
 ## Shared folders

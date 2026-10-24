@@ -91,14 +91,34 @@ public enum WindowsInstall {
     }
 
     /// The single cleanup of every way an install ends (done, failed, cancelled): deletes the unattend image (the
-    /// password) and the copied ISOs, and returns the config without install media. Safe to repeat.
+    /// password) and the copied ISOs, and returns the config without install media. Safe to repeat: once the
+    /// install is gone from the config, a tools disc attached since (`attachTools`) stays.
     public static func cleanUp(_ config: VMConfigV1, bundle: VMBundle) -> VMConfigV1 {
+        let installing = config.install != nil
         UnattendMedia.remove(from: bundle)
-        for name in [isoName, toolsName] { try? FileManager.default.removeItem(at: bundle.installDirectory.appendingPathComponent(name)) }
+        for name in installing ? [isoName, toolsName] : [isoName] {
+            try? FileManager.default.removeItem(at: bundle.installDirectory.appendingPathComponent(name))
+        }
         try? DurableWrite.syncDirectory(bundle.installDirectory)
         var config = config
-        config.removable.removeAll { [mediaID, unattendID, toolsID].contains($0.id) }
+        config.removable.removeAll { [mediaID, unattendID].contains($0.id) || (installing && $0.id == toolsID) }
         config.install = nil
+        return config
+    }
+
+    /// The guest-tools disc for an installed Windows VM without the tools (imported, or set up by hand): cloned into
+    /// `install/`, as during an install; `withTools` attaches it from the VM's next start.
+    public static func placeTools(_ tools: URL, in bundle: VMBundle) throws -> URL {
+        try FileManager.default.createDirectory(
+            at: bundle.installDirectory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        return try place(tools, as: toolsName, in: bundle)
+    }
+
+    /// `config` with the tools disc `iso` (from `placeTools`) attached, once.
+    public static func withTools(_ config: VMConfigV1, iso: URL) -> VMConfigV1 {
+        var config = config
+        config.removable.removeAll { $0.id == toolsID }
+        config.removable.append(Extensible(RemovableConfig(id: toolsID, path: iso.path, bus: .usb)))
         return config
     }
 

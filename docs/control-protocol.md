@@ -43,7 +43,7 @@ with end-of-file after it starts; when the VM asks before agents run commands, t
 |---|---|---|---|
 | `helper.hello` | `{proto, minProto, client: {name, version, kind: ui\|cli\|mcp, operator?}, sessionId?}` | `{proto, helperVersion, runtimeVersion}` | any |
 | `helper.shutdown` | — | `{}` | admin |
-| `vm.info` | — | `{id, name, os, backend, state, allowedRequests, capabilities, pendingRestart}` | observe |
+| `vm.info` | — | `{id, name, os, backend, state, allowedRequests, capabilities, pendingRestart, installing}` (`installing`: an install, or a cloud image's first boot, is not done) | observe |
 | `vm.start` | `{headless}` | `{state}` | control |
 | `vm.pause` | — | `{state}` | control |
 | `vm.resume` | — | `{state}` | control |
@@ -68,6 +68,8 @@ with end-of-file after it starts; when the VM asks before agents run commands, t
 | `vm.screen.read` | `{source?: ocr\|elements\|auto\|both, region?: {x, y, width, height}, maxItems?}` (guest pixels; `ocr` is recognized on the Mac from the display; `elements` needs the guest tools' `screen` cap; `auto`: elements when they have it, else ocr; text cleaned of control and bidi characters, never logged) | `{source, screen: {width, height}, ocr?: {items: [{text, rect: [x, y, w, h]}], truncated}, elements?: {items: [{role, name, value?, rect, enabled?, focused?}], truncated}, elementsError?}` (`elementsError`: why there are no controls, for auto and both; VMPane's words, the guest's message only quoted) | observe |
 | `vm.display.show` | — | `{}` | control |
 | `vm.install.cancel` | — (ends a Windows install; a running VM is ejected from its install discs and stopped) | `{state}` | uiOnly |
+| `vm.tools.update` | — (updates an older Linux or Windows agent now, as the automatic update does, even with `agent.autoUpdate` off) | `{started, version}` | uiOnly |
+| `vm.tools.attach` | — (a Windows VM: the guest-tools disc, cloned into the bundle, attached from its next boot) | `{nextBoot}` | uiOnly |
 | `vm.settings.get` | — | `config` | observe |
 | `vm.settings.apply` | `{patch}` (JSON merge patch over the config) | `{fields: {path: applied\|nextBoot\|rejected}, reasons?}` | admin; sensitive patch: uiOnly |
 | `vm.ports.list` | — | `{rules: [{…rule, status: listening\|blocked\|failed\|inactive, reason?}], listening: [{proto, port, process?}]}` (`blocked`: macOS Local Network privacy; `listening`: the guest agent's open ports, as suggestions) | observe |

@@ -27,6 +27,8 @@ public enum ControlMethod: String, CaseIterable, Sendable {
     case vmAgentStop = "vm.agent.stop"
     case vmDisplayShow = "vm.display.show"
     case vmInstallCancel = "vm.install.cancel"
+    case vmToolsUpdate = "vm.tools.update"
+    case vmToolsAttach = "vm.tools.attach"
     case vmSettingsGet = "vm.settings.get"
     case vmSettingsApply = "vm.settings.apply"
     case vmPortsList = "vm.ports.list"

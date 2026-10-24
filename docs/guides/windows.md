@@ -54,6 +54,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File D:\install.ps1   # D: = the 
 
 It logs to `C:\ProgramData\VMPane\tools-install.log`.
 
+A Windows VM without the guest tools (imported, or set up by hand) offers them at the top of its window once it
+has run a while (or **VM › Install Guest Tools…**): **Attach Tools Disc** attaches the VMPANE_TOOLS disc from
+the VM's next start (a running VM takes no new disc, and restarting Windows keeps the same VM running): shut
+Windows down, start the VM again, then run `install.ps1` as above. After
+that, a newer VMPane updates the agent by itself, without the disc (**Keep the guest tools up to date** in the
+VM's settings, General; **VM › Update Guest Tools** does it at once); the drivers stay as `install.ps1` put them.
+
 The disc also holds the VMPane guest agent (`vmpane-agent.msi`), which shares the clipboard and files with your
 Mac (see below). Unlike the drivers it is not code-signed for
 Windows (VMPane has no Windows signing certificate), so if you install it by hand Windows names its publisher

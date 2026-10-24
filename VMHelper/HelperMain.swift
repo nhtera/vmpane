@@ -76,8 +76,9 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
         return .terminateLater
     }
 
-    /// The menu bar: the app menu (About, Hide, Quit), Edit (for the settings' text fields) and Window. Without
-    /// one the app's menu is empty and ⌘Q does nothing. Keys a captured guest display takes still go to the guest.
+    /// The menu bar: the app menu (About, Hide, Quit), Edit (for the settings' text fields), VM (its guest tools) and
+    /// Window. Without one the app's menu is empty and ⌘Q does nothing. Keys a captured guest display takes still go
+    /// to the guest.
     static func mainMenu() -> NSMenu {
         let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "VMPane VM"
         let main = NSMenu()
@@ -116,6 +117,7 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
                 item("Paste", #selector(NSText.paste(_:)), "v"),
                 item("Select All", #selector(NSText.selectAll(_:)), "a"),
             ])
+        main.addItem(vmMenu())
         NSApp.windowsMenu = submenu(
             "Window",
             [
@@ -125,6 +127,17 @@ final class HelperDelegate: NSObject, NSApplicationDelegate {
                 item("Bring All to Front", #selector(NSApplication.arrangeInFront(_:))),
             ])
         return main
+    }
+
+    /// The VM menu: its guest tools, for the window's model once there is one (the menu is made before it).
+    static func vmMenu() -> NSMenuItem {
+        func model() -> HelperViewModel? { (NSApp.delegate as? HelperDelegate)?.windowModel }
+        let menu = NSMenu(title: "VM")
+        menu.addItem(DockMenuItem(title: "Install Guest Tools…") { model()?.showToolsBanner() })
+        menu.addItem(DockMenuItem(title: "Update Guest Tools") { if let model = model() { Task { await model.updateGuestTools() } } })
+        let holder = NSMenuItem(title: "VM", action: nil, keyEquivalent: "")
+        holder.submenu = menu
+        return holder
     }
 
     /// A click on the Dock tile brings a closed window back.

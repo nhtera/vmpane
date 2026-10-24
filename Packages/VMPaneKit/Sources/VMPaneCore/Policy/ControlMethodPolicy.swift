@@ -71,6 +71,8 @@ public enum ControlMethodPolicy {
         "vm.agent.stop": .uiOnly,
         "vm.display.show": .level(.control),
         "vm.install.cancel": .uiOnly,
+        "vm.tools.update": .uiOnly,
+        "vm.tools.attach": .uiOnly,
         "vm.settings.get": .level(.observe),
         "vm.settings.apply": .settingsApply,
         "vm.ports.list": .level(.observe),

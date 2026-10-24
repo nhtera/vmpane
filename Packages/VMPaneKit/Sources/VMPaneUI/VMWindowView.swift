@@ -74,6 +74,7 @@ public struct VMWindowView: View {
                 if model.memoryLow && (model.state == .running || model.state == .paused) {
                     LowMemoryBanner().transition(.opacity)
                 }
+                if let banner = model.toolsBanner { GuestToolsBannerView(banner: banner, model: model).transition(.opacity) }
                 if hud {
                     CaptureHUD(capturing: capturing)
                         .transition(.opacity)
@@ -89,10 +90,12 @@ public struct VMWindowView: View {
             .frame(maxHeight: .infinity, alignment: .top)
             .padding(.top, 12)
             .animation(.default, value: model.memoryLow)
+            .animation(.default, value: model.toolsBanner)
         }
         .onGeometryChange(for: CGSize.self, of: \.size) { room = $0 }
         .task { await model.watchInput() }
         .task { await model.watchMemory() }
+        .task { await model.watchGuestTools() }
         .task(id: model.notice) {
             guard let notice = model.notice else { return }
             // Long enough to read: an instruction stays longer than a confirmation.

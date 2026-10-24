@@ -10,6 +10,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
   update by themselves through the tools already there (no password), once no AI agent is at work in the VM, and the
   VM's window says so. **Keep the guest tools up to date** in the VM's settings (General) turns it off; `vm_status`
   and `vmpane doctor` say when a VM's tools are older than VMPane's. macOS VMs still update theirs by hand.
+- A VM without the guest tools (macOS, Linux from an ISO, imported VMs) offers them at the top of its window once it
+  has run a while: where the installer is (macOS), the command to run, which VMPane can type for you (Linux), or the
+  tools disc attached from the VM's next start (Windows). **VM › Install Guest Tools…** and **Update Guest Tools** are
+  in the VM's menu bar and its Dock menu.
 
 ### Fixed
 - A Windows guest-tools update from one beta to the next could install the new agent beside the old one instead of

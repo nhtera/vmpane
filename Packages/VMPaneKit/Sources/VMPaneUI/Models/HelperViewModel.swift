@@ -44,7 +44,7 @@ public final class HelperViewModel {
     /// A short confirmation the window shows for a moment ("Snapshot taken"); nil when there is none.
     public var notice: String?
     /// For the one-time hints (`accessibilityHintShown.<id>`).
-    private var vmID: String?
+    var vmID: String?
     public static let accessibilityHint =
         "An AI agent asked for this VM's controls: in the VM, allow vmpane-agent in System Settings › Privacy & Security › Accessibility"
     /// A snapshot is being taken (its button waits).
@@ -58,6 +58,8 @@ public final class HelperViewModel {
     public internal(set) var transfer: Transfer?
     /// The Mac is nearly out of memory while the VM runs (`watchMemory`).
     public private(set) var memoryLow = false
+    /// The guest tools as the window sees them, for the install banner (`HelperViewModel+GuestTools`).
+    public internal(set) var guestTools = GuestToolsState()
     /// What AI agents are doing on the VM (`HelperViewModel+Agent`); nil until read.
     public internal(set) var activity: AgentActivity?
     /// An agent's request waiting for the person's answer in the window (`ApprovalSheet`).
@@ -91,6 +93,7 @@ public final class HelperViewModel {
             await refreshAudio()
             agentConnected =
                 (try? await channel.call(ControlMethod.agentStatus.rawValue, params: nil, timeout: .seconds(5)))?["connected"] == true
+            await refreshGuestTools()
             await refreshActivity()
         } catch {
             lastError = String(describing: error)
@@ -113,6 +116,8 @@ public final class HelperViewModel {
         if let name = info["name"]?.stringValue { self.name = name }
         if let id = info["id"]?.stringValue { vmID = id }
         suspended = info["suspended"] == true
+        guestTools.installing = info["installing"] == true
+        guestTools.shareless = info["backend"] == "qemu"
         if case .array(let names)? = info["allowedRequests"] { allowed = Set(names.compactMap(\.stringValue)) }
     }
 
@@ -166,6 +171,8 @@ public final class HelperViewModel {
                 message: note.params?["message"]?.stringValue ?? "")
         case ControlNotification.agentConnectionChanged.rawValue:
             agentConnected = note.params?["connected"] == true
+            if agentConnected { (guestTools.waited, guestTools.requested) = (false, false) }  // offered again only after a new wait
+            Task { await refreshGuestTools() }
         case ControlNotification.agentActivity.rawValue:
             if let params = note.params { show(AgentActivity(params)) }
         case ControlNotification.agentToolsUpdate.rawValue:

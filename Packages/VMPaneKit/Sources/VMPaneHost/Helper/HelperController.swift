@@ -214,6 +214,7 @@ public actor HelperController {
             displayContinuation.yield()
             return .success(.object([:]))
         case .vmInstallCancel?: return await cancelInstall()
+        case .vmToolsUpdate?, .vmToolsAttach?: return await toolsRequest(request.method)
         case .agentStatus?, .agentExec?, .agentExecInput?, .agentExecSignal?, .agentFilePush?, .agentFilePull?:
             return await agentRequest(request.method, request.params, from: connection)
         case .eventsSubscribe?: return subscribe(request.params, connection)
@@ -273,7 +274,7 @@ public actor HelperController {
             "backend": .string(config.backend.rawValue), "state": .string(state.rawValue),
             "allowedRequests": .array(backend == nil ? [] : HelperStateMachine.allowedRequests(in: state).map { .string($0.rawValue) }),
             "capabilities": .array(capabilities.map { .string($0) }),
-            "pendingRestart": .bool(pendingRestart),
+            "pendingRestart": .bool(pendingRestart), "installing": .bool(config.install != nil),
             "suspended": .bool(state == .stopped && prepared.lock.bundle.isSuspended),
             // The agent level in effect, and whether a raised level was set outside VMPane (and so counts as off).
             "policy": .string(policy.level.rawValue), "policyTampered": .bool(policy.tampered),

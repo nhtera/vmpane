@@ -42,6 +42,17 @@ attached until the VM next stops, then VMPane removes it from the VM's settings.
 - Ubuntu's installer, after *Reboot Now*, waits on "Please remove the installation medium, then press ENTER",
   which its screen can hide: press Enter in the VM's window.
 
+A Linux installed from an ISO has no guest tools at first. Once the VM has run a while without them, its window
+offers them (or **VM › Install Guest Tools…**): open a terminal in the VM and run the command it shows, or let
+**Type in the VM** type it, then press Return:
+
+```sh
+sudo mkdir -p /mnt/vmpane-tools && (mountpoint -q /mnt/vmpane-tools || sudo mount -t virtiofs vmpane-tools /mnt/vmpane-tools) && sudo /mnt/vmpane-tools/install.sh
+```
+
+After that, a newer VMPane updates them by itself (**Keep the guest tools up to date** in the VM's settings,
+General; **VM › Update Guest Tools** does it at once).
+
 ## Display size
 
 A new Linux VM gets one pixel per point of its window (Settings → Display → Scaling: *Larger*), so the

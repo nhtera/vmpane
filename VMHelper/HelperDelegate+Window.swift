@@ -124,6 +124,10 @@ extension HelperDelegate {
             add("Pause", enabled: model.can(.pause)) { Task { await model.perform(.pause) } }
         }
         add("Take Snapshot", enabled: model.can(.snapshot)) { Task { await model.perform(.snapshot) } }
+        menu.addItem(.separator())
+        add(model.agentConnected ? "Update Guest Tools" : "Install Guest Tools…", enabled: model.state == .running) {
+            if model.agentConnected { Task { await model.updateGuestTools() } } else { model.showToolsBanner() }
+        }
         return menu
     }
 
