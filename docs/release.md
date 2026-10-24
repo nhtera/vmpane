@@ -17,7 +17,9 @@ not before a release. Nested virtualization (M3 and later) is covered by that Ma
 
 Results are keyed by the candidate DMG's SHA-256 (`itest/results/<sha>-<scenario>-<chip>-<macOS build>.json`).
 A result from a dirty tree or a skipped scenario never counts. A scenario that only passed on a rerun is flaky:
-open an issue and quarantine it; do not rerun until it passes.
+open an issue and quarantine it; do not rerun until it passes. A quarantined scenario (or one this Mac cannot run
+as it is) is left out of a beta's gate only by name, with its issue: `publish x.y.z --waive <scenario>=<issue URL>`,
+and the release notes say it was not checked.
 
 ## Steps
 

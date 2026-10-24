@@ -5,8 +5,9 @@
 #       candidate (build/release/<version>/candidate.json, with the DMG's SHA-256)
 #   scripts/release.sh itest <version> --tier beta|release
 #       runs the tier's scenarios (itest/tiers.json) against that exact DMG; results are keyed by its SHA-256
-#   scripts/release.sh publish <version> [--dry-run]
-#       gate: a passing, clean result for the candidate × every tier scenario (× the tier's hosts, itest/tiers.json);
+#   scripts/release.sh publish <version> [--dry-run] [--waive <scenario>=<issue URL>]...
+#       gate: a passing, clean result for the candidate × every tier scenario (× the tier's hosts, itest/tiers.json),
+#       but a scenario quarantined with an issue (--waive) is skipped and named in the release notes;
 #       then the corresponding source, SHA256SUMS, the appcast and the cask, and (not in --dry-run) the GitHub
 #       Release, the appcast on the gh-pages branch (after the DMG it offers) and the tap pull request
 # --dry-run: preflight problems that only a real release needs (tag, CI run, signed Windows tools) are warnings,
@@ -16,12 +17,18 @@ cd "$(dirname "$0")/.."
 
 stage=${1:-}
 version=${2:-}
-[[ -n $stage && -n $version ]] || { sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+[[ -n $stage && -n $version ]] || { sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 shift 2
 dry=false notarize=true tier=
+waived=()
 while (($#)); do
     case "$1" in
         --dry-run) dry=true ;;
+        --waive)
+            # A scenario quarantined for this release, with the issue that says why (docs/release.md, Tiers).
+            [[ ${2:-} =~ ^[a-z0-9-]+=https://github\.com/[^/]+/[^/]+/issues/[0-9]+$ ]] \
+                || { echo "--waive <scenario>=<GitHub issue URL>" >&2; exit 2; }
+            waived+=("$2"); shift ;;
         --no-notarize) notarize=false ;;
         --tier) tier=${2:?--tier beta|release}; shift ;;
         *) echo "unknown option $1" >&2; exit 2 ;;
@@ -144,6 +151,12 @@ publish() {
     needed=$(jq -r --arg t "$tier" '.tiers[$t].hosts' itest/tiers.json)
     # A result counts only for this DMG, when it passed, was not skipped and came from a clean tree.
     while read -r scenario; do
+        local waiver
+        waiver=$(printf '%s\n' ${waived[@]+"${waived[@]}"} | grep "^$scenario=" || true)
+        if [[ -n $waiver ]]; then
+            echo "waived: $scenario (${waiver#*=})" >&2
+            continue
+        fi
         hosts=$({ cat itest/results/"$sha-$scenario"-*.json 2>/dev/null || true; } \
             | jq -s '[.[] | select(.result == "pass" and .dirty == false) | "\(.chip) \(.macOSBuild)"] | unique | length')
         if ((hosts < needed)); then
@@ -165,6 +178,10 @@ publish() {
     (cd "$out" && shasum -a 256 VMPane-*.dmg vmpane-* >SHA256SUMS)
     local notes=$out/notes.md
     awk -v v="$version" '$0 ~ "^## \\[" v "\\]" {on = 1; next} on && /^## \[/ {exit} on' CHANGELOG.md >"$notes"
+    if ((${#waived[@]})); then
+        printf '\n### Not checked before this release\n' >>"$notes"
+        for waiver in "${waived[@]}"; do printf -- '- `%s`: %s\n' "${waiver%%=*}" "${waiver#*=}" >>"$notes"; done
+    fi
     local assets=("$dmg" "$out/vmpane-$version-corresponding-source.tar.zst" "$out/vmpane-guest-tools-$version-windows.iso" "$out/SHA256SUMS")
     local prerelease=--latest
     [[ $version == *-* ]] && prerelease=--prerelease
