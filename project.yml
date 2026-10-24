@@ -95,6 +95,13 @@ targets:
             mkdir -p "$app/Contents/Resources/GuestTools"
             cp "$tools" "$app/Contents/Resources/GuestTools/vmpane-guest-tools-windows.iso"
           fi
+          # The agent's MSI on its own too (guest-tools/fetch-agent-msi.sh), for the helper to update an older agent.
+          msi="$SRCROOT/build/guest-tools/windows-extra/vmpane-agent.msi"
+          if [[ -f "$msi" ]]; then
+            mkdir -p "$app/Contents/Resources/GuestTools/windows"
+            cp "$msi" "$app/Contents/Resources/GuestTools/windows/vmpane-agent.msi"
+            (cd "$app/Contents/Resources/GuestTools/windows" && shasum -a 256 vmpane-agent.msi >SHA256SUMS)
+          fi
     dependencies:
       - package: VMPaneKit
         product: VMPaneCore

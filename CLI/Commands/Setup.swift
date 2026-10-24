@@ -105,7 +105,8 @@ struct Doctor: AsyncParsableCommand {
             guard let session = try? await CLI.connector.connect(item.id) else { continue }
             let agent = try? await session.client.call(ControlMethod.agentStatus.rawValue, timeout: .seconds(3))
             session.client.close()
-            let agentText = agent?["connected"] == true ? "agent \(agent?["version"]?.stringValue ?? "?")" : "no agent"
+            let outdated = agent?["outdated"] == true ? " (older than VMPane's)" : ""
+            let agentText = agent?["connected"] == true ? "agent \(agent?["version"]?.stringValue ?? "?")\(outdated)" : "no agent"
             checks.append([
                 "check": .string("VM \(name)"), "ok": .bool(session.helperVersion == VMPane.version),
                 "detail": .string("helper \(session.helperVersion) (proto \(session.proto)), \(agentText)"),

@@ -11,7 +11,9 @@
            Manufacturer="VMPane" Language="1033" Codepage="1252" Version="$(var.Version)">
     <Package Id="*" InstallerVersion="500" Compressed="yes" InstallScope="perMachine"
              Description="VMPane Guest Agent" Comments="https://github.com/nhtera/vmpane" />
-    <MajorUpgrade Schedule="afterInstallInitialize"
+    <!-- Same-version upgrades too: Windows Installer compares only three fields, and a beta's version is
+         1.0.0.<beta> (cargo-wix), so beta.12 over beta.11 would otherwise install next to it. -->
+    <MajorUpgrade Schedule="afterInstallInitialize" AllowSameVersionUpgrades="yes"
                   DowngradeErrorMessage="A newer VMPane Guest Agent is already installed." />
     <Media Id="1" Cabinet="agent.cab" EmbedCab="yes" />
 

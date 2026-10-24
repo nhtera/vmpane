@@ -168,6 +168,8 @@ public final class HelperViewModel {
             agentConnected = note.params?["connected"] == true
         case ControlNotification.agentActivity.rawValue:
             if let params = note.params { show(AgentActivity(params)) }
+        case ControlNotification.agentToolsUpdate.rawValue:
+            if let message = note.params?["message"]?.stringValue { notice = message }
         case ControlNotification.screenAccessibilityNeeded.rawValue:
             // Once per VM: macOS shows its own prompt in the guest too.
             let key = "accessibilityHintShown.\(vmID ?? "?")"

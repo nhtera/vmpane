@@ -74,6 +74,10 @@ public actor HelperController {
     var inputsInFlight = 0
     /// What agents did lately, and the person's Take over (`AgentActivity`).
     var activity = AgentActivityState()
+    /// The guest tools' update from this runtime (`HelperController+ToolsUpdate`).
+    var toolsUpdate = ToolsUpdateState()
+    /// Agents' requests that may change something, still being answered (an update waits for them).
+    var agentRequestsInFlight = 0
     /// What agents' single input requests hold down, per connection (`HelperController+HeldInput`).
     var heldInput: [ObjectIdentifier: HeldInput] = [:]
     /// How long a question waits for the person (`HelperController+Confirm`); no answer is a no.
@@ -183,7 +187,10 @@ public actor HelperController {
             audit(request, caller, result: .failure(refusal), since: started)
             return .failure(refusal)
         }
+        let changing = caller.identity != .ui && !Self.readOnlyMethods.contains(request.method)
+        if changing { agentRequestsInFlight += 1 }
         let result = await route(request, from: connection)
+        if changing { agentRequestsInFlight -= 1 }
         if caller.identity != .ui { audit(request, caller, result: result, since: started) }
         return result
     }
@@ -219,6 +226,7 @@ public actor HelperController {
         case .vmClipboardWrite?: return await clipboardWrite(request.params, from: connection)
         case .vmSettingsApply?: return await applySettings(request.params, byApp: identity(of: connection).identity == .ui)
         case .vmStart?, .vmPause?, .vmResume?, .vmSuspend?, .vmStop?:
+            if request.method == ControlMethod.vmStop.rawValue { await finishToolsInstallBeforeStop(request.params) }
             return await lifecycle(request.method, request.params)
         case .vmSnapshotList?, .vmSnapshotCreate?, .vmSnapshotDelete?, .vmSnapshotRestore?, .vmSnapshotRename?:
             return await snapshotRequest(request.method, request.params, byApp: identity(of: connection).identity == .ui)

@@ -269,12 +269,15 @@ public struct QEMUConfig: ExtensibleFields {
 public struct AgentConfig: ExtensibleFields {
     public enum Transport: String, Codable, Sendable { case auto, vsock, virtioSerial, tcp }
     public var transport: Transport
+    /// Update the guest tools from VMPane's when they are older (Linux, Windows); absent is on.
+    public var autoUpdate: Bool?
 
-    public init(transport: Transport) {
+    public init(transport: Transport, autoUpdate: Bool? = nil) {
         self.transport = transport
+        self.autoUpdate = autoUpdate
     }
 
-    enum CodingKeys: String, CodingKey, CaseIterable { case transport }
+    enum CodingKeys: String, CodingKey, CaseIterable { case transport, autoUpdate }
     public static let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
 }
 

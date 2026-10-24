@@ -94,7 +94,8 @@ public enum SettingsPatch {
         case "display": return ["widthPx", "heightPx", "autoResize"].contains(leaf ?? "") ? .live : .nextBoot
         case "network": return parts.count == 3 && leaf == "mode" ? .live : .nextBoot
         case "clipboard": return leaf == "allowWithAgents" ? .host : .nextBoot
-        case "cpu", "memory", "removable", "audio", "vz", "qemu", "windows", "agent": return .nextBoot
+        case "agent": return leaf == "autoUpdate" ? .host : .nextBoot
+        case "cpu", "memory", "removable", "audio", "vz", "qemu", "windows": return .nextBoot
         default: return .unknown
         }
     }

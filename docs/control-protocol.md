@@ -73,7 +73,7 @@ with end-of-file after it starts; when the VM asks before agents run commands, t
 | `vm.ports.list` | — | `{rules: [{…rule, status: listening\|blocked\|failed\|inactive, reason?}], listening: [{proto, port, process?}]}` (`blocked`: macOS Local Network privacy; `listening`: the guest agent's open ports, as suggestions) | observe |
 | `vm.clipboard.read` | `{types?}` (text, png, files; also html and rtf, which an older agent leaves out) | `{items: [{type: text, text} \| {type: html, text} \| {type: rtf, text} \| {type: png, dataB64} \| {type: files, files}]}` (guest agent's clipboard: macOS and Windows guests; `files` are guest paths, for `agent.file.pull`; follows `clipboard.mode`'s direction) | control + clipboard.allowWithAgents |
 | `vm.clipboard.write` | `{items: [{type: text, text} \| {type: html, text} \| {type: rtf, text} \| {type: png, dataB64}]}` (html and rtf need guest tools from 1.0.0-beta.11) | `{}` (follows `clipboard.mode`'s direction) | control + clipboard.allowWithAgents |
-| `agent.status` | — | `{connected, version, os, osVersion, proto, caps, session}` | observe |
+| `agent.status` | — | `{connected, version, os, osVersion, proto, caps, session, outdated}` (`outdated`: older than the helper's VMPane) | observe |
 | `agent.exec` | `{argv, as, cwd, env, timeoutMs, stdin, input, desktop?}` (`desktop: true`: opens it on the signed-in user's desktop, as the user, without stdin or a timeout; needs the guest tools' `desktop` cap) | `{execId}`; with `desktop`: `{execId, pid, launched: true}` at once (no output; `exec.exited` when it ends) | exec (as:user), admin (as:admin) |
 | `agent.exec.input` | `{execId, dataB64, eof}` | `{}` | exec |
 | `agent.exec.signal` | `{execId, signal}` (own exec only) | `{}` | exec |
@@ -119,6 +119,7 @@ at it) needs `control` for clients other than the app and an operator.
 | `snapshot.progress` | `{id, percent}` |
 | `install.progress` | `{phase, percent, message}`; subscribing to `install` while a Windows install runs sends the current one at once |
 | `files.progress` | `{bytesDone, bytesTotal, file}` (during `vm.files.drop`) |
+| `agent.toolsUpdate` | `{state, version, message}` (topic `agent`: `state` updating, updated or failed, as an older Linux or Windows agent updates itself from the helper's tools; the VM window shows `message`) |
 <!-- contract:notifications:end -->
 
 An exec's `exec.output` and `exec.exited` can arrive before the `agent.exec` answer that names its `execId` (a

@@ -1,8 +1,8 @@
 # Guest agent in a Linux VZ guest: installed from the read-only `vmpane-tools` share as a user would, then
 # over vsock: connects after boot (target < 10 s), exec round trip with identity and exit codes, 1 GiB push and
 # pull with matching SHA-256 (target ≥ 100 MB/s), the guest clock within 1 s after a live-snapshot restore, and
-# a disk snapshot of the running guest under the agent's file system freeze, and the session helper of a
-# logged-in user running `as: "user"` commands.
+# a disk snapshot of the running guest under the agent's file system freeze, the session helper of a
+# logged-in user running `as: "user"` commands, and an older agent updating itself from the app's tools.
 # Needs an app built with the Linux guest tools (guest-tools/build-linux.sh) and ~4 GiB free.
 # Sourced by scripts/itest.sh with $APP set.
 
@@ -107,6 +107,28 @@ scenario_run() {
     out=$(it_agent_exec --user 'id -un') || it_fail "exec as the user failed" || return 1
     [[ $out == ubuntu ]] || it_fail "as user, id -un printed '$out'" || return 1
     echo "agent-linux: session helper connected for the logged-in user; as:user runs as $out"
+
+    # 8. An older agent updates by itself: a debug agent pretending 0.9.0 (VMPANE_TEST_AGENT_VERSION, which a
+    #    release agent ignores) replaces the installed one; the helper sends the runtime's tools and runs
+    #    install.sh, and the agent comes back as this VMPane's version.
+    (cd "$VMPANE_ROOT/agent" && cargo build --locked --quiet --target aarch64-unknown-linux-musl -p vmpane-agent) \
+        || it_fail "cannot build a debug agent" || return 1
+    it_rpc "$socket" agent.file.push "{\"hostPath\": \"$VMPANE_ROOT/agent/target/aarch64-unknown-linux-musl/debug/vmpane-agent\", \"guestPath\": \"/root/old-agent\", \"overwrite\": true}" >/dev/null \
+        || it_fail "cannot push the debug agent" || return 1
+    it_agent_exec 'install -m 0755 /root/old-agent /usr/local/bin/vmpane-agent && rm /root/old-agent && mkdir -p /etc/systemd/system/vmpane-agent.service.d && printf "[Service]\nEnvironment=VMPANE_TEST_AGENT_VERSION=0.9.0\n" >/etc/systemd/system/vmpane-agent.service.d/old.conf && systemctl daemon-reload && systemd-run --quiet --collect --on-active=1 systemctl restart vmpane-agent' >/dev/null \
+        || it_fail "cannot install the older agent" || return 1
+    it_wait_for 60 bash -c "[[ \$(/usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' '$socket' agent.status | jq -r .version) == 0.9.0 ]]" \
+        || it_fail "the older agent did not connect" || return 1
+    local version
+    version=$("$APP/Contents/Helpers/vmpane" --version 2>/dev/null | awk '{print $NF}')
+    it_wait_for 180 bash -c "[[ \$(/usr/bin/python3 '$VMPANE_ROOT/itest/lib/rpc.py' '$socket' agent.status | jq -r '.version + \" \" + (.outdated | tostring)') == '$version false' ]]" \
+        || { it_rpc "$socket" agent.status >&2; it_agent_exec 'cat /var/log/vmpane-tools-update.log; journalctl -u vmpane-agent -n 20 --no-pager' >&2 || true
+             it_fail "the older agent was not updated to $version"; return 1; }
+    # The helper sees the new agent within a second, then records the update.
+    it_wait_for 15 grep -q '"method":"agent.toolsUpdate".*"result":"ok"' "$bundle/logs/mcp-audit.jsonl" \
+        || it_fail "the update is not in the audit log" || return 1
+    it_agent_exec 'rm -rf /etc/systemd/system/vmpane-agent.service.d && systemctl daemon-reload' >/dev/null || true
+    echo "agent-linux: an agent claiming 0.9.0 updated itself to $version"
 
     it_rpc "$socket" vm.stop '{"mode": "force"}' >/dev/null
     it_rpc "$socket" helper.shutdown >/dev/null

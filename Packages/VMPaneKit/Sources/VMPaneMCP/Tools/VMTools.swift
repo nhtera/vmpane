@@ -62,7 +62,8 @@ enum VMTools {
             let info = try await access.call(vm, .vmInfo, launching: false)
             let agent = (try? await access.call(vm, .agentStatus)) ?? ["connected": false]
             let structured: JSONValue = ["info": info, "agent": agent]
-            let tools = agent["connected"] == true ? "guest tools running" : "no guest tools"
+            var tools = agent["connected"] == true ? "guest tools running" : "no guest tools"
+            if agent["outdated"] == true { tools += " (older than VMPane's)" }
             return ToolResult(
                 text: "\(info["name"]?.stringValue ?? vm): \(info["state"]?.stringValue ?? "?"), \(tools)", structured: structured)
         }

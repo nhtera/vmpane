@@ -64,4 +64,6 @@ public enum ControlNotification: String, CaseIterable, Sendable {
     case screenAccessibilityNeeded = "screen.accessibilityNeeded"
     /// What AI agents are doing on the VM changed (`vm.agent.activity`'s result), on the `vm` topic.
     case agentActivity = "agent.activity"
+    /// The guest tools' automatic update: `state` updating, updated or failed, `version`, `message`; `agent` topic.
+    case agentToolsUpdate = "agent.toolsUpdate"
 }

@@ -26,12 +26,15 @@ public struct RuntimeStore: Sendable {
     }
 
     /// The `runtime/` directory name for `app`: its version, plus the identity of its QEMU bundle (`-q…`), of its
-    /// Linux and macOS guest tools (`-t…`, `-m…`) when it has them, and of the helper's code (`-h…`), so a rebuild
-    /// under the same app version (every Debug build, a re-spun release) gets a fresh copy.
+    /// Linux, macOS and Windows guest tools (`-t…`, `-m…`, `-w…`) when it has them, and of the helper's code (`-h…`),
+    /// so a rebuild under the same app version (every Debug build, a re-spun release) gets a fresh copy.
     public static func version(app: URL, appVersion: String) -> String {
         let resources = app.appendingPathComponent("Contents/Resources", isDirectory: true)
         var version = appVersion
-        let manifests = [("q", "qemu/MANIFEST.json"), ("t", "GuestTools/linux/SHA256SUMS"), ("m", "GuestTools/macos/SHA256SUMS")]
+        let manifests = [
+            ("q", "qemu/MANIFEST.json"), ("t", "GuestTools/linux/SHA256SUMS"), ("m", "GuestTools/macos/SHA256SUMS"),
+            ("w", "GuestTools/windows/SHA256SUMS"),
+        ]
         for (tag, manifest) in manifests {
             guard let data = try? Data(contentsOf: resources.appendingPathComponent(manifest)) else { continue }
             version += "-\(tag)" + shortHash(data)

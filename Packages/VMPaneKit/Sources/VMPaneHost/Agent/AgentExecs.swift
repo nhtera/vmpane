@@ -14,6 +14,8 @@ actor AgentExecs {
         let stdin: UInt32?
         /// Started by an AI agent: the kill switch ends it, after the connection that started it closed too.
         var byAgent = false
+        /// An app on the desktop (`launch`): it stays open as long as the person likes.
+        var desktop = false
     }
 
     private enum Exit {
@@ -75,13 +77,16 @@ actor AgentExecs {
         let call = try await connection.call(AgentMethod.execStart, RPCParams.encode(params).get())
         let started = try RPCParams.decode(AgentDesktopStarted.self, from: call.result).get()
         let key = Key(connection, started.execId)
-        routes[key] = Route(owner: owner, connection: connection, stdin: nil, byAgent: byAgent)
+        routes[key] = Route(owner: owner, connection: connection, stdin: nil, byAgent: byAgent, desktop: true)
         Task {
             _ = await self.waitForExit(key)
             self.remove(key)
         }
         return started
     }
+
+    /// Whether a caller's command (not an app on the desktop) runs in the guest now.
+    var runsCommands: Bool { routes.values.contains { $0.owner != nil && !$0.desktop } }
 
     /// A command the helper ran for itself.
     struct Finished: Sendable {

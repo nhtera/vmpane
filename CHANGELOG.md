@@ -5,7 +5,15 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- The guest tools in Linux and Windows VMs keep up with VMPane: when VMPane is newer than the tools in a VM, they
+  update by themselves through the tools already there (no password), once no AI agent is at work in the VM, and the
+  VM's window says so. **Keep the guest tools up to date** in the VM's settings (General) turns it off; `vm_status`
+  and `vmpane doctor` say when a VM's tools are older than VMPane's. macOS VMs still update theirs by hand.
+
 ### Fixed
+- A Windows guest-tools update from one beta to the next could install the new agent beside the old one instead of
+  replacing it (both are version 1.0.0 to Windows Installer).
 - A VM stopped before an update kept starting on the previous version (its QEMU and guest tools) until VMPane quit:
   its next start, from the library, `vmpane` or an AI agent, now uses the updated one. A VM still running on the
   previous version says **Restart to update**; a suspended one resumes on the version that suspended it (#12).

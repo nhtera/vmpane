@@ -30,7 +30,7 @@ extension HelperController {
     private func agentEvent(_ event: AgentHub.Event) {
         switch event {
         case .connected(let connection, let peer):
-            Self.log.info("guest agent \(peer.hello.agentVersion, privacy: .public) connected (\(peer.hello.os, privacy: .public))")
+            Self.log.notice("guest agent \(peer.hello.agentVersion, privacy: .public) connected (\(peer.hello.os, privacy: .public))")
             let execs = agentExecs
             let clipboard = clipboardAttach(connection, peer: peer)
             Task {
@@ -52,6 +52,7 @@ extension HelperController {
             Task { await Self.syncClock(connection, peer: peer) }
             Task { await self.cloudInitReady() }
             Task { await self.mountShares(connection, peer: peer) }
+            Task { await self.updateToolsIfOlder(connection, peer: peer) }
             mapSharesDrive(connection, peer: peer)
             broadcastAgent(connected: true)
         case .disconnected:
@@ -64,17 +65,6 @@ extension HelperController {
     private func broadcastAgent(connected: Bool) {
         server?.broadcast(
             topic: "agent", method: ControlNotification.agentConnectionChanged.rawValue, params: ["connected": .bool(connected)])
-    }
-
-    /// Sets the guest clock to the host's (after a connect, a resume or a restore the guest's is stale).
-    static func syncClock(_ connection: AgentConnection, peer: AgentConnection.Peer) async {
-        guard peer.hello.caps?.contains(AgentCap.time) == true else { return }
-        let now = Int64(Date().timeIntervalSince1970 * 1_000_000_000)
-        do {
-            _ = try await connection.call(AgentMethod.timeSet, RPCParams.encode(AgentTimeSetParams(unixNanos: now)).get())
-        } catch {
-            log.notice("guest clock sync failed: \(String(describing: error), privacy: .public)")
-        }
     }
 
     /// Follows the VM state: QEMU's agent socket is connected while the VM runs (and no Windows install uses
@@ -119,7 +109,9 @@ extension HelperController {
         if ControlMethod(rawValue: method) == .agentStatus { return await agentStatus() }
         let stopped = agentStop(owner)
         let admitted = agentGeneration
-        guard let connection = await agentHub.waitForConnection(timeout: Self.agentWait) else {
+        // While the guest tools update, their agent is back within a minute or two.
+        let wait = toolsUpdate.installing ? toolsUpdate.reconnect : Self.agentWait
+        guard let connection = await agentHub.waitForConnection(timeout: wait) else {
             return .failure(RPCError(.agentUnavailable, "the guest agent is not connected"))
         }
         // Agents may have been stopped, or the person may have taken over, while the guest's tools connected.
@@ -215,7 +207,7 @@ extension HelperController {
         return .success([
             "connected": true, "version": .string(peer.hello.agentVersion), "os": .string(peer.hello.os),
             "osVersion": .string(peer.hello.osVersion ?? ""), "proto": .int(Int64(peer.proto)),
-            "caps": .array(caps.map(JSONValue.string)), "session": .bool(session),
+            "caps": .array(caps.map(JSONValue.string)), "session": .bool(session), "outdated": .bool(peer.toolsOutdated),
         ])
     }
 
