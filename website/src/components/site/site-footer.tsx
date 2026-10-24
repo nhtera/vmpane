@@ -7,14 +7,15 @@ import { Brand } from "./brand";
 
 const t = strings.footer;
 
-/** The draft's footer: the logo, three link columns, the licence line. */
+/** The footer: the logo and what VMPane is, three link columns, the licence line. */
 export function SiteFooter() {
   return (
     <footer className="foot">
       <div className="wrap">
         <div className="cols">
-          <div>
+          <div className="foot-brand">
             <Brand />
+            <p>{t.about}</p>
           </div>
           <div>
             <h2>{t.product.title}</h2>

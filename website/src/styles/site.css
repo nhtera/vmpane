@@ -147,8 +147,15 @@
   /* rows 24 px apart at least, so each small link keeps its own target */
   .foot ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
   .foot a { color: var(--text-2); }
-  .foot .logo { font-size: 16px; }
-  .foot .logo img { width: 22px; height: 22px; }
+  /* the logo keeps the text colour (not the links' grey), with what VMPane is under it */
+  .foot .logo { font-size: 19px; color: var(--text); }
+  .foot .logo img { width: 30px; height: 30px; }
+  .foot-brand { display: grid; gap: 14px; align-content: start; grid-column: 1 / -1; }
+  .foot-brand p { font-size: 14px; line-height: 1.5; color: var(--text-2); max-width: 30em; }
+  @media (min-width: 900px) {
+    .foot .cols { grid-template-columns: minmax(0, 1.8fr) repeat(3, minmax(0, 1fr)); gap: 40px; }
+    .foot-brand { grid-column: auto; }
+  }
   .foot .legal { display: flex; flex-wrap: wrap; gap: 4px 20px; }
 
   /* ---------- 404 ---------- */

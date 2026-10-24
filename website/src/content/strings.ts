@@ -40,6 +40,8 @@ export const strings = {
     toLight: "Switch to light theme",
   },
   footer: {
+    // under the logo: what VMPane is, in two sentences (each claim is on the landing page)
+    about: "VMPane runs macOS, Linux and Windows 11 in native Mac windows, each VM in its own process. AI agents get only the VMs you open to them, and every VM starts at Off.",
     product: {
       title: "Product",
       links: [
