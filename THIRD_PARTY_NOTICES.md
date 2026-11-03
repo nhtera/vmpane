@@ -3008,7 +3008,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- tokio 1.53.2
+- tokio 1.53.3
 
 ```
 MIT License
