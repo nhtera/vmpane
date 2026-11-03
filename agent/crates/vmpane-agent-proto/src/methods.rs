@@ -50,6 +50,9 @@ pub mod method {
     /// The files a drag going on in the guest carries, while the person drags out of the VM's window
     /// ([`cap::DRAG`], served by the session helper).
     pub const DRAG_PROBE: &str = "drag.probe";
+    /// How long ago the signed-in user's session last took input (keys, pointer), served by the session helper
+    /// ([`cap::INPUT_IDLE`]): after a pause the host sends a key that does nothing alone, until the guest has it.
+    pub const INPUT_IDLE: &str = "input.idle";
 }
 
 /// Capabilities an agent advertises in `hello`. A method whose cap is missing answers `capUnsupported`.
@@ -80,6 +83,8 @@ pub mod cap {
     pub const SESSION_STATE: &str = "session.state";
     /// `drag.probe` (Windows guests).
     pub const DRAG: &str = "drag";
+    /// `input.idle` (Windows guests).
+    pub const INPUT_IDLE: &str = "input.idle";
 }
 
 /// Who sends a method.
@@ -554,6 +559,15 @@ pub enum SessionState {
 #[serde(rename_all = "camelCase")]
 pub struct SessionStateResult {
     pub state: SessionState,
+}
+
+// MARK: input
+
+/// `input.idle` result: milliseconds since the signed-in user's session last took input.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct InputIdleResult {
+    pub idle_ms: u64,
 }
 
 // MARK: drag

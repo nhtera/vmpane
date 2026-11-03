@@ -102,6 +102,7 @@ pub fn protocol_document() -> Value {
             Some(cap::SESSION_STATE),
         ),
         request::<Empty, DragProbeResult>(&mut g, method::DRAG_PROBE, Some(cap::DRAG)),
+        request::<Empty, InputIdleResult>(&mut g, method::INPUT_IDLE, Some(cap::INPUT_IDLE)),
     ];
     let mut methods = Map::new();
     for e in entries {

@@ -20,6 +20,7 @@ mod drag;
 mod exec;
 mod files;
 mod freeze;
+mod input;
 mod log;
 mod netinfo;
 mod os;

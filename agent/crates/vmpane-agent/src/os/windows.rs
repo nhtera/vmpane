@@ -22,6 +22,25 @@ pub use drag::drag_probe;
 pub use net::{interfaces, listening_ports};
 pub use uia::screen_elements;
 
+/// Milliseconds since this session last took input (keys, pointer), or None when Windows cannot say.
+pub fn input_idle_ms() -> Option<u64> {
+    use windows::Win32::System::SystemInformation::GetTickCount;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO};
+    let mut info = LASTINPUTINFO {
+        cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32,
+        dwTime: 0,
+    };
+    // SAFETY: `info` is a LASTINPUTINFO with its size set, as the call requires.
+    if !unsafe { GetLastInputInfo(&mut info) }.as_bool() {
+        return None;
+    }
+    // Both are milliseconds since boot, wrapping together every 49.7 days; an input stamped after the tick was read
+    // counts as now.
+    // SAFETY: no arguments.
+    let since = unsafe { GetTickCount() }.wrapping_sub(info.dwTime) as i32;
+    Some(u64::from(since.max(0).unsigned_abs()))
+}
+
 pub const HAS_NET_INFO: bool = true;
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;

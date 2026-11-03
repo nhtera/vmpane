@@ -16,6 +16,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
   in the VM's menu bar and its Dock menu.
 
 ### Fixed
+- In a Windows VM, an AI agent's first input of a session could be lost: the "Before agent" snapshot pauses the VM,
+  and after a VM's first snapshot Windows can ignore the keyboard for several seconds once it runs again. VMPane now
+  sends a key that does nothing alone (right Ctrl) until the guest tools say Windows has it (up to 10 seconds), then
+  the agent's input (#11). Older guest tools get the earlier 1-second wait until they update.
 - A Windows guest-tools update from one beta to the next could install the new agent beside the old one instead of
   replacing it (both are version 1.0.0 to Windows Installer).
 - A VM stopped before an update kept starting on the previous version (its QEMU and guest tools) until VMPane quit:

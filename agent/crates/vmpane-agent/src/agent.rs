@@ -71,6 +71,9 @@ impl Agent {
                 if crate::drag::SUPPORTED {
                     caps.push(cap::DRAG);
                 }
+                if crate::input::SUPPORTED {
+                    caps.push(cap::INPUT_IDLE);
+                }
                 caps
             }
             Role::Daemon => {
@@ -90,6 +93,9 @@ impl Agent {
                 }
                 if crate::drag::SUPPORTED {
                     caps.push(cap::DRAG);
+                }
+                if crate::input::SUPPORTED {
+                    caps.push(cap::INPUT_IDLE);
                 }
                 caps
             }

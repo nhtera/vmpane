@@ -103,6 +103,7 @@ Host → guest requests unless noted. A method whose cap the agent did not adver
 | `power.shutdown` | power | `{reboot, force}` → `{}` (answered first) |
 | `net.addrs`, `ports.listening` | net, ports | → interfaces / listening sockets (hints only) |
 | `drag.probe` | drag | `{}` → `{items: [{path, folder}]}`: the files a drag going on in the guest carries (none without one), caught by a nearly invisible drop target over the whole screen that refuses the drop, so the guest's drag ends cancelled once its button goes up (Windows; user-session helper) |
+| `input.idle` | input.idle | `{}` → `{idleMs}`: milliseconds since the signed-in session last took input (keys, pointer). After a live snapshot the host sends right Ctrl alone, which does nothing, until this says the guest has it (and waits at least 1 s), so an agent's first input is not lost (Windows; user-session helper) |
 | `fs.freeze`, `fs.thaw` | freeze | `{timeoutMs ≤ 60000}` → `{frozen}` / → `{thawed}` |
 | `session.state` | session.state | `{}` → `{state: greeter\|locked\|unlocked\|unknown}`, answered by the daemon (root) from what the signed-in user cannot set: Windows, the console session's `WTSSessionInfoEx` (no user name: the sign-in screen; else its lock flag); Linux, logind's foreground seat session (class `greeter`: the login screen; a user session is `unlocked`, or `unknown` with its lock hint, which is the user's to set); macOS, `/dev/console` owned by root (the login window), else `IOConsoleUsers`' `CGSSessionScreenIsLocked` for the console user |
 | `screen.elements` | screen | `{maxElements ≤ 800}` → `{elements: [{role, name, value?, rect: [x, y, w, h], enabled, focused}], truncated}`: the controls of the user's foreground window in display pixels, names ≤ 120 characters (user-session helper: UI Automation on Windows; macOS: the accessibility tree once Accessibility is granted, else `permissionDenied` and, the first time, macOS's prompt; read in a short-lived `vmpane-agent screen-elements` child, since a running process keeps its first answer about the grant) |
@@ -145,7 +146,7 @@ this same protocol, with the daemon in the host's role.
 
 The daemon relays to the current helper, mapping exec and stream ids both ways:
 - `exec.start {as: "user"}` and its `exec.signal`, stdin and output (desktop launches too);
-- `session.reveal`, `screen.elements` and `drag.probe`;
+- `session.reveal`, `screen.elements`, `drag.probe` and `input.idle`;
 - `clipboard.get` / `clipboard.set` with their streams;
 - the helper's `clipboard.changed`, which goes on to the host. The helper polls the pasteboard every 250 ms and
   does not report its own `clipboard.set`.

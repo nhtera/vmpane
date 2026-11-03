@@ -36,6 +36,8 @@ public enum AgentMethod {
     public static let sessionState = "session.state"
     /// The files a drag going on in the guest carries (`AgentCap.drag`, Windows guests), served by the session helper.
     public static let dragProbe = "drag.probe"
+    /// Milliseconds since the signed-in session last took input (`AgentCap.inputIdle`, Windows guests).
+    public static let inputIdle = "input.idle"
 
     /// Methods the guest may send. Anything else from the guest is a protocol violation.
     public static let fromGuest: Set<String> = [hello, agentHeartbeat, execExited, clipboardChanged]
@@ -65,6 +67,8 @@ public enum AgentCap {
     public static let sessionState = "session.state"
     /// `drag.probe`: files dragged out of the VM's window go on to Finder (Windows guests).
     public static let drag = "drag"
+    /// `input.idle`: the helper can tell when the guest takes input again (Windows guests).
+    public static let inputIdle = "input.idle"
 }
 
 /// The agent protocol's own error codes (JSON-RPC's standard ones are in `ControlErrorCode`).

@@ -648,6 +648,20 @@
       ],
       "type": "object"
     },
+    "InputIdleResult": {
+      "description": "`input.idle` result: milliseconds since the signed-in user's session last took input.",
+      "properties": {
+        "idleMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "idleMs"
+      ],
+      "type": "object"
+    },
     "ListeningPort": {
       "properties": {
         "address": {
@@ -1178,6 +1192,17 @@
       },
       "result": {
         "$ref": "#/$defs/HelloResult"
+      }
+    },
+    "input.idle": {
+      "cap": "input.idle",
+      "direction": "hostToGuest",
+      "kind": "request",
+      "params": {
+        "$ref": "#/$defs/Empty"
+      },
+      "result": {
+        "$ref": "#/$defs/InputIdleResult"
       }
     },
     "net.addrs": {

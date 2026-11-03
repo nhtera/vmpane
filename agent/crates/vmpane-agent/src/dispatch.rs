@@ -33,6 +33,7 @@ fn required_cap(name: &str) -> Option<&'static str> {
         method::SCREEN_ELEMENTS => cap::SCREEN,
         method::SESSION_STATE => cap::SESSION_STATE,
         method::DRAG_PROBE => cap::DRAG,
+        method::INPUT_IDLE => cap::INPUT_IDLE,
         _ => return None,
     })
 }
@@ -154,6 +155,19 @@ pub async fn handle(
                 then: None,
             })
         }
+        method::INPUT_IDLE => {
+            // The session's input: read by its session helper.
+            let link = conn.agent.session.current().ok_or_else(|| {
+                ErrorObject::new(ErrorCode::NoSession, "nobody is signed in to the guest")
+            })?;
+            let (value, _) = link
+                .call(name, relay_params(&Empty {}), |_| Vec::new())
+                .await?;
+            Ok(Reply {
+                result: value,
+                then: None,
+            })
+        }
         // Answered here, by root: never by the session helper, which the signed-in user controls.
         method::SESSION_STATE => {
             let state = tokio::task::spawn_blocking(crate::os::session_state)
@@ -195,6 +209,7 @@ async fn handle_in_session(
             crate::screen::elements(request.decode_params()?).await
         }
         method::DRAG_PROBE if crate::drag::SUPPORTED => crate::drag::probe().await,
+        method::INPUT_IDLE if crate::input::SUPPORTED => crate::input::idle(),
         method::AGENT_PING => Reply::ok(&Empty {}),
         method::AGENT_INFO => Reply::ok(&conn.agent.info(conn.proto)),
         method::EXEC_START => exec::start(conn, request.decode_params()?).await,
