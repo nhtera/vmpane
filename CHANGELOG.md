@@ -5,6 +5,11 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.0-beta.12]
+Updates now reach every VM: a VM stopped before an update starts on the new version, and the guest tools in Linux and
+Windows VMs update themselves; a VM without them offers them. An AI agent's first input in a Windows VM is no longer
+lost.
+
 ### Added
 - The guest tools in Linux and Windows VMs keep up with VMPane: when VMPane is newer than the tools in a VM, they
   update by themselves through the tools already there (no password), once no AI agent is at work in the VM, and the
@@ -25,6 +30,9 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - A VM stopped before an update kept starting on the previous version (its QEMU and guest tools) until VMPane quit:
   its next start, from the library, `vmpane` or an AI agent, now uses the updated one. A VM still running on the
   previous version says **Restart to update**; a suspended one resumes on the version that suspended it (#12).
+- VoiceOver reads each VM in the library as one sentence, names the VM list, and reads the inspector's state and disk
+  use, the new-VM sheet's systems and the VM settings' sections; the inspector says "Start it to read" instead of a
+  dash, and small captions in the sidebars are easier to read.
 
 ## [1.0.0-beta.11]
 AI agents act faster and see more, with you able to take over at any moment; Linux VMs are ready in minutes; the
