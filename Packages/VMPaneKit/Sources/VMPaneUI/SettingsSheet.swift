@@ -131,9 +131,12 @@ public struct SettingsSheet: View {
         // macOS guests update theirs by hand (VMPane Agent.pkg) for now.
         if model.draft.os != .macos {
             Section {
-                row("agent.autoUpdate") { Toggle("Keep the guest tools up to date", isOn: $model.draft.agent.updatesTools) }
-            } footer: {
-                Text("When VMPane is newer than the tools in the VM, they update by themselves while no AI agent is at work.")
+                row("agent.autoUpdate") {
+                    Toggle(isOn: $model.draft.agent.updatesTools) {
+                        Text("Keep the guest tools up to date")
+                        Text("When VMPane is newer than the tools in the VM, they update by themselves while no AI agent is at work.")
+                    }
+                }
             }
         }
     }

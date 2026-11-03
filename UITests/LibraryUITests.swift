@@ -102,7 +102,7 @@ final class LibraryUITests: XCTestCase {
     @MainActor
     func testALibraryWithAVM() throws {
         let (_, window) = try libraryWithAVM()
-        let vm = window.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Ubuntu 26.04, Linux, stopped"))
+        let vm = window.staticTexts.matching(NSPredicate(format: "value BEGINSWITH %@", "Ubuntu 26.04, Linux, stopped"))
             .firstMatch
         XCTAssertTrue(vm.waitForExistence(timeout: 15), "the VM is listed with its system and state")
         vm.click()
@@ -122,7 +122,7 @@ final class LibraryUITests: XCTestCase {
     @MainActor
     func testALibraryWithAVMPassesTheAccessibilityAudit() throws {
         let (app, window) = try libraryWithAVM()
-        let vm = window.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Ubuntu 26.04")).firstMatch
+        let vm = window.staticTexts.matching(NSPredicate(format: "value BEGINSWITH %@", "Ubuntu 26.04")).firstMatch
         XCTAssertTrue(vm.waitForExistence(timeout: 15))
         vm.click()
         XCTAssertTrue(window.buttons["Start"].waitForExistence(timeout: 5))

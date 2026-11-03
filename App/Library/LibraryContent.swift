@@ -36,6 +36,7 @@ struct LibraryContent: View {
                     ForEach(store.creations) { CreationRow(store: store, creation: $0) }
                     ForEach(rows) { VMRowView(row: $0).tag($0.id) }
                 }
+                .accessibilityLabel(filter.rawValue)  // the list says which VMs it holds
                 // A double-click or Return starts the VM or shows its window, with or without the inspector.
                 .contextMenu(forSelectionType: UUID.self) { ids in
                     if let id = ids.first, let row = store.row(id) { menu(row) }
@@ -75,6 +76,7 @@ struct VMRowView: View {
             VMThumbnail(row: row)
                 .frame(width: 96, height: 60)
                 .overlay(alignment: .bottomTrailing) { SystemTile(row.system, size: 22).padding(4) }
+                .accessibilityHidden(true)  // the sentence names its system
             VStack(alignment: .leading, spacing: 3) {
                 Text(row.name).font(.headline).lineLimit(1)
                 HStack(spacing: 6) {
@@ -90,11 +92,11 @@ struct VMRowView: View {
                 if row.restartToUpdate { UpdateMark() }
                 if row.agentActive, let client = row.agentClient { AgentBadge(client: row.agentLine(client)) }
             }
+            // One sentence, as text: the list's row is what selects (a bare element of its own has no role).
+            .accessibilityRepresentation { Text(Self.spoken(row)) }
             Spacer(minLength: 0)
         }
         .padding(.vertical, 4)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.spoken(row))
     }
 
     /// The row as one sentence ("Debian 13, Linux, running, Claude Code acting").

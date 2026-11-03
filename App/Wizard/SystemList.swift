@@ -38,14 +38,16 @@ struct SystemList: View {
 
     private func row(_ system: SystemTile.System, _ title: String, _ version: String?) -> some View {
         HStack(spacing: 10) {
-            SystemTile(system, size: 30)
+            SystemTile(system, size: 30).accessibilityHidden(true)  // the title names the system
+            // The words alone are the row's element: with the tile inside its frame the audit samples the tile's pixels.
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                if let version { Text(version).font(.caption).foregroundStyle(.secondary) }
+                // In the primary colour: the secondary one on the sidebar's material is too faint for small text.
+                if let version { Text(version).font(.caption) }
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("system \(title)")
         }
         .padding(.vertical, 3)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("system \(title)")
     }
 }

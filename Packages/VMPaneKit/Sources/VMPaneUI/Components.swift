@@ -51,6 +51,7 @@ public struct StateDot: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("State: \(Self.label(state, suspended: suspended))")
+        .accessibilityAddTraits(.isStaticText)  // read as text: without a role VoiceOver cannot say what it is
     }
 
     public static func label(_ state: VMRunState?, suspended: Bool = false) -> String {

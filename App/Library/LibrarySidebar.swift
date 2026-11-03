@@ -38,12 +38,18 @@ struct LibrarySidebar: View {
     var body: some View {
         Group {
             if isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Virtual Machines").font(.headline)
-                    Text("Your VMs appear here, with what each one is doing.").font(.callout).foregroundStyle(.secondary)
+                // A list, as with VMs: it sits below the title bar and names the sidebar's column for VoiceOver. In the
+                // primary colour: the secondary one on the sidebar's material is too faint for small text (the
+                // accessibility audit's contrast).
+                List {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Virtual Machines").font(.headline)
+                        Text("Your VMs appear here, with what each one is doing.").font(.callout)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, 4)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .padding(12)
+                .listStyle(.sidebar)
                 .contentShape(Rectangle())  // the whole sidebar takes a dropped installer
             } else {
                 List(selection: Binding(get: { filter }, set: { if let new = $0 { filter = new } })) {
@@ -52,7 +58,7 @@ struct LibrarySidebar: View {
                             Label {
                                 Text(item.rawValue)
                             } icon: {
-                                SectionIcon(item.icon.systemImage, color: item.icon.color, size: 20)
+                                SectionIcon(item.icon.systemImage, color: item.icon.color, size: 20).accessibilityHidden(true)
                             }
                             .badge(store.rows.filter(item.includes).count)
                             .tag(item)

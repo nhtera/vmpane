@@ -63,8 +63,8 @@ private struct SystemSection: View {
     var body: some View {
         Form {
             LabeledContent("System", value: row.systemName)
-            LabeledContent("Version", value: guest.osVersion ?? (row.isRunning ? "—" : "Start it to read"))
-            LabeledContent("Guest tools", value: guest.toolsVersion ?? (row.isRunning ? "Not running" : "—"))
+            LabeledContent("Version", value: guest.osVersion ?? (row.isRunning ? "Not reported" : "Start it to read"))
+            LabeledContent("Guest tools", value: guest.toolsVersion ?? (row.isRunning ? "Not running" : "Start it to read"))
             LabeledContent("State") { StateDot(row.state, suspended: row.suspended) }
             LabeledContent("On disk") { ByteSizeText(row.diskBytes) }
             LabeledContent("Location") {
@@ -108,10 +108,8 @@ private struct InspectorActions: View {
                     .help("Copy the guest account's password VMPane keeps for you; the clipboard forgets it after a minute")
             }
             Spacer(minLength: 0)
-            Menu {
+            Menu("More actions", systemImage: "ellipsis") {
                 VMActionMenu(store: store, row: row)
-            } label: {
-                Label("More", systemImage: "ellipsis")
             }
             .labelStyle(.iconOnly)
             .menuStyle(.button)
@@ -179,6 +177,7 @@ private struct ResourcesSection: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Disk usage")
                     .accessibilityValue(text)
+                    .accessibilityAddTraits(.isStaticText)  // read as text: without a role VoiceOver cannot say what it is
                 }
                 Group {
                     Stepper(value: draft.cpuCount, in: 1...cores) {

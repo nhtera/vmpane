@@ -147,6 +147,7 @@ private struct FactsBox: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(fact.0)
                 .accessibilityValue(fact.1)
+                .accessibilityAddTraits(.isStaticText)  // read as text: without a role VoiceOver cannot say what it is
             }
         }
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
