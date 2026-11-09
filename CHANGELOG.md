@@ -5,6 +5,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.0-beta.13]
+Omarchy, Arch Linux with the Hyprland desktop, joins the new-VM sheet: VMPane installs it for you from its own ISO
+with nothing to click.
+
 ### Added
 - **Omarchy** in the new-VM sheet: Arch Linux with the Hyprland desktop, installed for you from Omarchy's own arm64
   ISO (5.7 GB, checked against the pinned SHA-256) with nothing to click. VMPane writes the installer's answers (your
