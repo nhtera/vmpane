@@ -23,6 +23,10 @@ export const FAQ: readonly Faq[] = [
     a: "No. VMPane runs Arm guests only, with no emulation. Windows 11 on Arm runs x64 apps through its own built-in emulation.",
   },
   {
+    q: "Which Linux systems come ready to use?",
+    a: "Ubuntu, Debian and Fedora from their own cloud images, and Omarchy, Arch Linux with the Hyprland desktop, from its own ISO. Each installs with nothing typed: VMPane writes the account you chose into the install. Any other distribution installs from its ISO, the catalog's or yours.",
+  },
+  {
     q: "Does it use QEMU?",
     a: "For Windows only. macOS and Linux run on Apple's Virtualization framework. Windows 11 needs a TPM, Secure Boot and its own drivers, which QEMU with Hypervisor.framework provides; each Windows VM's QEMU runs in its own macOS sandbox.",
   },

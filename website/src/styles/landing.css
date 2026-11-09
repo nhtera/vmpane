@@ -78,7 +78,7 @@
   .tile .i { width: 1.3em; height: 1.3em; }
   .tile.ubuntu { background: var(--tile-ubuntu); } .tile.debian { background: var(--tile-debian); }
   .tile.fedora { background: var(--tile-fedora); } .tile.windows { background: var(--tile-windows); }
-  .tile.macos { background: var(--tile-macos); }
+  .tile.macos { background: var(--tile-macos); } .tile.omarchy { background: var(--tile-omarchy); }
   .tile .panes { display: grid; grid-template-columns: repeat(2, .5em); gap: .1em; } .tile .panes i { width: .5em; height: .5em; border-radius: .08em; background: var(--on-color); }
   /* the settings sheet: sections | the open one's form */
   .sets { display: grid; grid-template-columns: 33% minmax(0, 1fr); height: calc(100% - 3.6em); }

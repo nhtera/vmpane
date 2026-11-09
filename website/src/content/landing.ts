@@ -56,7 +56,7 @@ export const landing = {
         title: "Linux, ready in minutes.",
         facts: [
           { text: "Ubuntu, Debian and Fedora from their own cloud images: nothing to click through" },
-          { text: "Omarchy, the Arch Linux desktop, installed from its own ISO with nothing to click" },
+          { text: "Omarchy, Arch Linux with the Hyprland desktop, installed from its own ISO with nothing typed" },
           { text: "Or an installer ISO, the catalog's or yours, checked before it boots" },
           { text: "Made in the background: the library shows each stage" },
           { text: "Shared folders over virtiofs" },
@@ -261,7 +261,7 @@ export const landing = {
     rows: [
       ["macOS", "4", "8 GB", "80 GB", "4 GB"],
       ["Linux", "4", "4 GB", "64 GB", "2 GB"],
-      ["Linux with a desktop", "4", "8 GB", "64 GB", "4 GB"],
+      ["Linux with a desktop (Omarchy)", "4", "8 GB", "64 GB", "4 GB"],
       ["Windows 11", "4", "8 GB", "64 GB", "4 GB"],
     ],
     note: "On a smaller Mac, a new VM gets about half its processors and memory, never less than the minimum, and the Mac keeps 4 GB for itself. You can change all of it. Disks take only the space the system uses.",
@@ -282,10 +282,10 @@ export const landing = {
       { name: "Ubuntu 24.04", tile: "U", brand: "ubuntu", os: "Linux", state: "Running", st: "run", spec: "4 CPUs · 4 GB" },
       { name: "Windows 11", tile: "panes", brand: "windows", os: "Windows", state: "Running", st: "run", spec: "4 CPUs · 8 GB" },
       { name: "macOS 26", tile: "mac", brand: "macos", os: "macOS", state: "Suspended", st: "susp", spec: "4 CPUs · 8 GB" },
-      { name: "Fedora 42", tile: "F", brand: "fedora", os: "Linux", state: "Stopped", st: "", spec: "2 CPUs · 4 GB" },
+      { name: "Omarchy 4.5.0", tile: "O", brand: "omarchy", os: "Linux", state: "Stopped", st: "", spec: "4 CPUs · 8 GB" },
     ],
     library: {
-      label: "VMPane's library: Ubuntu and Windows running, macOS suspended, Fedora stopped; Ubuntu is chosen, and its agent activity shows a denied command.",
+      label: "VMPane's library: Ubuntu and Windows running, macOS suspended, Omarchy stopped; Ubuntu is chosen, and its agent activity shows a denied command.",
       // The sidebar's filters and their counts (LibraryFilter).
       filters: [["All", "4", "list", "gray"], ["Running", "2", "play", "green"], ["Agent active", "1", "sparkle", "blue"]],
       facts: [["System", "Linux"], ["On disk", "9.8 GB"]],
