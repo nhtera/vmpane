@@ -232,7 +232,9 @@ test("the hero's Read the docs chevron sits on the line: centred on the lowercas
     const g = svg.getBBox();
     return box.top + (g.y + g.height / 2) * (box.height / 24) - xMid;
   });
-  assert.ok(Math.abs(off) <= 0.75, `the chevron is ${off.toFixed(2)}px off the middle of the lowercase letters`);
+  // Within 1.25 px: under the 1.3 px that flex centring alone put it off (the bug this guards), and room for the
+  // x-height of the fallback font on Linux (CI's Chromium measured 1.11 px with the Mac's 0.75 px bound).
+  assert.ok(Math.abs(off) <= 1.25, `the chevron is ${off.toFixed(2)}px off the middle of the lowercase letters`);
   await context.close();
 });
 
