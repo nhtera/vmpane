@@ -72,9 +72,10 @@ install scripts never reach the app's build, including the release job that hold
 
 ## Pipeline notes
 
-Pinned as Ghira's (2026-10-09): `@tanstack/react-start` 1.168.60, `@cloudflare/vite-plugin`
-2.0.0-beta.sha-52b0dc0e9, `cf` 1.0.0-beta.12, `fumadocs-core` 16.16.2, `fumadocs-mdx` 15.4.6, `vite` 8.3.2,
-TypeScript 5.9.3. Do not upgrade them casually: `cf` is an open beta.
+Pinned as Ghira's (2026-10-09): `@tanstack/react-start` 1.168.60, `fumadocs-core` 16.16.2, `fumadocs-mdx` 15.4.6,
+`vite` 8.3.2, TypeScript 5.9.3; `@cloudflare/vite-plugin` 2.0.0-beta.v.13 and `cf` 1.0.0-beta.28 since 2026-11-10 (the
+older ones depended on a `@cloudflare/config` with a high-severity advisory, which fails `npm audit` in CI). Do not
+upgrade them casually: `cf` is an open beta.
 
 - **Prerender:** `cf build` prerenders `/`, `/docs`, every docs page, `/404.html` and the JSON/text routes listed
   in `vite.config.ts` `pages` (crawl + `failOnError`). Output: `.cloudflare/output/v0/` (`workers/default/assets/`
