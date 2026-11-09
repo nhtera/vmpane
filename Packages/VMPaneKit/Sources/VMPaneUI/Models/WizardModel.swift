@@ -106,14 +106,23 @@ public final class WizardModel {
     /// Steps this OS goes through (only Windows asks for an account).
     public var steps: [Step] { Step.allCases.filter { $0 != .account || needsAccount } }
 
-    /// Windows Setup and Linux cloud images create the account from the wizard.
-    public var needsAccount: Bool { os == .windows || isCloudImage }
+    /// Windows Setup, Linux cloud images and Omarchy's autoinstall create the account from the wizard.
+    public var needsAccount: Bool { os == .windows || hasLinuxAccount }
 
     /// A Linux cloud image: no installer, cloud-init sets the VM up.
     public var isCloudImage: Bool {
         if case .linuxCatalog(let image)? = source { return image.isCloudImage }
         return false
     }
+
+    /// Omarchy's ISO: installs itself from a seed VMPane writes (`OmarchySeed`), with the account from the wizard.
+    public var isAutoinstallISO: Bool {
+        if case .linuxCatalog(let image)? = source { return image.isAutoinstallISO }
+        return false
+    }
+
+    /// The wizard's account goes to a Linux system: a cloud image's first boot, or Omarchy's autoinstall.
+    public var hasLinuxAccount: Bool { isCloudImage || isAutoinstallISO }
 
     /// Memory and CPU a Mac keeps for itself.
     public static let reservedHostMemoryGiB = 4
@@ -189,7 +198,7 @@ public final class WizardModel {
     }
 
     private var accountProblems: [String] {
-        if isCloudImage { return linuxAccountProblems }
+        if hasLinuxAccount { return linuxAccountProblems }
         guard os == .windows else { return [] }
         var problems: [String] = []
         let user = userName.trimmingCharacters(in: .whitespaces)
@@ -271,9 +280,9 @@ public final class WizardModel {
         password = ""
     }
 
-    /// The account a cloud image's first boot creates.
+    /// The account a cloud image's first boot, or Omarchy's autoinstall, creates.
     var cloudAccount: CloudImageInstall.Account? {
-        guard isCloudImage else { return nil }
+        guard hasLinuxAccount else { return nil }
         let key = sshKey.trimmingCharacters(in: .whitespacesAndNewlines)
         return CloudImageInstall.Account(userName: userName, password: password, sshKey: key.isEmpty ? nil : key, desktop: desktop)
     }

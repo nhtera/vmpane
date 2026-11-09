@@ -8,30 +8,13 @@
 source "$VMPANE_ROOT/itest/lib/common.sh"
 IT_SCENARIO=linux-iso-install
 
-# Path of the catalog image $1, downloaded once into ~/VMPaneItest/downloads and sha256-checked.
-iso_from_catalog() {
-    local entry url sha file
-    entry=$(jq -c --arg id "$1" '.images[] | select(.id == $id)' \
-        "$VMPANE_ROOT/Packages/VMPaneKit/Sources/VMPaneHost/Install/Resources/linux-catalog.json")
-    url=$(jq -r .url <<<"$entry")
-    sha=$(jq -r .sha256 <<<"$entry")
-    file="$HOME/VMPaneItest/downloads/$(basename "$url")"
-    if [[ ! -f $file || $(shasum -a 256 "$file" | awk '{print $1}') != "$sha" ]]; then
-        mkdir -p "$(dirname "$file")"
-        curl -fsSL --retry 3 -o "$file.partial" "$url" || return 1
-        [[ $(shasum -a 256 "$file.partial" | awk '{print $1}') == "$sha" ]] || { echo "sha256 mismatch: $url" >&2; return 1; }
-        mv "$file.partial" "$file"
-    fi
-    echo "$file"
-}
-
 install_media() {  # jq filter: attach $iso as install media
     echo '.removable += [{id: "install", path: "'"$1"'", bus: "usb"}] | .install = {media: "install"}'
 }
 
 scenario_run() {
     local work iso pids=() b pid socket shot lit start
-    iso=$(iso_from_catalog debian-13.7-netinst) || { it_fail "cannot get the Debian netinst ISO"; return 1; }
+    iso=$(it_catalog_iso debian-13.7-netinst) || { it_fail "cannot get the Debian netinst ISO"; return 1; }
     work=$(mktemp -d /tmp/vp-iso.XXXXXX)
     export VMPANE_SUPPORT_DIR="$work/s"
     mkdir -p "$VMPANE_SUPPORT_DIR/VMs"

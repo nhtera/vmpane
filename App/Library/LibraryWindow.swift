@@ -227,34 +227,37 @@ private struct EmptyLibrary: View {
     let choose: (WizardModel.Card?) -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 22) {
-                VStack(spacing: 6) {
-                    Text("Create your first VM").font(.largeTitle.bold())
-                    Text("macOS, Linux and Windows on this Mac, each in a window of its own.").foregroundStyle(.secondary)
+        // Centred by layout, not by a scroll anchor: a scrolled-to-centre ScrollView reports its content's accessibility
+        // frames at the unscrolled positions until the first resize (UI tests, VoiceOver, then click past the elements).
+        GeometryReader { viewport in
+            ScrollView {
+                VStack(spacing: 22) {
+                    VStack(spacing: 6) {
+                        Text("Create your first VM").font(.largeTitle.bold())
+                        Text("macOS, Linux and Windows on this Mac, each in a window of its own.").foregroundStyle(.secondary)
+                    }
+                    HStack(spacing: 14) {
+                        tile(.macos, "Latest from Apple")
+                        tile(.ubuntu, "\(WizardModel.Card.ubuntu.versionText(in: .bundled) ?? "") · ready in minutes")
+                        tile(.windows, "for Arm, installed for you")
+                    }
+                    Button("More systems: Debian, Fedora, Omarchy, an installer file…") { choose(nil) }.vmCapsule(large: false)
+                    VStack(spacing: 10) {
+                        Label("Or drop an installer (.iso or .ipsw) here", systemImage: "arrow.down.doc")
+                            .frame(maxWidth: .infinity)
+                            .padding(18)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .strokeBorder(.secondary.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
+                        Label("AI agents cannot see a VM until you allow it.", systemImage: "lock.shield")
+                    }
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: 560)
                 }
-                HStack(spacing: 14) {
-                    tile(.macos, "Latest from Apple")
-                    tile(.ubuntu, "\(WizardModel.Card.ubuntu.versionText(in: .bundled) ?? "") · ready in minutes")
-                    tile(.windows, "for Arm, installed for you")
-                }
-                Button("More systems: Debian, Fedora, an installer file…") { choose(nil) }.vmCapsule(large: false)
-                VStack(spacing: 10) {
-                    Label("Or drop an installer (.iso or .ipsw) here", systemImage: "arrow.down.doc")
-                        .frame(maxWidth: .infinity)
-                        .padding(18)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(.secondary.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
-                    Label("AI agents cannot see a VM until you allow it.", systemImage: "lock.shield")
-                }
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: 560)
+                .padding(30)
+                .frame(maxWidth: .infinity, minHeight: viewport.size.height)
             }
-            .padding(30)
-            .frame(maxWidth: .infinity)
         }
-        .defaultScrollAnchor(.center)
     }
 
     /// A quick-start tile: a real button (Tab reaches it), named by its system.

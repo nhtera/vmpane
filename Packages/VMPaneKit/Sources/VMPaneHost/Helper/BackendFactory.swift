@@ -53,7 +53,11 @@ public enum BackendFactory {
                 plan: plan, title: config.name, replan: { try VZPlanBuilder.plan($0, bundle: bundle, guestTools: tools) })
             return Made(
                 backend: backend, config: config, afterStart: { VZBackend.installed($0, bundle: bundle) },
-                afterStop: { LinuxInstall.finished($0, bundle: bundle) ?? CloudImageInstall.finished($0, bundle: bundle) })
+                afterStop: { config in
+                    // Both, in turn: an autoinstall (Omarchy) has an ISO and a seed to detach.
+                    let media = LinuxInstall.finished(config, bundle: bundle)
+                    return CloudImageInstall.finished(media ?? config, bundle: bundle) ?? media
+                })
         case .qemu:
             guard let runtime, FileManager.default.fileExists(atPath: runtime.appendingPathComponent("qemu/bin").path) else {
                 return Made(backend: nil, config: config)  // this app has no QEMU

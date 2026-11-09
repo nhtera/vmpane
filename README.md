@@ -7,7 +7,8 @@ A native macOS app for running virtual machines on Apple silicon:
 - a `vmpane` command-line tool and a built-in **MCP server** (`vmpane mcp`) so AI coding agents can drive VMs:
   batched input that reports whether the screen changed, screen text and controls, desktop apps, sign-in, all
   within a level you choose per VM, with **Take Over** and a kill switch
-- Linux VMs ready in minutes from Ubuntu, Debian and Fedora cloud images; a new-VM sheet listing every system
+- Linux VMs ready in minutes from Ubuntu, Debian and Fedora cloud images, and Omarchy installed from its own ISO with
+  nothing to click; a new-VM sheet listing every system
 - snapshots as undo, port forwarding and shared folders
 
 Status: public beta ([1.0.0-beta.10](https://github.com/nhtera/vmpane/releases/tag/v1.0.0-beta.10)). Requires macOS 15 or

@@ -11,13 +11,15 @@ public struct ImageCatalog: Codable, Sendable, Equatable {
         public var url: URL
         public var sha256: String
         public var sizeBytes: Int64
-        /// `cloudImage`: a distribution's cloud image (qcow2), set up with cloud-init instead of an installer. Absent:
+        /// `cloudImage`: a distribution's cloud image (qcow2), set up with cloud-init instead of an installer.
+        /// `autoinstallISO`: an installer ISO that installs itself from a `cidata` seed VMPane writes (Omarchy). Absent:
         /// an installer ISO (or a macOS restore image).
         public var kind: String?
-        /// Cloud images: `ubuntu`, `debian` or `fedora` (what the seed is written for).
+        /// Cloud images: `ubuntu`, `debian` or `fedora` (what the seed is written for); autoinstall ISOs: `omarchy`.
         public var distro: String?
 
         public var isCloudImage: Bool { kind == "cloudImage" }
+        public var isAutoinstallISO: Bool { kind == "autoinstallISO" }
 
         public init(
             id: String, name: String, version: String, build: String? = nil, url: URL, sha256: String, sizeBytes: Int64,
@@ -48,7 +50,8 @@ public struct ImageCatalog: Codable, Sendable, Equatable {
     /// macOS restore images. The primary macOS path: `VZMacOSRestoreImage.fetchLatestSupported` fails
     /// on macOS 15 hosts (Apple's catalog lists only macOS 27), so VMPane ships its own list.
     public static func macOS() throws -> ImageCatalog { try load("macos-catalog") }
-    /// Linux arm64 cloud images and installer ISOs (`scripts/refresh-linux-catalog.sh` pins the cloud images).
+    /// Linux arm64 cloud images and installer ISOs (`scripts/refresh-linux-catalog.sh` pins the cloud images,
+    /// `scripts/refresh-omarchy-catalog.sh` Omarchy's ISO).
     public static func linux() throws -> ImageCatalog { try load("linux-catalog") }
 
     static func load(_ name: String) throws -> ImageCatalog {

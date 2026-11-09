@@ -24,6 +24,35 @@ Return makes another of the system you used last.
   password's hash, as `/etc/shadow` does). Until then the VM cannot be snapshotted. A copy made before that is a new
   machine with its own setup, and every copy gets its own SSH port.
 
+## Omarchy, installed for you
+
+**New VM** › **Omarchy** › **Create** makes a VM of [Omarchy](https://omarchy.org) (Arch Linux with the Hyprland
+desktop) from Omarchy's own arm64 ISO, with nothing to click: the ISO (5.7 GB, downloaded once into
+`~/Library/Caches/app.vmpane.mac/ISO/` and checked against the SHA-256 pinned in VMPane) boots with a small `cidata`
+disc beside it that holds what its installer asks for (`install/cidata` in the VM's bundle: the disk's layout, the
+VM's name as host name, the Mac's time zone, your account with the password as a `$6$` hash). Omarchy's installer
+takes that and installs by itself, in a few minutes; the VM then restarts in place into Omarchy's lock screen, where
+you sign in with your password (**Copy Password** in the VM's inspector when VMPane made it up). The VM's window
+reports the install, and once Omarchy's boot loader is in place the seed's data is removed; the ISO and the seed's
+disc leave the VM at its next stop.
+
+- The disk is not encrypted (Omarchy's default on a laptop would ask for the passphrase at every start).
+- Omarchy keeps SSH off. With an SSH public key in **Customize…** › Account, its installer turns `sshd` on for that
+  key, and VMPane forwards SSH from 127.0.0.1 on this Mac (`vmpane ssh <vm> -u <user>`).
+- Omarchy's installer has no step for VMPane's guest tools: once Omarchy runs, the VM's window offers them as for
+  any ISO install (see below; the command needs your password for `sudo`). Omarchy's own first-run notices (update
+  the system, set an agent, set up Git) appear on its desktop.
+- Hyprland draws in software in a VM (Apple's framework gives Linux a 2D display): fine for a terminal-centred
+  desktop, slow for video. Omarchy sizes the VM as a desktop (8 GB of memory on a Mac with room) with *Sharp
+  (Retina pixels)* as its display scaling: Hyprland draws Omarchy at scale 2, which then comes out right.
+- Hyprland takes the display's size when you sign in and keeps it: a VM window resized afterwards shows the same
+  picture scaled. Size the window first, or sign out and in again (Omarchy's `~/.config/hypr/monitors.lua` can pin a
+  mode).
+- The pin comes from Omarchy's release ISO, whose detached signature by Omarchy's release key is checked when the
+  catalog is refreshed (`scripts/refresh-omarchy-catalog.sh`). Omarchy calls its arm64 build preliminary; it is
+  built for Nvidia's DGX Spark and Snapdragon laptops, and VMPane's VM is none of those (its installer reports the
+  plain `aarch64` platform).
+
 ## Installing from an ISO
 
 Create a Linux VM from the catalog (**Customize…** › Installer: Ubuntu Server, Debian, Fedora Server; arm64 ISOs,

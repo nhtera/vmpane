@@ -52,18 +52,25 @@ public enum LinuxInstall {
         try DurableWrite.syncDirectory(lock.bundle.auxDirectory)
     }
 
-    /// After the VM stopped: if it was installing and the install finished (the system disk has a partition
-    /// table and the firmware has an OS boot entry, written when the boot loader is installed), the config
-    /// without the installer media; else nil. Virtualization reboots Linux guests in place, so the installed
-    /// system first runs with the media still attached; its boot entry comes first, so the ISO goes unused.
+    /// Whether the install into `config`'s disk finished: the disk has a partition table and the firmware an OS boot
+    /// entry (written when the boot loader is installed, the installer's last step). Readable while the VM runs: the
+    /// firmware's variable store is kept up to date on disk.
+    public static func isInstalled(_ config: VMConfigV1, bundle: VMBundle) -> Bool {
+        guard config.os == .linux, let disk = config.disks.first, let url = try? bundle.fileURL(relativePath: disk.file),
+            DiskImage.hasPartitionTable(url)
+        else { return false }
+        return !DiskImage.efiBootLoaders(inVariableStore: bundle.auxDirectory.appendingPathComponent("efi_vars.fd")).isEmpty
+    }
+
+    /// After the VM stopped: if it was installing and the install finished (`isInstalled`), the config without the
+    /// installer media; else nil. Virtualization reboots Linux guests in place, so the installed system first runs
+    /// with the media still attached; its boot entry comes first, so the ISO goes unused. An autoinstall's seed record
+    /// (`install.cloudInit`, `OmarchyInstall`) stays until its device goes (`CloudImageInstall.finished`).
     public static func finished(_ config: VMConfigV1, bundle: VMBundle) -> VMConfigV1? {
-        guard config.os == .linux, let media = config.install?.media, let disk = config.disks.first,
-            let url = try? bundle.fileURL(relativePath: disk.file), DiskImage.hasPartitionTable(url),
-            !DiskImage.efiBootLoaders(inVariableStore: bundle.auxDirectory.appendingPathComponent("efi_vars.fd")).isEmpty
-        else { return nil }
+        guard let media = config.install?.media, isInstalled(config, bundle: bundle) else { return nil }
         var config = config
         config.removable.removeAll { $0.id == media }
-        config.install = nil
+        if config.install?.cloudInit == nil { config.install = nil } else { config.install?.media = nil }
         return config
     }
 }

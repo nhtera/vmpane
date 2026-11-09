@@ -5,7 +5,7 @@ import VMPaneHost
 /// The new-VM sheet's front: one card per system, sized for this Mac, and a line saying what Create makes.
 extension WizardModel {
     public enum Card: String, CaseIterable, Identifiable, Sendable {
-        case macos, ubuntu, debian, fedora, windows
+        case macos, ubuntu, debian, fedora, omarchy, windows
 
         public var id: String { rawValue }
 
@@ -15,6 +15,7 @@ extension WizardModel {
             case .ubuntu: "Ubuntu"
             case .debian: "Debian"
             case .fedora: "Fedora"
+            case .omarchy: "Omarchy"
             case .windows: "Windows 11"
             }
         }
@@ -22,7 +23,7 @@ extension WizardModel {
         public var os: GuestOS {
             switch self {
             case .macos: .macos
-            case .ubuntu, .debian, .fedora: .linux
+            case .ubuntu, .debian, .fedora, .omarchy: .linux
             case .windows: .windows
             }
         }
@@ -33,11 +34,14 @@ extension WizardModel {
             case .macos: "Apple’s restore image, downloaded and installed for you. You finish in macOS Setup Assistant."
             case .ubuntu, .debian, .fedora:
                 "A cloud image: nothing to click through. SSH on 127.0.0.1 and the guest tools are ready on the first boot."
+            case .omarchy:
+                "Arch Linux with the Hyprland desktop, installed for you from Omarchy’s own arm64 ISO with nothing to click, "
+                    + "in a few minutes. You sign in at its lock screen."
             case .windows: "Installed for you from Microsoft’s Windows 11 for Arm ISO, with no clicks, in about 10 minutes."
             }
         }
 
-        /// A Linux card's cloud image in the catalog (`distro`).
+        /// A Linux card's image in the catalog (`distro`): a distribution's cloud image, Omarchy's ISO.
         var distro: String? { os == .linux ? rawValue : nil }
 
         public var group: CardGroup {
@@ -48,13 +52,14 @@ extension WizardModel {
             }
         }
 
-        /// The images Create can make the card from: all of macOS's restore images, a distribution's cloud images
-        /// (none for Windows: Microsoft's ISO). `choose` takes the newest; a picker is worth showing only for more
-        /// than one.
+        /// The images Create can make the card from: all of macOS's restore images, a distribution's cloud images,
+        /// Omarchy's autoinstall ISOs (none for Windows: Microsoft's ISO). `choose` takes the newest; a picker is worth
+        /// showing only for more than one.
         public func images(in catalogs: Catalogs) -> [ImageCatalog.Image] {
             switch self {
             case .macos: catalogs.macOS
             case .ubuntu, .debian, .fedora: catalogs.linux.filter { $0.isCloudImage && $0.distro == distro }
+            case .omarchy: catalogs.linux.filter { $0.isAutoinstallISO && $0.distro == distro }
             case .windows: []
             }
         }
@@ -65,7 +70,7 @@ extension WizardModel {
             switch self {
             case .macos:
                 return catalogs.macOS.last.map { Self.dropping("macOS", from: $0.title) }
-            case .ubuntu, .debian, .fedora:
+            case .ubuntu, .debian, .fedora, .omarchy:
                 return images(in: catalogs).first.map { Self.dropping(title, from: $0.title) }
             case .windows:
                 return "11 for Arm"
@@ -111,8 +116,8 @@ extension WizardModel {
         return (cpus, memory)
     }
 
-    /// Chooses `card`: its system, its installer when VMPane can fetch it, and for a Linux cloud image an account
-    /// (this Mac's user name and a generated password, kept for agent sign-in and Copy Password).
+    /// Chooses `card`: its system, its installer when VMPane can fetch it, and for a Linux cloud image or Omarchy an
+    /// account (this Mac's user name and a generated password, kept for agent sign-in and Copy Password).
     public func choose(_ card: Card, catalogs: Catalogs = .bundled) {
         // A password made up for another card is not carried over (nobody would know it).
         if usesGeneratedPassword { password = "" }
@@ -123,12 +128,14 @@ extension WizardModel {
         switch card {
         case .macos:
             source = catalogs.macOS.last.map { .macCatalog($0) }
-        case .ubuntu, .debian, .fedora:
-            source = catalogs.linux.first { $0.isCloudImage && $0.distro == card.distro }.map { .linuxCatalog($0) }
+        case .ubuntu, .debian, .fedora, .omarchy:
+            source = card.images(in: catalogs).first.map { .linuxCatalog($0) }
             userName = Self.defaultUserName()
             let password = Self.generatedPassword()
             self.password = password
             generatedPassword = password
+            // Omarchy is a desktop, drawn in software in a VM: sized as one.
+            if card == .omarchy { (cpuCount, memoryGiB) = sized(Recommended.for(.linux, desktop: true)) }
         case .windows:
             break  // Microsoft's ISO: the person downloads it (Customize)
         }

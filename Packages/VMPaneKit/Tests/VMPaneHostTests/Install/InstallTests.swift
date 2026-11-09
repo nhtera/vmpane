@@ -16,6 +16,9 @@ import VMPaneCore
         }
     }
     #expect(try ImageCatalog.macOS().images.first?.build == "24G90")
+    let omarchy = try #require(try ImageCatalog.linux().images.first { $0.distro == "omarchy" })
+    #expect(omarchy.isAutoinstallISO && !omarchy.isCloudImage && omarchy.url.lastPathComponent.hasSuffix("-aarch64.iso"))
+    #expect(omarchy.title == "Omarchy \(omarchy.version)")
 }
 
 @Test func catalogTitlesNameTheVersionOnceAndTheCacheKnowsWhatItHas() throws {
@@ -299,6 +302,54 @@ private func temporaryDirectory() throws -> URL {
     let done = try #require(LinuxInstall.finished(config, bundle: bundle))
     #expect(done.removable.isEmpty && done.install == nil)
     #expect(LinuxInstall.finished(done, bundle: bundle) == nil)  // not installing any more
+    // An autoinstall's seed record outlives the ISO's: its device goes with the seed (CloudImageInstall.finished).
+    var seeded = config
+    seeded.install?.cloudInit = "cidata"
+    let media = try #require(LinuxInstall.finished(seeded, bundle: bundle))
+    #expect(media.install?.media == nil && media.install?.cloudInit == "cidata")
+}
+
+/// Omarchy's ISO gets its seed beside it: the account (as a hash), the disk's layout and the host name, recorded with
+/// the media; SSH is forwarded only with a key, as Omarchy turns sshd on only then.
+@Test func omarchyInstallSeedsTheISO() throws {
+    let dir = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let fresh = VMConfigV1(
+        VMConfigFields.new(name: "Omarchy 4.5.0", os: .linux, diskGiB: 16, macAddress: MachineIdentity.randomMACAddress()))
+    let bundle = try VMBundle.create(at: dir.appendingPathComponent("O.vmpane"), config: fresh)
+    let image = ImageCatalog.Image(
+        id: "omarchy", name: "Omarchy", version: "4.5.0", url: URL(string: "https://iso.test/o.iso")!,
+        sha256: String(repeating: "0", count: 64), sizeBytes: 1, kind: "autoinstallISO", distro: "omarchy")
+    let withISO = try LinuxInstall.prepare(fresh, iso: try makeISO(in: dir, "arm", loader: "BOOTAA64.EFI"))
+    let lock = try #require(try bundle.tryLock())
+    defer { lock.release() }
+    let account = CloudImageInstall.Account(userName: "tien", password: "pw")
+    let config = try OmarchyInstall.apply(withISO, image: image, account: account, holding: lock)
+    let seedDir = CloudImageInstall.seedDirectory(in: bundle)
+    #expect(config.install?.media == "install" && config.install?.cloudInit == "cidata")
+    #expect(
+        config.removable.map(\.fields) == [
+            RemovableConfig(id: "install", path: withISO.removable[0].path, bus: .usb),
+            RemovableConfig(id: "cidata", path: CloudInitSeed.iso(of: seedDir).path, bus: .virtio),
+        ])
+    #expect(config.portForwards.isEmpty, "no key: Omarchy keeps SSH off")
+    let written = try Data(contentsOf: seedDir.appendingPathComponent("user_configuration.json"))
+    let configuration = try #require(try JSONSerialization.jsonObject(with: written) as? [String: Any])
+    #expect(configuration["hostname"] as? String == "omarchy-4-5-0")
+    let credentials = try String(contentsOf: seedDir.appendingPathComponent("user_credentials.json"), encoding: .utf8)
+    #expect(credentials.contains("\"$6$") && !credentials.contains("pw\""))
+    #expect(!FileManager.default.fileExists(atPath: seedDir.appendingPathComponent("authorized_keys").path))
+    #expect(FileManager.default.fileExists(atPath: CloudInitSeed.iso(of: seedDir).path) && !CloudImageInstall.isUsed(bundle))
+
+    let keyed = try OmarchyInstall.apply(
+        withISO, image: image, account: .init(userName: "tien", password: "pw", sshKey: "ssh-ed25519 AAAA t@m"), holding: lock)
+    #expect(keyed.portForwards.count == 1 && keyed.portForwards[0].guestPort == 22 && keyed.portForwards[0].hostAddress == "127.0.0.1")
+    #expect(throws: OmarchyInstall.Failure.noMedia) { try OmarchyInstall.apply(fresh, image: image, account: account, holding: lock) }
+    var cloud = image
+    cloud.kind = "cloudImage"
+    #expect(throws: OmarchyInstall.Failure.notAutoinstall) {
+        try OmarchyInstall.apply(withISO, image: cloud, account: account, holding: lock)
+    }
 }
 
 /// `text` as UTF-16LE after `offset` padding bytes (EFI variable stores do not align strings for us).

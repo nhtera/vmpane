@@ -60,7 +60,7 @@ public struct SystemTile: View {
 extension SystemTile {
     /// What a tile shows: a system the new-VM sheet makes, a VM's system, or an installer file from this Mac.
     public enum System: Hashable, Sendable {
-        case macos, ubuntu, debian, fedora, linux, windows, installer, unknown
+        case macos, ubuntu, debian, fedora, omarchy, linux, windows, installer, unknown
 
         public init(_ card: WizardModel.Card) {
             switch card {
@@ -68,11 +68,12 @@ extension SystemTile {
             case .ubuntu: self = .ubuntu
             case .debian: self = .debian
             case .fedora: self = .fedora
+            case .omarchy: self = .omarchy
             case .windows: self = .windows
             }
         }
 
-        /// A VM's system (nil: unknown, its config unreadable); `distro` (`ubuntu`, `debian`, `fedora`) picks a Linux
+        /// A VM's system (nil: unknown, its config unreadable); `distro` (`ubuntu`, `debian`, `fedora`, `omarchy`) picks a Linux
         /// VM's colours when known.
         public init(_ os: GuestOS?, distro: String? = nil) {
             switch os {
@@ -84,6 +85,7 @@ extension SystemTile {
                     case "ubuntu": .ubuntu
                     case "debian": .debian
                     case "fedora": .fedora
+                    case "omarchy": .omarchy
                     default: .linux
                     }
             case nil: self = .unknown
@@ -96,6 +98,7 @@ extension SystemTile {
             case .ubuntu: .letter("U")
             case .debian: .letter("D")
             case .fedora: .letter("F")
+            case .omarchy: .letter("O")
             case .linux: .symbol("terminal.fill")
             case .windows: .panes
             case .installer: .add
@@ -111,6 +114,7 @@ extension SystemTile {
             case .ubuntu: (0xE8622C, 0xC2410C)
             case .debian: (0xC8174A, 0x8A0F33)
             case .fedora: (0x3C6EB4, 0x22437A)
+            case .omarchy: (0x6B7FD7, 0x3B4A9E)
             case .linux: (0x4B5563, 0x1F2937)
             case .windows: (0x1F8BE8, 0x0A5BB0)
             case .unknown: (0x6B6B70, 0x3A3A3E)

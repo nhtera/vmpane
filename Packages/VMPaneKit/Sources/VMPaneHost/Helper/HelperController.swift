@@ -27,6 +27,7 @@ public actor HelperController {
     /// The unattended Windows install this VM is going through, if any (`HelperController+WindowsInstall`).
     var windowsInstall: InstallState?
     var installReader: GuestLineReader?
+    /// Follows a Windows install (QEMU), or an autoinstall from an ISO (`HelperController+CloudInit`): a VM has one.
     var installWatch: Task<Void, Never>?
     var installTiming = InstallTiming()
     /// The guest agent's connection (`HelperController+Agent`).

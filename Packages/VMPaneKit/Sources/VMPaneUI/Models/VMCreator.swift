@@ -18,7 +18,7 @@ public struct VMCreator: Sendable {
         public var unattend: UnattendInput?
         /// Keep the account's password (`GuestCredentials`): for Copy Password, and for agent sign-in when the VM allows it.
         public var keepPassword = false
-        /// Linux cloud images: the account cloud-init creates.
+        /// Linux cloud images and Omarchy's autoinstall: the account the first boot (the install) creates.
         public var cloudAccount: CloudImageInstall.Account?
         public var configure: @Sendable (inout VMConfigV1) -> Void
 
@@ -166,6 +166,10 @@ public struct VMCreator: Sendable {
                 guard let account = request.cloudAccount else { throw CreateError.missingAccount }
                 config = try CloudImageInstall.apply(config, base: base, image: image, account: account, holding: lock)
             }
+            if case .linuxCatalog(let image) = request.source, image.isAutoinstallISO {
+                guard let account = request.cloudAccount else { throw CreateError.missingAccount }
+                config = try OmarchyInstall.apply(config, image: image, account: account, holding: lock)
+            }
             try ConfigStore.save(config, holding: lock)
         }
     }
@@ -207,6 +211,9 @@ extension WizardModel {
     struct Snapshot: Sendable {
         let name: String, cpuCount: Int, memoryGiB: Int, audioOutput: Bool, microphone: Bool, clipboard: Bool
         let mcpPolicy: PolicyLevel, sharedFolders: [URL], rosetta: Bool, os: GuestOS?, signIn: Bool
+        /// Omarchy's Hyprland draws at scale 2 (its own choice for the VM's display): with every Retina pixel it
+        /// looks right; at one pixel per point (Linux's default here, for consoles) it would be twice the size.
+        let retinaDisplay: Bool
 
         @MainActor init(_ model: WizardModel) {
             name = model.name
@@ -220,6 +227,7 @@ extension WizardModel {
             rosetta = model.rosetta
             os = model.os
             signIn = model.needsAccount && model.keepSignInPassword
+            retinaDisplay = model.isAutoinstallISO
         }
 
         func configure(_ config: inout VMConfigV1) {
@@ -243,6 +251,7 @@ extension WizardModel {
                 return Extensible(ShareConfig(id: "share-\(index + 1)", name: shareName, hostPath: folder.path, readOnly: false))
             }
             if os == .linux { config.vz?.rosetta = rosetta }
+            if retinaDisplay { config.display.scaling = .retina }
         }
     }
 }

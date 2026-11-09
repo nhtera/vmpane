@@ -10,6 +10,8 @@ public struct CloudInitSeed: Sendable, Equatable {
 
     public enum Problem: Error, Equatable, CustomStringConvertible {
         case userName, hostName, sshKey
+        /// Omarchy's layout needs room for its ESP and system (`OmarchySeed.minimumDiskBytes`).
+        case diskTooSmall
         case isoFailed(String)
 
         public var description: String {
@@ -17,6 +19,7 @@ public struct CloudInitSeed: Sendable, Equatable {
             case .userName: "a Linux user name is 1 to 32 lowercase letters, digits, - and _, starting with a letter"
             case .hostName: "the host name is letters, digits and hyphens"
             case .sshKey: "the SSH key is one line, as in ~/.ssh/id_ed25519.pub"
+            case .diskTooSmall: "the disk is too small for the system (at least 8 GB)"
             case .isoFailed(let message): "the cloud-init seed could not be written: \(message)"
             }
         }
@@ -144,9 +147,11 @@ public struct CloudInitSeed: Sendable, Equatable {
         return try Self.makeISO(directory)
     }
 
-    /// The seed in `directory` for a new machine (a clone): a fresh `instance-id`, the ISO made again.
+    /// The seed in `directory` for a new machine (a clone): a fresh `instance-id`, the ISO made again. An Omarchy
+    /// seed (`OmarchySeed`, no `meta-data`) has no instance: its ISO is only made again.
     public static func reissue(_ directory: URL) throws -> URL {
         let file = directory.appendingPathComponent("meta-data")
+        guard FileManager.default.fileExists(atPath: file.path) else { return try makeISO(directory) }
         let lines = try String(contentsOf: file, encoding: .utf8).split(separator: "\n").map {
             $0.hasPrefix("instance-id:") ? "instance-id: \(quoted(UUID().uuidString.lowercased()))" : String($0)
         }
@@ -164,14 +169,14 @@ public struct CloudInitSeed: Sendable, Equatable {
         directory.deletingLastPathComponent().appendingPathComponent(directory.lastPathComponent + ".iso", isDirectory: false)
     }
 
-    private static func writePrivate(_ text: String, to url: URL) throws {
+    static func writePrivate(_ text: String, to url: URL) throws {
         try? FileManager.default.removeItem(at: url)
         guard FileManager.default.createFile(atPath: url.path, contents: Data(text.utf8), attributes: [.posixPermissions: 0o600])
         else { throw Problem.isoFailed("cannot write \(url.lastPathComponent)") }
     }
 
     /// Built beside it and renamed into place (0600 first), so a VM never sees half an ISO.
-    private static func makeISO(_ directory: URL) throws -> URL {
+    static func makeISO(_ directory: URL) throws -> URL {
         let iso = iso(of: directory)
         let partial = directory.deletingLastPathComponent().appendingPathComponent(".\(iso.lastPathComponent).\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: partial) }

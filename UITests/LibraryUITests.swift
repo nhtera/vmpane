@@ -44,7 +44,7 @@ final class LibraryUITests: XCTestCase {
         XCTAssertTrue(shows("Ubuntu", in: sheet), "on its system")
         sheet.buttons["Cancel"].click()
         XCTAssertTrue(sheet.waitForNonExistence(timeout: 5))
-        app.buttons["More systems: Debian, Fedora, an installer file…"].click()
+        app.buttons["More systems: Debian, Fedora, Omarchy, an installer file…"].click()
         XCTAssertTrue(sheet.waitForExistence(timeout: 5), "the other systems are in the sheet")
         row("Fedora", in: sheet).click()
         XCTAssertTrue(shows("Fedora", in: sheet))

@@ -22,16 +22,18 @@ struct SourceStep: View {
                 }
             case .linux?:
                 Section {
-                    ForEach(catalog.filter(\.isCloudImage)) { image in catalogRow(image, .linuxCatalog(image)) }
+                    ForEach(catalog.filter { $0.isCloudImage || $0.isAutoinstallISO }) { image in catalogRow(image, .linuxCatalog(image)) }
                 } header: {
                     Text("Ready in minutes")
                 } footer: {
                     Text(
-                        "The distribution's cloud image: no installer to click through; your account, SSH and VMPane's "
-                            + "guest tools are set up on first boot.")
+                        "Nothing to click through. A distribution's cloud image sets your account, SSH and VMPane's guest "
+                            + "tools up on first boot; Omarchy's ISO installs itself with your account.")
                 }
                 Section("Installer (ISO download)") {
-                    ForEach(catalog.filter { !$0.isCloudImage }) { image in catalogRow(image, .linuxCatalog(image)) }
+                    ForEach(catalog.filter { !$0.isCloudImage && !$0.isAutoinstallISO }) { image in
+                        catalogRow(image, .linuxCatalog(image))
+                    }
                 }
                 Section("Or use an ISO you have") {
                     fileRow(title: "Choose an arm64 ISO…", types: [UTType(filenameExtension: "iso") ?? .data]) { .linuxISO($0) }
@@ -112,13 +114,14 @@ struct SourceStep: View {
     }
 }
 
-/// The account the system creates: Windows Setup's (with Microsoft's licence), or a Linux cloud image's first boot.
+/// The account the system creates: Windows Setup's (with Microsoft's licence), a Linux cloud image's first boot, or
+/// Omarchy's autoinstall.
 struct AccountStep: View {
     @Bindable var wizard: WizardModel
 
     var body: some View {
         Form {
-            if wizard.isCloudImage { linux } else { windows }
+            if wizard.hasLinuxAccount { linux } else { windows }
         }
         .formStyle(.grouped)
     }
@@ -161,15 +164,27 @@ struct AccountStep: View {
         } header: {
             Text("Your Linux account")
         } footer: {
-            Text("An administrator (sudo). With a key, SSH takes only the key. VMPane forwards SSH from this Mac only.")
-        }
-        Section {
-            Toggle("Install a desktop (GNOME)", isOn: $wizard.desktop)
-        } footer: {
             Text(
-                wizard.desktop
-                    ? "Downloads and installs the desktop on first boot: several minutes and a few GB more."
-                    : "A server: a text console and SSH.")
+                wizard.isAutoinstallISO
+                    ? "An administrator (sudo). With a key, Omarchy turns SSH on and takes only the key; without one, "
+                        + "SSH stays off. VMPane forwards SSH from this Mac only."
+                    : "An administrator (sudo). With a key, SSH takes only the key. VMPane forwards SSH from this Mac only.")
+        }
+        if wizard.isCloudImage {
+            Section {
+                Toggle("Install a desktop (GNOME)", isOn: $wizard.desktop)
+            } footer: {
+                Text(
+                    wizard.desktop
+                        ? "Downloads and installs the desktop on first boot: several minutes and a few GB more."
+                        : "A server: a text console and SSH.")
+            }
+        } else {
+            Section {
+                LabeledContent("Desktop", value: "Hyprland (Omarchy)")
+            } footer: {
+                Text("You sign in at Omarchy's lock screen. The VM's window offers VMPane's guest tools once Omarchy runs.")
+            }
         }
     }
 }
@@ -264,6 +279,7 @@ struct SummaryStep: View {
             LabeledContent("Installer", value: installer)
             if wizard.needsAccount { LabeledContent("Account", value: wizard.userName) }
             if wizard.isCloudImage { LabeledContent("Desktop", value: wizard.desktop ? "GNOME" : "None (server)") }
+            if wizard.isAutoinstallISO { LabeledContent("Desktop", value: "Hyprland (Omarchy)") }
             LabeledContent("Processors", value: "\(wizard.cpuCount)")
             LabeledContent("Memory", value: "\(wizard.memoryGiB) GB")
             LabeledContent("Disk", value: "\(wizard.diskGiB) GB")

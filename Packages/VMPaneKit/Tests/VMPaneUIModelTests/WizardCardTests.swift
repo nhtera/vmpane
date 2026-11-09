@@ -10,14 +10,17 @@ private let catalogs = WizardModel.Catalogs(
     linux: [
         image("ubuntu-server", "Ubuntu Server 24.04.5", "24.04.5"), image("ubuntu-cloud", "Ubuntu 26.04", "26.04", distro: "ubuntu"),
         image("debian-cloud", "Debian 13", "13", distro: "debian"), image("fedora-cloud", "Fedora 44", "44", distro: "fedora"),
+        image("omarchy-iso", "Omarchy", "4.5.0", distro: "omarchy", kind: "autoinstallISO"),
     ])
 
-private func image(_ id: String, _ name: String, _ version: String, distro: String? = nil) -> ImageCatalog.Image {
+private func image(
+    _ id: String, _ name: String, _ version: String, distro: String? = nil, kind: String = "cloudImage"
+) -> ImageCatalog.Image {
     var image = ImageCatalog.Image(
         id: id, name: name, version: version, url: URL(fileURLWithPath: "/tmp/\(id)"), sha256: String(repeating: "0", count: 64),
         sizeBytes: 1)
     if let distro {
-        image.kind = "cloudImage"
+        image.kind = kind
         image.distro = distro
     }
     return image
@@ -91,9 +94,11 @@ private func image(_ id: String, _ name: String, _ version: String, distro: Stri
 
 /// The sheet lists the cards in sections, macOS first; each row says the version Create makes.
 @Test func cardsAreGroupedAndSayTheirVersion() {
-    #expect(WizardModel.CardGroup.allCases.map(\.cards) == [[.macos], [.ubuntu, .debian, .fedora], [.windows]])
-    #expect(WizardModel.Card.allCases.map { $0.versionText(in: catalogs) } == ["Sequoia 15.6.1", "26.04", "13", "44", "11 for Arm"])
+    #expect(WizardModel.CardGroup.allCases.map(\.cards) == [[.macos], [.ubuntu, .debian, .fedora, .omarchy], [.windows]])
+    #expect(
+        WizardModel.Card.allCases.map { $0.versionText(in: catalogs) } == ["Sequoia 15.6.1", "26.04", "13", "44", "4.5.0", "11 for Arm"])
     #expect(WizardModel.Card.ubuntu.images(in: catalogs).map(\.id) == ["ubuntu-cloud"], "cloud images only")
+    #expect(WizardModel.Card.omarchy.images(in: catalogs).map(\.id) == ["omarchy-iso"], "its autoinstall ISO")
     #expect(WizardModel.Card.windows.images(in: catalogs).isEmpty)
     #expect(WizardModel.Card.fedora.versionText(in: .init(macOS: [], linux: [])) == nil, "no image, no version")
 }
@@ -101,6 +106,7 @@ private func image(_ id: String, _ name: String, _ version: String, distro: Stri
 /// The bundled catalog's rows read as the design shows them.
 @Test func theBundledCatalogsVersions() {
     #expect(WizardModel.Card.ubuntu.versionText(in: .bundled) == "26.04 LTS")
+    #expect(WizardModel.Card.omarchy.versionText(in: .bundled) == "4.5.0")
     #expect(WizardModel.Card.macos.versionText(in: .bundled)?.hasPrefix("Sequoia") == true)
 }
 
@@ -133,4 +139,24 @@ private func image(_ id: String, _ name: String, _ version: String, distro: Stri
     let iso = URL(fileURLWithPath: "/tmp/Win11_Arm64.iso")
     wizard.use(iso, kind: .windowsISO)
     #expect(wizard.installerFile == iso && wizard.catalogImage == nil && wizard.card == .windows)
+}
+
+/// Omarchy: its ISO installs itself with the wizard's account (the same step as a cloud image's), sized as a desktop;
+/// Hyprland is its desktop, so there is no GNOME to add.
+@MainActor @Test func theOmarchyCardIsReadyToCreate() throws {
+    let wizard = WizardModel(host: .init(cores: 10, memoryGiB: 16), existingNames: [])
+    wizard.choose(.omarchy, catalogs: catalogs)
+    #expect(wizard.os == .linux && wizard.isAutoinstallISO && !wizard.isCloudImage && wizard.hasLinuxAccount && wizard.needsAccount)
+    #expect(wizard.steps.contains(.account) && !wizard.desktop)
+    #expect(wizard.problems(in: .summary).isEmpty, "\(wizard.problems(in: .summary))")
+    #expect(wizard.summaryLine == "Omarchy 4.5.0 · 4 CPUs · 8 GB · 64 GB · Agents: Off" && wizard.name == "Omarchy 4.5.0")
+    #expect(wizard.usesGeneratedPassword && wizard.userName == WizardModel.defaultUserName())
+    let request = try #require(wizard.request())
+    #expect(request.cloudAccount?.userName == wizard.userName && request.cloudAccount?.password == wizard.password && request.keepPassword)
+    var config = VMConfigV1(VMConfigFields.new(name: "x", os: .linux, diskGiB: 64, macAddress: "02:00:00:00:00:01"))
+    request.configure(&config)
+    #expect(config.display.scaling == .retina, "Hyprland at scale 2 needs every Retina pixel")
+    #expect(config.memory.mib == 8192 && config.cpu.count == 4)
+    wizard.userName = "root"
+    #expect(wizard.problems(in: .account) == ["root is a name the system uses already."])
 }

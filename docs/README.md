@@ -16,7 +16,7 @@ are the site's navigation, in order. A file not listed here is not published.
 | Page | Contents |
 |---|---|
 | [macOS guests](guides/macos.md) | Apple's restore image, the install, guest tools, snapshots |
-| [Linux guests](guides/linux.md) | Ubuntu, Debian and Fedora from the catalog, your own arm64 ISO, shared folders |
+| [Linux guests](guides/linux.md) | Ubuntu, Debian and Fedora from the catalog, Omarchy installed for you, your own arm64 ISO, shared folders |
 | [Windows guests](guides/windows.md) | Windows 11 on Arm from your ISO, set up with no clicks |
 
 ## AI agents

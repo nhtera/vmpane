@@ -7,6 +7,8 @@
 //        vmpane-itest-policy release   (the kill switch)
 //        vmpane-itest-policy create-cloud <image id> <name> <user> <qemu-img> <cache dir> [--desktop] [--ssh-key <key>]
 //            (the password on stdin; prints the new bundle's path)
+//        vmpane-itest-policy seed-omarchy <bundle> <user> [--ssh-key <key>]
+//            (the password on stdin): OmarchyInstall.apply on a bundle whose config boots the Omarchy ISO as install media
 import Foundation
 import VMPaneCore
 import VMPaneHost
@@ -19,7 +21,8 @@ func fail(_ message: String, code: Int32 = 1) -> Never {
 
 let usage =
     "usage: vmpane-itest-policy set <bundle> <level> [--clipboard] [--confirm-exec] | release "
-    + "| create-cloud <image id> <name> <user> <qemu-img> <cache dir> [--desktop] [--ssh-key <key>]"
+    + "| create-cloud <image id> <name> <user> <qemu-img> <cache dir> [--desktop] [--ssh-key <key>] "
+    + "| seed-omarchy <bundle> <user> [--ssh-key <key>]"
 guard let support = ProcessInfo.processInfo.environment["VMPANE_SUPPORT_DIR"], !support.isEmpty else {
     fail("VMPANE_SUPPORT_DIR is not set (this tool never touches the real library)", code: 64)
 }
@@ -51,6 +54,21 @@ do {
             config.memory.mib = 4096
         }
         print(try await creator.create(request).url.path)
+    case "seed-omarchy":
+        let omarchy = try ImageCatalog.linux().images.first { $0.isAutoinstallISO && $0.distro == "omarchy" }
+        guard arguments.count >= 3, let image = omarchy else { fail(usage, code: 64) }
+        let options = Array(arguments.dropFirst(3))
+        let sshKey = options.firstIndex(of: "--ssh-key").flatMap { options.indices.contains($0 + 1) ? options[$0 + 1] : nil }
+        let password =
+            String(data: FileHandle.standardInput.readDataToEndOfFile(), encoding: .utf8)?
+            .trimmingCharacters(in: .newlines) ?? ""
+        let bundle = try VMBundle.open(URL(fileURLWithPath: arguments[1]))
+        guard let lock = try bundle.tryLock() else { fail("a helper holds \(arguments[1]); stop it first") }
+        defer { lock.release() }
+        let config = try OmarchyInstall.apply(
+            try ConfigStore.load(bundle), image: image, account: .init(userName: arguments[2], password: password, sshKey: sshKey),
+            holding: lock)
+        try ConfigStore.save(config, holding: lock)
     case "set":
         guard arguments.count >= 3, let level = PolicyLevel(rawValue: arguments[2]) else { fail(usage, code: 64) }
         let options = Set(arguments.dropFirst(3))

@@ -6,7 +6,7 @@ extension LibraryStore.Row {
     /// The tile: a Linux VM's distribution, guessed from its name (VMPane names a cloud image's VM after it), only
     /// colours it.
     public var system: SystemTile.System {
-        let distro = ["ubuntu", "debian", "fedora"].first { name.lowercased().contains($0) }
+        let distro = ["ubuntu", "debian", "fedora", "omarchy"].first { name.lowercased().contains($0) }
         return SystemTile.System(os, distro: distro)
     }
 

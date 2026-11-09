@@ -9,7 +9,7 @@ you set. It is free and open source (Apache-2.0). VMPane is pre-alpha: public be
 | Guest | Runs on | From |
 |---|---|---|
 | macOS | Apple's Virtualization framework | Apple's restore image (IPSW): from VMPane's catalog, or one you have |
-| Linux | Apple's Virtualization framework | Ubuntu Server, Debian or Fedora Server from the catalog, or your own arm64 ISO |
+| Linux | Apple's Virtualization framework | Ubuntu, Debian or Fedora cloud images and Omarchy (installed with no clicks) from the catalog, Ubuntu Server, Debian or Fedora Server installers, or your own arm64 ISO |
 | Windows 11 on Arm | QEMU with Hypervisor.framework, a software TPM 2.0 and Secure Boot | Your Windows 11 Arm64 ISO, installed with no clicks |
 
 Each running VM is its own process (`VMPaneVM.app`), with its own window and Dock tile: a crash takes down one

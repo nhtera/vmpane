@@ -5,6 +5,18 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Omarchy** in the new-VM sheet: Arch Linux with the Hyprland desktop, installed for you from Omarchy's own arm64
+  ISO (5.7 GB, checked against the pinned SHA-256) with nothing to click. VMPane writes the installer's answers (your
+  account as a password hash, the disk's layout, the VM's name, the Mac's time zone) to a small `cidata` disc; Omarchy
+  installs itself in a few minutes and the VM restarts into its lock screen. The seed's data goes once the boot loader
+  is in place, the ISO and the disc at the next stop. With an SSH key, Omarchy turns SSH on and VMPane forwards it from
+  127.0.0.1. The guest tools are offered in the VM's window, as for any ISO install.
+
+### Fixed
+- The empty library's quick start is centred by layout, not by scrolling: until its window was resized, its buttons and
+  texts told accessibility (VoiceOver, UI tests) positions above where they were drawn.
+
 ## [1.0.0-beta.12]
 Updates now reach every VM: a VM stopped before an update starts on the new version, and the guest tools in Linux and
 Windows VMs update themselves; a VM without them offers them. An AI agent's first input in a Windows VM is no longer

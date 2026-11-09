@@ -10,10 +10,10 @@ only the rest is done by hand.
       launch (ui-smoke), `install-cli --user` (cli-e2e). *By hand:* the new account's first-run prompts, and
       `install-cli` with its administrator prompt.
 - [ ] New VM, each system in the sheet's list: macOS (IPSW), Ubuntu, Debian and Fedora (cloud images, nothing
-      typed), Windows 11 (ISO, unattended, from Customize), an installer file; a dropped .iso/.ipsw opens the sheet with it. Each is made in the background
-      and installs to a desktop or a login prompt with the guest tools.
+      typed), Omarchy (its ISO, installed with nothing typed), Windows 11 (ISO, unattended, from Customize), an installer file; a dropped .iso/.ipsw opens the sheet with it. Each is made in the background
+      and installs to a desktop or a login prompt with the guest tools (Omarchy: offered in its window).
       *Tested:* the list, its keys and Customize (ui-smoke's LibraryUITests), cloud images (linux-cloud), the installs
-      (macos-install, linux-iso-install, win-install), dropped ISOs read in place (unit tests). *By hand:* a
+      (macos-install, linux-iso-install, omarchy-install, win-install), dropped ISOs read in place (unit tests). *By hand:* a
       system's Create through to the running VM, and a drop on the Dock icon.
 - [ ] Dock: each running VM has its own Dock tile with its icon; the Dock menu acts on it.
       *Tested:* the VM's own app has a menu bar, and its Quit asks while the VM runs (ui-smoke).

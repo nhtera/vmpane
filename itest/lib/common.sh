@@ -34,6 +34,24 @@ it_image() {
     echo "$file"
 }
 
+# Path of the Linux catalog image $1 (Packages/.../linux-catalog.json), downloaded once into ~/VMPaneItest/downloads
+# and checked against the catalog's SHA-256.
+it_catalog_iso() {
+    local entry url sha file
+    entry=$(jq -c --arg id "$1" '.images[] | select(.id == $id)' \
+        "$VMPANE_ROOT/Packages/VMPaneKit/Sources/VMPaneHost/Install/Resources/linux-catalog.json")
+    url=$(jq -r .url <<<"$entry")
+    sha=$(jq -r .sha256 <<<"$entry")
+    file="$HOME/VMPaneItest/downloads/$(basename "$url")"
+    if [[ ! -f $file || $(shasum -a 256 "$file" | awk '{print $1}') != "$sha" ]]; then
+        mkdir -p "$(dirname "$file")"
+        curl -fsSL --retry 3 -o "$file.partial" "$url" || return 1
+        [[ $(shasum -a 256 "$file.partial" | awk '{print $1}') == "$sha" ]] || { echo "sha256 mismatch: $url" >&2; return 1; }
+        mv "$file.partial" "$file"
+    fi
+    echo "$file"
+}
+
 # Minimal valid bundle at $1. Optional: $2 = os (linux), $3 = extra jq filter applied to the config.
 it_create_bundle() {
     local bundle=$1 os=${2:-linux} extra=${3:-.} id mac

@@ -56,6 +56,7 @@ export const landing = {
         title: "Linux, ready in minutes.",
         facts: [
           { text: "Ubuntu, Debian and Fedora from their own cloud images: nothing to click through" },
+          { text: "Omarchy, the Arch Linux desktop, installed from its own ISO with nothing to click" },
           { text: "Or an installer ISO, the catalog's or yours, checked before it boots" },
           { text: "Made in the background: the library shows each stage" },
           { text: "Shared folders over virtiofs" },

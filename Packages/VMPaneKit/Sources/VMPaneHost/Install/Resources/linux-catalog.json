@@ -57,6 +57,16 @@
       "url": "https://download.fedoraproject.org/pub/fedora/linux/releases/44/Cloud/aarch64/images/Fedora-Cloud-Base-Generic-44-1.7.aarch64.qcow2",
       "sha256": "55c60a3b80d3616a08705afd0459e75fe9f03c54aba7a46e4002a41a72fa0d5b",
       "sizeBytes": 528154624
+    },
+    {
+      "id": "omarchy-4.5.0",
+      "name": "Omarchy",
+      "version": "4.5.0",
+      "kind": "autoinstallISO",
+      "distro": "omarchy",
+      "url": "https://iso.omarchy.org/omarchy-4.5.0-aarch64.iso",
+      "sha256": "c9a9dd1107c10924eeb1e885226f9884080b1ffbf227d1f7f9ad255e4cebfb17",
+      "sizeBytes": 6071351296
     }
   ]
 }
