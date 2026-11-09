@@ -129,14 +129,16 @@ test("Reduce Transparency: no element keeps a backdrop blur, and the glass is so
     const cdp = await context.newCDPSession(page);
     await cdp.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-transparency", value: "reduce" }] });
     assert.equal(await page.evaluate(() => matchMedia("(prefers-reduced-transparency: reduce)").matches), true);
-    // Chromium restyles elements inside a size container (the Mac's screen) a frame after an emulated media change.
-    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-    const blurred = await page.evaluate(() =>
+    // Chromium restyles after an emulated media change a frame later, and elements inside a size container (the
+    // Mac's screen) later still; on a slow runner it took longer than two frames (CI, 2026-11-10). Wait, bounded,
+    // for the blur to go everywhere, then check every element: a blur that stays fails below either way.
+    const blurredNow = () =>
       [...document.querySelectorAll("*")].filter((el) => {
         const s = getComputedStyle(el);
         return (s.backdropFilter && s.backdropFilter !== "none") || (s.webkitBackdropFilter && s.webkitBackdropFilter !== "none");
-      }).map((el) => el.className || el.tagName),
-    );
+      }).map((el) => el.className || el.tagName);
+    await page.waitForFunction(`(${blurredNow.toString()})().length === 0`, null, { timeout: 5000 }).catch(() => {});
+    const blurred = await page.evaluate(blurredNow);
     assert.deepEqual(blurred, [], path);
     assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--glass").trim()), "100%");
     await context.close();
