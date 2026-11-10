@@ -270,7 +270,7 @@ dependencies = [
 
 [[package]]
 name = "vmpane-agent-proto"
-version = "0.1.0"
+version = "1.0.0-beta.13"
 dependencies = [
  "bytes",
  "schemars",

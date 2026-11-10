@@ -10,7 +10,7 @@ grep -v '^#' "$root/scripts/tools.lock" | while read -r name version exe url sha
     dir="$tools/$name-$version"
     if [[ ! -f "$dir/.installed" ]]; then
         tmp=$(mktemp -d)
-        curl -fsSL -o "$tmp/archive.zip" "$url"
+        curl -fsSL --retry 3 --retry-delay 2 -o "$tmp/archive.zip" "$url"
         if [[ "$(shasum -a 256 "$tmp/archive.zip" | awk '{print $1}')" != "$sha" ]]; then
             echo "error: $name $version: sha256 mismatch for $url" >&2
             rm -rf "$tmp"

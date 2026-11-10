@@ -358,6 +358,7 @@ func theHostAcknowledgesWhatItReadToAgentsThatAsk(asks: Bool) async throws {
     let (agent, hostFD) = try FakeAgent.pair()
     let connection = AgentConnection(socket: AgentSocket(fd: hostFD), hostVersion: "h", portOutlivesConnections: true)
     let peer = Task { try await connection.open(helloTimeout: nil) }
+    let started = ContinuousClock.now
     try agent.send(heartbeat)
     guard case .response(let reset)? = await agent.nextMessage() else { Issue.record("no reset"); return }
     #expect(reset.id == .int(0))
@@ -365,8 +366,18 @@ func theHostAcknowledgesWhatItReadToAgentsThatAsk(asks: Bool) async throws {
     try agent.send(.response(RPCResponse(id: .int(9), result: [:])))  // an answer to the earlier host
     try agent.hello()
     _ = try await peer.value
-    guard case .response(let welcome)? = await agent.nextMessage() else { Issue.record("no hello answer"); return }
-    #expect(welcome.id == .int(1))
+    // The host had the two stale messages within this span of its first reset: under two seconds, it must not
+    // have asked again; longer (the Mac running the suite under ASan took 2 s here once, 2026-11-06), one more
+    // reset may precede the welcome.
+    let span = ContinuousClock.now - started
+    var resets = 0
+    var welcome: RPCResponse?
+    while welcome == nil, case .response(let response)? = await agent.nextMessage() {
+        if response.id == .int(0) { resets += 1 } else { welcome = response }
+    }
+    #expect(welcome?.id == .int(1), "no hello answer")
+    #expect(resets == 0 || span >= .seconds(2), "asked again within \(span)")
+    #expect(resets <= 1, "asked \(resets) more times in \(span)")
     #expect(await connection.isOpen)
 
     let (other, otherFD) = try FakeAgent.pair()

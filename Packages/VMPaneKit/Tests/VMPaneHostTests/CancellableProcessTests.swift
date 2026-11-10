@@ -22,12 +22,18 @@ private func sleeper() -> Process {
     #expect(!process.isRunning)
 }
 
+/// The cancel is what ends the process (a signal, not its own end) and the wait returns well before `sleep 30`
+/// would: the Mac that runs the suite under ASan is shared, and the signal's round trip took 7 s there once
+/// (2026-11-09).
 @Test func aCancelEndsARunningProcess() async throws {
     let process = sleeper()
     let run = Task { try await CancellableProcess.run(process) }
-    for _ in 0..<50 where !process.isRunning { try await Task.sleep(for: .milliseconds(20)) }
+    for _ in 0..<500 where !process.isRunning { try await Task.sleep(for: .milliseconds(20)) }
+    try #require(process.isRunning, "started within 10 s")
     let cancelled = ContinuousClock.now
     run.cancel()
     _ = try? await run.value
-    #expect(!process.isRunning && ContinuousClock.now - cancelled < .seconds(2))
+    #expect(!process.isRunning)
+    #expect(process.terminationReason == .uncaughtSignal, "ended by the terminate, not on its own")
+    #expect(ContinuousClock.now - cancelled < .seconds(15))
 }
